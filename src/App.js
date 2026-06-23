@@ -11,11 +11,8 @@ const db = {
 };
 
 const TECHNICIENS_FB = ["AD","CB","JM","KD","CD","RC","MC","DIV"];
-
 const ROULEMENTS = ["608 ZZ C3","608 RSH","6000 ZZ C3","6001 ZZ C3","6002 ZZ C3","6003 ZZ C3","6004 ZZ C3","6005 ZZ C3","6006 ZZ C3","6007 ZZ C3","6008 ZZ C3","6009 ZZ C3","6010 ZZ C3","6011 ZZ C3","6200 ZZ C3","6201 ZZ C3","6202 ZZ C3","6203 ZZ C3","6204 ZZ C3","6205 ZZ C3","6206 ZZ C3","6207 ZZ C3","6208 ZZ C3","6209 ZZ C3","6210 ZZ C3","6211 ZZ C3","6212 ZZ C3","6213 ZZ C3","6214 ZZ C3","6215 ZZ C3","6216 ZZ C3","6217 ZZ C3","6217 C3","6218 ZZ C3","6218 C3","6219 ZZ C3","6219 C3","6300 ZZ C3","6301 ZZ C3","6302 ZZ C3","6303 ZZ C3","6304 ZZ C3","6305 ZZ C3","6306 ZZ C3","6307 ZZ C3","6308 ZZ C3","6309 ZZ C3","6310 ZZ C3","6311 ZZ C3","6312 ZZ C3","6313 ZZ C3","6314 ZZ C3","6315 ZZ C3","6316 ZZ C3","6317 ZZ C3","6317 C3","6318 ZZ C3","6318 C3","6319 ZZ C3","6319 C3","NU 206 C3","NU 208 C3","NU 209 C3","NU 210 C3","NU 212 C3","NU 213 C3","NU 214 C3","NU 215 C3","NU 308 C3","NU 309 C3","NU 310 C3","NU 311 C3","NU 312 C3","NU 313 C3","NU 314 C3","NU 315 C3","NU 316 C3","NU 319 C3","NU 322 C3","Autre"];
-
 const SEUIL_DEFAUT = 100;
-
 const ETAPES = ["Entrée","Infos électriques","Information rotation avant démontage","Information matériel au démontage","Information des essais après remontage"];
 
 const CHAMPS = {
@@ -126,10 +123,11 @@ const CHAMPS = {
 
 function champVisible(c,v){return !c.condition||v[c.condition.champ]===c.condition.valeur;}
 function etapeOk(nom,v,nr){if(nr)return true;for(const c of(CHAMPS[nom]||[])){if(!c.required||!champVisible(c,v))continue;if(!v[c.id])return false;}return true;}
-function enErreur(c,val){if(c.type!=="mesure")return false;const v=parseFloat(val);return !isNaN(v)&&v>SEUIL_DEFAUT;}
+function enErreur(c,val){if(c.type!=="mesure")return false;const vv=parseFloat(val);return !isNaN(vv)&&vv>SEUIL_DEFAUT;}
 function genDE(){return "DE-"+String(Math.floor(1000+Math.random()*9000));}
 function today(){return new Date().toISOString().split("T")[0];}
 function fmt(iso){if(!iso)return "—";return new Date(iso).toLocaleDateString("fr-FR");}
+function fmtVal(c,val){if(!val)return "—";if(c.unite)return val+" "+c.unite;return val;}
 
 const S={
   app:{fontFamily:"system-ui,-apple-system,sans-serif",background:"#F5F6F8",minHeight:"100vh",color:"#1A1A2E"},
@@ -139,7 +137,7 @@ const S={
   card:{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"16px 20px",marginBottom:16},
   cAct:{background:"#fff",borderRadius:10,border:"2px solid #1B4F8A",padding:"16px 20px",marginBottom:16},
   cDone:{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:12,overflow:"hidden"},
-  cLock:{background:"#F5F6F8",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 20px",marginBottom:12,opacity:.5},
+  cLock:{background:"#F5F6F8",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 20px",marginBottom:12,opacity:0.5},
   lbl:{fontSize:12,fontWeight:600,color:"#6B7280",textTransform:"uppercase",letterSpacing:".06em",display:"block",marginBottom:4},
   inp:{width:"100%",padding:"8px 10px",borderRadius:6,border:"1.5px solid #D1D5DB",fontSize:14,boxSizing:"border-box",background:"#fff"},
   inpErr:{width:"100%",padding:"8px 10px",borderRadius:6,border:"1.5px solid #D73A49",fontSize:14,boxSizing:"border-box",background:"#FFF5F5"},
@@ -151,6 +149,140 @@ const S={
   nr:{border:"1.5px solid #E2E6EA",borderRadius:8,padding:"8px 14px",display:"flex",alignItems:"center",gap:10,marginBottom:14,cursor:"pointer"},
 };
 
+// ─── APERÇU + IMPRESSION ───────────────────────────────────────────────
+function genHtmlFiche(v){
+  function row2(l1,v1,l2,v2,err1,err2){
+    const s1=err1?"color:#D73A49;font-weight:bold":"";
+    const s2=err2?"color:#D73A49;font-weight:bold":"";
+    return `<tr><td class="lbl">${l1}</td><td class="val" style="${s1}">${v1||"—"}</td><td class="lbl">${l2}</td><td class="val" style="${s2}">${v2||"—"}</td></tr>`;
+  }
+  function secHdr(num,titre,tech){
+    return `<tr class="sec-hdr"><td colspan="4"><span class="sec-num">${num}.</span> ${titre}<span class="sec-tech">${tech?"Technicien : "+tech:""}</span></td></tr>`;
+  }
+  const css=`
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:Arial,sans-serif;font-size:9.5pt;color:#1A1A2E;background:#fff;}
+    .page{max-width:210mm;margin:0 auto;padding:12mm;}
+    .hdr{background:#1B4F8A;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+    .hdr-title{font-size:15pt;font-weight:bold;}
+    .hdr-sub{font-size:8pt;opacity:0.75;margin-top:2px;}
+    .hdr-de{font-size:18pt;font-weight:bold;color:#E8720C;text-align:right;}
+    .hdr-date{font-size:8pt;opacity:0.75;text-align:right;}
+    table{width:100%;border-collapse:collapse;margin-bottom:4px;}
+    td{padding:5px 7px;border:0.4px solid #DEE2E6;vertical-align:top;}
+    tr:nth-child(even) td{background:#F8F9FA;}
+    .lbl{font-weight:bold;font-size:9.5pt;width:22%;}
+    .val{font-size:9.5pt;width:28%;}
+    .sec-hdr td{background:#1B4F8A;color:#fff;font-weight:bold;font-size:9.5pt;padding:6px 8px;}
+    .sec-num{margin-right:6px;}
+    .sec-tech{float:right;font-size:8pt;opacity:0.8;font-weight:normal;}
+    .sub-hdr td{background:#D6E4F7;color:#1B4F8A;font-weight:bold;font-size:8.5pt;padding:5px 8px;}
+    .alerte td{background:#FFF0F0;color:#D73A49;font-size:8.5pt;padding:5px 8px;}
+    .footer{border-top:0.5px solid #DEE2E6;margin-top:12px;padding-top:6px;font-size:7pt;color:#6B7280;text-align:center;}
+    @media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.no-print{display:none!important;}}
+  `;
+  const tech1=v.tech_entree||"—";
+  const tech2=v.tech_elec||"—";
+  const tech3=v.tech_mesure_avant||"—";
+  const tech4=v.tech_demontage||"—";
+  const tech5r=v.tech_remontage||"—";
+  const tech5e=v.tech_essai||"—";
+  const rou_av=v.type_roulement_av?v.type_roulement_av.replace("Autre:",""):"—";
+  const rou_ar=v.type_roulement_ar?v.type_roulement_ar.replace("Autre:",""):"—";
+  const jav=`${v.joint_av_int||"?"}x${v.joint_av_ext||"?"}x${v.joint_av_ep||"?"} ${v.joint_av_levres==="Double"?"DL":"SL"}`;
+  const jar=`${v.joint_ar_int||"?"}x${v.joint_ar_ext||"?"}x${v.joint_ar_ep||"?"} ${v.joint_ar_levres==="Double"?"DL":"SL"}`;
+  const now=new Date().toLocaleDateString("fr-FR");
+
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/><title>Fiche ${v.de||""}</title><style>${css}</style></head><body>
+<div class="page">
+  <button class="no-print" onclick="window.print()" style="margin-bottom:12px;background:#1B4F8A;color:#fff;border:none;padding:8px 18px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:600;">📄 Imprimer / Enregistrer PDF</button>
+  <button class="no-print" onclick="window.close()" style="margin-bottom:12px;margin-left:8px;background:#fff;color:#1B4F8A;border:1.5px solid #1B4F8A;padding:8px 18px;border-radius:6px;font-size:14px;cursor:pointer;font-weight:600;">✕ Fermer</button>
+  <div class="hdr">
+    <div><div class="hdr-title">FICHE D'ENTRETIEN / EXPERTISE</div><div class="hdr-sub">Atelier PMV — Matériels électriques</div></div>
+    <div><div class="hdr-de">${v.de||"—"}</div><div class="hdr-date">${v.date_entree||now}</div></div>
+  </div>
+  <table>
+    ${secHdr("1","ENTRÉE",tech1)}
+    ${row2("Client",v.client,"Téléphone",v.telephone)}
+    ${row2("Mail",v.mail,"Matériel / Identification lieux",v.materiel_lieu)}
+    ${row2("Marque moteur",v.marque_moteur,"Type",v.type_moteur)}
+    ${row2("Numéro de série",v.numero_serie,"Fixation",v.fixation)}
+    ${row2("Puissance",(v.puissance?v.puissance+" kW":""),"Vitesse",(v.vitesse?v.vitesse+" tr/mn":""))}
+    ${row2("Tension",(v.tension?v.tension+" V":""),"Déposé par nos soins",v.depose_nos_soins)}
+  </table>
+  <table>
+    ${secHdr("2","INFOS ÉLECTRIQUES",tech2)}
+    ${row2("Couplage",v.couplage,"ADX isol. — résultat",v.adx_resultat,false,v.adx_resultat==="Hors Tolérance")}
+    ${row2("Isolement enroulement/masse",(v.isol_masse?v.isol_masse+" Ω":""),"ADX isol. — valeur",(v.adx_valeur?v.adx_valeur+" Ω":""))}
+    ${row2("Isolement U-V",(v.isol_uv?v.isol_uv+" Ω":""),"Isolement V-W",(v.isol_vw?v.isol_vw+" Ω":""),false,parseFloat(v.isol_vw)>SEUIL_DEFAUT)}
+    ${row2("Isolement W-U",(v.isol_wu?v.isol_wu+" Ω":""),"Plaque à bornes — état",v.plaque_bornes_etat,false,v.plaque_bornes_etat==="HS")}
+    ${v.plaque_bornes_etat==="HS"?row2("Plaque à bornes — taille",v.plaque_bornes_taille,"Résistance sonde — présence",v.sonde_presence):row2("Résistance sonde — présence",v.sonde_presence,"Résistance sonde — valeur",(v.sonde_valeur?v.sonde_valeur+" Ω":""))}
+  </table>
+  <table>
+    ${secHdr("3","INFORMATION ROTATION AVANT DÉMONTAGE",tech3)}
+    ${row2("Essai à vide possible",v.essai_vide_avant,"Vérif rotor court-circuit",v.rotor_cc_realise+(v.rotor_cc_resultat?" — "+v.rotor_cc_resultat:""))}
+    ${row2("Intensité Phase 1",(v.int_p1_avant?v.int_p1_avant+" A":""),"Intensité Phase 2",(v.int_p2_avant?v.int_p2_avant+" A":""))}
+    ${row2("Intensité Phase 3",(v.int_p3_avant?v.int_p3_avant+" A":""),"Intensité 560V Ph.1",(v.int_560_p1_avant?v.int_560_p1_avant+" A":""))}
+    ${row2("Intensité 560V Ph.2",(v.int_560_p2_avant?v.int_560_p2_avant+" A":""),"Intensité 560V Ph.3",(v.int_560_p3_avant?v.int_560_p3_avant+" A":""))}
+    ${row2("Vibration avant — mm/s",(v.vib_av_mms_avant?v.vib_av_mms_avant+" mm/s":""),"Vibration avant — GE",(v.vib_av_ge_avant?v.vib_av_ge_avant+" GE":""))}
+    ${row2("Vibration arrière — mm/s",(v.vib_ar_mms_avant?v.vib_ar_mms_avant+" mm/s":""),"Vibration arrière — GE",(v.vib_ar_ge_avant?v.vib_ar_ge_avant+" GE":""))}
+    ${row2("Nettoyage HP",v.nettoyage_hp,"Étuvage du stator",v.etuvage_stator)}
+    ${v.etuvage_stator==="Oui"?row2("Mesure isolement masse (HP)",(v.isol_masse_hp?v.isol_masse_hp+" Ω":""),"Isol. enroulements min.",(v.isol_enroul_min?v.isol_enroul_min+" Ω":"")):row2("Isol. enroulements min.",(v.isol_enroul_min?v.isol_enroul_min+" Ω":""),"","")}
+  </table>
+  <table>
+    ${secHdr("4","INFORMATION MATÉRIEL AU DÉMONTAGE",tech4)}
+    ${row2("Présence d'un ventilateur",v.ventilateur_present,"État ventilateur",v.etat_ventilateur)}
+    ${row2("Taille ventilateur",v.taille_ventilateur,"Peinture à faire",v.peinture)}
+    ${row2("Circlips avant",v.circlips_avant,"Circlips arrière",v.circlips_arriere)}
+    ${row2("Rondelle souplesse — présence",v.rondelle_presence,"État visuel bobinage",v.etat_bobinage)}
+    <tr class="sub-hdr"><td colspan="2">ROULEMENT AVANT</td><td colspan="2">ROULEMENT ARRIÈRE</td></tr>
+    ${row2("Type",rou_av,"Type",rou_ar)}
+    ${row2("État",v.etat_roulement_av,"État",v.etat_roulement_ar,v.etat_roulement_av==="HS"||v.etat_roulement_av==="Cassé",v.etat_roulement_ar==="HS"||v.etat_roulement_ar==="Cassé")}
+    ${row2("Flasque — état",v.etat_flasque_av,"Flasque — état",v.etat_flasque_ar)}
+    ${row2("Flasque — mesure",(v.mesure_flasque_av?v.mesure_flasque_av+" mm":""),"Flasque — mesure",(v.mesure_flasque_ar?v.mesure_flasque_ar+" mm":""))}
+    ${row2("Arbre — état",v.etat_arbre_av,"Arbre — état",v.etat_arbre_ar)}
+    ${row2("Arbre — mesure",(v.mesure_arbre_av?v.mesure_arbre_av+" mm":""),"Arbre — mesure",(v.mesure_arbre_ar?v.mesure_arbre_ar+" mm":""))}
+    ${row2("Joint à lèvres",jav,"Joint à lèvres",jar)}
+    ${row2("État visuel rotor",v.etat_rotor,"","")}
+  </table>
+  <table>
+    ${secHdr("5","INFORMATION DES ESSAIS APRÈS REMONTAGE","Remonté: "+tech5r+" / Essayé: "+tech5e)}
+    ${row2("Essai à vide possible",v.essai_vide_apres,"Resserrage plaque à bornes",v.resserage_plaque)}
+    ${row2("Intensité Phase 1",(v.int_p1_apres?v.int_p1_apres+" A":""),"Intensité Phase 2",(v.int_p2_apres?v.int_p2_apres+" A":""))}
+    ${row2("Intensité Phase 3",(v.int_p3_apres?v.int_p3_apres+" A":""),"Intensité 560V Ph.1",(v.int_560_p1_apres?v.int_560_p1_apres+" A":""))}
+    ${row2("Intensité 560V Ph.2",(v.int_560_p2_apres?v.int_560_p2_apres+" A":""),"Intensité 560V Ph.3",(v.int_560_p3_apres?v.int_560_p3_apres+" A":""))}
+    ${row2("Vibration avant — mm/s",(v.vib_av_mms_apres?v.vib_av_mms_apres+" mm/s":""),"Vibration avant — GE",(v.vib_av_ge_apres?v.vib_av_ge_apres+" GE":""))}
+    ${row2("Vibration arrière — mm/s",(v.vib_ar_mms_apres?v.vib_ar_mms_apres+" mm/s":""),"Vibration arrière — GE",(v.vib_ar_ge_apres?v.vib_ar_ge_apres+" GE":""))}
+  </table>
+  <div class="footer">Fiche ${v.de||"—"} — Générée le ${now} — Atelier PMV — Document confidentiel</div>
+</div></body></html>`;
+}
+
+function imprimerFiche(v){
+  const html=genHtmlFiche(v);
+  const w=window.open("","_blank","width=900,height=700");
+  w.document.write(html);
+  w.document.close();
+  setTimeout(()=>w.print(),800);
+}
+
+function ApercuFiche({v,onClose}){
+  const html=genHtmlFiche(v);
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:300,display:"flex",flexDirection:"column"}}>
+      <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+        <span style={{fontWeight:700}}>Aperçu de la fiche</span>
+        <div style={{display:"flex",gap:10}}>
+          <button style={{background:"#E8720C",color:"#fff",border:"none",padding:"7px 16px",borderRadius:6,fontWeight:600,cursor:"pointer"}} onClick={()=>imprimerFiche(v)}>📄 Imprimer / PDF</button>
+          <button style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",padding:"7px 16px",borderRadius:6,fontWeight:600,cursor:"pointer"}} onClick={onClose}>✕ Fermer</button>
+        </div>
+      </div>
+      <iframe srcDoc={html} style={{flex:1,border:"none",background:"#fff"}} title="Aperçu fiche"/>
+    </div>
+  );
+}
+
+// ─── COMPOSANTS CHAMPS ──────────────────────────────────────────────────
 function ChampRoulement({valeur,onChange}){
   const isAutre=valeur==="Autre"||(!ROULEMENTS.slice(0,-1).includes(valeur)&&valeur);
   const selVal=isAutre?"Autre":(valeur||"");
@@ -172,13 +304,11 @@ function UnChamp({c,v,onChange,techs}){
   const val=v[c.id]||"";
   const manque=c.required&&!val;
   const err=enErreur(c,val);
-
   const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>
     {c.label}{c.required&&<span style={{color:"#D73A49"}}> *</span>}
     {c.unite&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}
     {c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:11}}> — {c.note}</span>}
   </label>;
-
   let ctrl;
   if(c.type==="technicien"){
     ctrl=<select value={val} onChange={e=>onChange(c.id,e.target.value)} style={S.sel}>
@@ -222,7 +352,6 @@ function UnChamp({c,v,onChange,techs}){
   }else{
     ctrl=<input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} style={manque?S.inpErr:S.inp} placeholder="—"/>;
   }
-
   return <div style={{marginBottom:14}}>{lbl}{ctrl}{manque&&<div style={{fontSize:11,color:"#D73A49",marginTop:3}}>Champ obligatoire</div>}</div>;
 }
 
@@ -231,14 +360,8 @@ function SectionEtape({nom,idx,actif,validees,v,nr,onChange,onNR,onValider,sessi
   const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;
   const ok=etapeOk(nom,v,nr);
   const techEtape=(CHAMPS[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";
-
-  function resume(){
-    return(CHAMPS[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,4)
-      .map(c=>`${c.label}: ${v[c.id]}${c.unite?" "+c.unite:""}`).join(" · ");
-  }
-
+  function resume(){return(CHAMPS[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,4).map(c=>`${c.label}: ${v[c.id]}${c.unite?" "+c.unite:""}`).join(" · ");}
   if(estLock)return <div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
-
   if(estVal&&!estAct)return(
     <div style={S.cDone}>
       <div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}>
@@ -248,22 +371,13 @@ function SectionEtape({nom,idx,actif,validees,v,nr,onChange,onNR,onValider,sessi
         </div>
         <span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲ Replier":"▼ Modifier"}</span>
       </div>
-      {ouvert?(
-        <div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}>
-          <div style={S.info}>✏️ Modification tracée dans l'historique.</div>
-          {(CHAMPS[nom]||[]).map(c=><UnChamp key={c.id} c={c} v={v} onChange={onChange} techs={techs}/>)}
-        </div>
-      ):<div style={{padding:"4px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}
+      {ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modification tracée dans l'historique.</div>{(CHAMPS[nom]||[]).map(c=><UnChamp key={c.id} c={c} v={v} onChange={onChange} techs={techs}/>)}</div>):<div style={{padding:"4px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}
     </div>
   );
-
   return(
     <div style={S.cAct}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}>
-        <div>
-          <span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span>
-          <p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p>
-        </div>
+        <div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div>
         <span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{ETAPES.length}</span>
       </div>
       <div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>
@@ -271,11 +385,9 @@ function SectionEtape({nom,idx,actif,validees,v,nr,onChange,onNR,onValider,sessi
         <input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/>
         <div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché, les champs ne sont plus obligatoires</p></div>
       </div>
-      <div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}>
-        {(CHAMPS[nom]||[]).map(c=><UnChamp key={c.id} c={c} v={v} onChange={onChange} techs={techs}/>)}
-      </div>
+      <div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}>{(CHAMPS[nom]||[]).map(c=><UnChamp key={c.id} c={c} v={v} onChange={onChange} techs={techs}/>)}</div>
       {!ok&&!nr&&<div style={{...S.alert,marginBottom:10}}>⚠ Des champs obligatoires (*) sont manquants.</div>}
-      <button style={{...S.p1,width:"100%",justifyContent:"center",opacity:ok?1:.5,marginTop:12}} disabled={!ok||saving} onClick={onValider}>
+      <button style={{...S.p1,width:"100%",justifyContent:"center",opacity:ok?1:0.5,marginTop:12}} disabled={!ok||saving} onClick={onValider}>
         {saving?"Enregistrement…":"Enregistrer et continuer →"}
       </button>
     </div>
@@ -296,19 +408,17 @@ function ModalIdent({techs,onConfirm}){
           <option value="">— Sélectionner</option>
           {techs.map(x=><option key={x}>{x}</option>)}
         </select>
-        <button style={{...S.p1,width:"100%",justifyContent:"center",opacity:t?1:.5}} disabled={!t} onClick={()=>onConfirm(t)}>
-          Ouvrir la fiche
-        </button>
+        <button style={{...S.p1,width:"100%",justifyContent:"center",opacity:t?1:0.5}} disabled={!t} onClick={()=>onConfirm(t)}>Ouvrir la fiche</button>
       </div>
     </div>
   );
 }
 
 function statutStyle(s){
-  if(s==="Terminée")return {background:"#F0FFF4",color:"#22863A"};
-  if(s==="En cours")return {background:"#FFF8E1",color:"#E8720C"};
-  if(s==="Modifiée")return {background:"#EEF4FF",color:"#1B4F8A"};
-  return {};
+  if(s==="Terminée")return{background:"#F0FFF4",color:"#22863A"};
+  if(s==="En cours")return{background:"#FFF8E1",color:"#E8720C"};
+  if(s==="Modifiée")return{background:"#EEF4FF",color:"#1B4F8A"};
+  return{};
 }
 
 function PageAccueil({onNew,onOpen}){
@@ -316,22 +426,12 @@ function PageAccueil({onNew,onOpen}){
   const [loading,setLoading]=useState(true);
   const [q,setQ]=useState("");
   const [fs,setFs]=useState("Tous");
-
-  useEffect(()=>{
-    db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));
-  },[]);
-  const list=fiches.filter(f=>{
-    const qq=q.toLowerCase();
-    return(!qq||(f.de||"").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq))&&(fs==="Tous"||f.statut===fs);
-  });
-
+  useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));});
+  const list=fiches.filter(f=>{const qq=q.toLowerCase();return(!qq||(f.de||"").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq))&&(fs==="Tous"||f.statut===fs);});
   return(
     <div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-        <div>
-          <h1 style={{fontSize:22,fontWeight:800,margin:0}}>Fiches atelier</h1>
-          <p style={{fontSize:13,color:"#6B7280",margin:"3px 0 0"}}>{fiches.length} fiche{fiches.length>1?"s":""} enregistrée{fiches.length>1?"s":""}</p>
-        </div>
+        <div><h1 style={{fontSize:22,fontWeight:800,margin:0}}>Fiches atelier</h1><p style={{fontSize:13,color:"#6B7280",margin:"3px 0 0"}}>{fiches.length} fiche{fiches.length>1?"s":""} enregistrée{fiches.length>1?"s":""}</p></div>
         <button style={S.p1} onClick={onNew}>+ Nouvelle fiche</button>
       </div>
       <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16,display:"flex",gap:10,flexWrap:"wrap"}}>
@@ -375,14 +475,12 @@ function PageChoix({onChoisir,onRetour}){
       <h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>Nouvelle fiche — quel matériel ?</h2>
       <p style={{fontSize:14,color:"#6B7280",margin:"0 0 20px"}}>Le formulaire s'adaptera selon votre choix.</p>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:14}}>
-        {mats.map(m=>(
-          <div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}>
-            <div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div>
-            <p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.id}</p>
-            <p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>
-            {m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}
-          </div>
-        ))}
+        {mats.map(m=>(<div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}>
+          <div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div>
+          <p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.id}</p>
+          <p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>
+          {m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}
+        </div>))}
       </div>
     </div>
   );
@@ -397,6 +495,7 @@ function PageFiche({ficheInit,sessionTech,techs,onRetour}){
   const [saving,setSaving]=useState(false);
   const [flash,setFlash]=useState(null);
   const [erreur,setErreur]=useState(null);
+  const [apercu,setApercu]=useState(false);
 
   useEffect(()=>{
     if(!ficheInit?.id)return;
@@ -439,17 +538,18 @@ function PageFiche({ficheInit,sessionTech,techs,onRetour}){
 
   return(
     <div style={{maxWidth:800,margin:"0 auto",paddingBottom:40}}>
+      {apercu&&<ApercuFiche v={v} onClose={()=>setApercu(false)}/>}
       <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:48,zIndex:90}}>
         <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
           <div>
             <p style={{margin:0,fontSize:13,fontWeight:700}}>{info}</p>
-            <p style={{margin:"2px 0 0",fontSize:11,opacity:.7}}>Session : {sessionTech} — étape {actif+1}/{ETAPES.length}</p>
+            <p style={{margin:"2px 0 0",fontSize:11,opacity:0.7}}>Session : {sessionTech} — étape {actif+1}/{ETAPES.length}</p>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
             <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:100}}>
               <div style={{background:"#E8720C",height:6,borderRadius:20,width:`${prog}%`,transition:"width .4s"}}/>
             </div>
-            <span style={{fontSize:12,opacity:.85}}>{prog}%</span>
+            <span style={{fontSize:12,opacity:0.85}}>{prog}%</span>
             <button style={{...S.p2,fontSize:12,padding:"5px 12px"}} onClick={onRetour}>← Liste</button>
           </div>
         </div>
@@ -470,8 +570,10 @@ function PageFiche({ficheInit,sessionTech,techs,onRetour}){
             <p style={{fontSize:18,fontWeight:800,color:"#22863A",margin:"0 0 4px"}}>Fiche complète !</p>
             <p style={{fontSize:13,color:"#6B7280",margin:"0 0 20px"}}>{v.de} — enregistrée dans Supabase</p>
             <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
-              <button style={S.p1} onClick={()=>window.print()}>📄 Imprimer / PDF</button>
+              <button style={S.p1} onClick={()=>setApercu(true)}>👁 Aperçu fiche</button>
+              <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v)}>📄 Imprimer / PDF</button>
               <button style={S.p2}>📧 Rapport client (bientôt)</button>
+              <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
             </div>
           </div>
         )}
@@ -502,11 +604,11 @@ export default function App(){
       <div style={S.hdr}>
         <div>
           <p style={{fontSize:16,fontWeight:700,margin:0}}>⚡ Atelier PMV — Fiches d'entretien</p>
-          <p style={{fontSize:12,opacity:.75,margin:"2px 0 0"}}>Expertise moteurs & matériels électriques</p>
+          <p style={{fontSize:12,opacity:0.75,margin:"2px 0 0"}}>Expertise moteurs & matériels électriques</p>
         </div>
         {sessionTech&&(
           <div style={{display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontSize:12,opacity:.75}}>Session :</span>
+            <span style={{fontSize:12,opacity:0.75}}>Session :</span>
             <span style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:13,fontWeight:700}}>{sessionTech}</span>
             <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:11,cursor:"pointer"}} onClick={()=>setSessionTech(null)}>Changer</button>
           </div>
