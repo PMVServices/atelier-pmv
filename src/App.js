@@ -10,6 +10,57 @@ const db = {
   async del(t,p){await fetch(`${SUPA_URL}/rest/v1/${t}${p}`,{method:"DELETE",headers:this.h});}
 };
 
+
+// ─── PIN DE SÉCURITÉ ───────────────────────────────────────────────────
+// Changez "0000" par votre code PIN à 4 chiffres
+const PIN_CODE = "3739";
+const PIN_STORAGE_KEY = "pmv_atelier_pin_ok";
+
+function ModalPin({onSuccess}){
+  const [saisie,setSaisie]=useState("");
+  const [erreur,setErreur]=useState(false);
+  function handleTouche(c){
+    if(saisie.length>=4)return;
+    const nouveau=saisie+c;
+    setSaisie(nouveau);
+    if(nouveau.length===4){
+      if(nouveau===PIN_CODE){
+        localStorage.setItem(PIN_STORAGE_KEY,"1");
+        onSuccess();
+      }else{
+        setErreur(true);
+        setTimeout(()=>{setSaisie("");setErreur(false);},800);
+      }
+    }
+  }
+  function handleEffacer(){setSaisie(s=>s.slice(0,-1));}
+  const touches=["1","2","3","4","5","6","7","8","9","","0","⌫"];
+  return(
+    <div style={{position:"fixed",inset:0,background:"#1B4F8A",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}}>
+      <div style={{background:"#fff",borderRadius:16,padding:"32px 28px",width:300,textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
+        <div style={{fontSize:32,marginBottom:8}}>🔒</div>
+        <p style={{fontSize:17,fontWeight:700,margin:"0 0 4px"}}>Atelier PMV</p>
+        <p style={{fontSize:13,color:"#6B7280",margin:"0 0 24px"}}>Entrez le code PIN</p>
+        <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:24}}>
+          {[0,1,2,3].map(i=>(
+            <div key={i} style={{width:16,height:16,borderRadius:"50%",background:saisie.length>i?(erreur?"#D73A49":"#1B4F8A"):"#E2E6EA",transition:"background 0.15s"}}/>
+          ))}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+          {touches.map((t,i)=>(
+            t===""?<div key={i}/>:
+            <button key={i} onClick={()=>t==="⌫"?handleEffacer():handleTouche(t)}
+              style={{padding:"14px",fontSize:18,fontWeight:600,borderRadius:10,border:"1.5px solid #E2E6EA",background:t==="⌫"?"#F5F6F8":"#fff",cursor:t?"pointer":"default",color:t==="⌫"?"#6B7280":"#1A1A2E"}}>
+              {t}
+            </button>
+          ))}
+        </div>
+        {erreur&&<p style={{color:"#D73A49",fontSize:13,marginTop:12,fontWeight:600}}>Code incorrect</p>}
+      </div>
+    </div>
+  );
+}
+
 const TECHNICIENS_FB = ["AD","CB","JM","KD","CD","RC","MC","DIV"];
 const ROULEMENTS = ["608 ZZ C3","608 RSH","6000 ZZ C3","6001 ZZ C3","6002 ZZ C3","6003 ZZ C3","6004 ZZ C3","6005 ZZ C3","6006 ZZ C3","6007 ZZ C3","6008 ZZ C3","6009 ZZ C3","6010 ZZ C3","6011 ZZ C3","6200 ZZ C3","6201 ZZ C3","6202 ZZ C3","6203 ZZ C3","6204 ZZ C3","6205 ZZ C3","6206 ZZ C3","6207 ZZ C3","6208 ZZ C3","6209 ZZ C3","6210 ZZ C3","6211 ZZ C3","6212 ZZ C3","6213 ZZ C3","6214 ZZ C3","6215 ZZ C3","6216 ZZ C3","6217 ZZ C3","6217 C3","6218 ZZ C3","6218 C3","6219 ZZ C3","6219 C3","6300 ZZ C3","6301 ZZ C3","6302 ZZ C3","6303 ZZ C3","6304 ZZ C3","6305 ZZ C3","6306 ZZ C3","6307 ZZ C3","6308 ZZ C3","6309 ZZ C3","6310 ZZ C3","6311 ZZ C3","6312 ZZ C3","6313 ZZ C3","6314 ZZ C3","6315 ZZ C3","6316 ZZ C3","6317 ZZ C3","6317 C3","6318 ZZ C3","6318 C3","6319 ZZ C3","6319 C3","NU 206 C3","NU 208 C3","NU 209 C3","NU 210 C3","NU 212 C3","NU 213 C3","NU 214 C3","NU 215 C3","NU 308 C3","NU 309 C3","NU 310 C3","NU 311 C3","NU 312 C3","NU 313 C3","NU 314 C3","NU 315 C3","NU 316 C3","NU 319 C3","NU 322 C3","Autre"];
 const SEUIL_DEFAUT = 100;
@@ -583,6 +634,7 @@ function PageFiche({ficheInit,sessionTech,techs,onRetour}){
 }
 
 export default function App(){
+  const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_STORAGE_KEY)==="1");
   const [page,setPage]=useState("accueil");
   const [sessionTech,setSessionTech]=useState(null);
   const [ficheOuverte,setFicheOuverte]=useState(null);
@@ -598,6 +650,8 @@ export default function App(){
 
   function askIdent(fn){setDemandeIdent(true);setPending(()=>fn);}
   function confirmIdent(t){setSessionTech(t);setDemandeIdent(false);if(pending){pending(t);setPending(null);}}
+
+  if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
 
   return(
     <div style={S.app}>
