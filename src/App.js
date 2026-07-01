@@ -4,10 +4,10 @@ const SUPA_URL = "https://pupbzngvudprcweukuoi.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1cGJ6bmd2dWRwcmN3ZXVrdW9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxODY3NDAsImV4cCI6MjA5Nzc2Mjc0MH0.jn025v42M3qNpAKfvy49cdCySBdTqwRz99b1EfaKYoo";
 const H = {"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`};
 const db = {
-  async get(t,p=""){const r=await fetch(`${SUPA_URL}/rest/v1/${t}${p}`,{headers:{...H,"Prefer":"return=representation"}});return r.json();},
-  async post(t,b){const r=await fetch(`${SUPA_URL}/rest/v1/${t}`,{method:"POST",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(b)});return r.json();},
-  async patch(t,p,b){const r=await fetch(`${SUPA_URL}/rest/v1/${t}${p}`,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(b)});return r.json();},
-  async del(t,p){await fetch(`${SUPA_URL}/rest/v1/${t}${p}`,{method:"DELETE",headers:H});},
+  async get(t,p=""){try{const r=await fetch(`${SUPA_URL}/rest/v1/${t}${p}`,{headers:{...H,"Prefer":"return=representation"}});return r.json();}catch(e){return[];}},
+  async post(t,b){try{const r=await fetch(`${SUPA_URL}/rest/v1/${t}`,{method:"POST",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(b)});return r.json();}catch(e){return null;}},
+  async patch(t,p,b){try{const r=await fetch(`${SUPA_URL}/rest/v1/${t}${p}`,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(b)});return r.json();}catch(e){return null;}},
+  async del(t,p){try{await fetch(`${SUPA_URL}/rest/v1/${t}${p}`,{method:"DELETE",headers:H});}catch(e){}},
   async uploadPhoto(path,file){
     const r=await fetch(`${SUPA_URL}/storage/v1/object/photos/${path}`,{method:"POST",headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`,"Content-Type":file.type,"x-upsert":"true"},body:file});
     if(!r.ok){const e=await r.text();throw new Error(e);}return true;
@@ -22,17 +22,13 @@ const CATS_FB=["Vue d'ensemble","Plaque moteur","Plaque pompe","Plaque ventilati
 const ROULEMENTS=["608 ZZ C3","608 RSH","6000 ZZ C3","6001 ZZ C3","6002 ZZ C3","6003 ZZ C3","6004 ZZ C3","6005 ZZ C3","6006 ZZ C3","6007 ZZ C3","6008 ZZ C3","6009 ZZ C3","6010 ZZ C3","6011 ZZ C3","6200 ZZ C3","6201 ZZ C3","6202 ZZ C3","6203 ZZ C3","6204 ZZ C3","6205 ZZ C3","6206 ZZ C3","6207 ZZ C3","6208 ZZ C3","6209 ZZ C3","6210 ZZ C3","6211 ZZ C3","6212 ZZ C3","6213 ZZ C3","6214 ZZ C3","6215 ZZ C3","6216 ZZ C3","6217 ZZ C3","6217 C3","6218 ZZ C3","6218 C3","6219 ZZ C3","6219 C3","6300 ZZ C3","6301 ZZ C3","6302 ZZ C3","6303 ZZ C3","6304 ZZ C3","6305 ZZ C3","6306 ZZ C3","6307 ZZ C3","6308 ZZ C3","6309 ZZ C3","6310 ZZ C3","6311 ZZ C3","6312 ZZ C3","6313 ZZ C3","6314 ZZ C3","6315 ZZ C3","6316 ZZ C3","6317 ZZ C3","6317 C3","6318 ZZ C3","6318 C3","6319 ZZ C3","6319 C3","NU 206 C3","NU 208 C3","NU 209 C3","NU 210 C3","NU 212 C3","NU 213 C3","NU 214 C3","NU 215 C3","NU 308 C3","NU 309 C3","NU 310 C3","NU 311 C3","NU 312 C3","NU 313 C3","NU 314 C3","NU 315 C3","NU 316 C3","NU 319 C3","NU 322 C3","Autre"];
 const SEUIL_OMEGA=300;
 const ETAPES=["Entrée","Infos électriques","Information rotation avant démontage","Information matériel au démontage","Information des essais après remontage"];
-
-// ─── NOMMAGE DOSSIERS ───────────────────────────────────────────────────
-// Structure : Client / DE / Matériel_Lieu
-function slug(s){return (s||"").replace(/\s+/g,"_").replace(/[^a-zA-Z0-9_\-]/g,"").substring(0,30);}
-function deSlug(de){return (de||"").replace(/-/g,"");}  // DE-1042 → DE1042
-function cheminFiche(v){
-  const client=slug(v.client||"Client");
-  const de=deSlug(v.de||"DE");
-  const mat=slug((v.materiel_lieu||v.type_moteur||"Materiel"));
-  return {client,de,mat,chemin:`${client}/${de}/${mat}`};
-}
+const STATUTS_CHANTIER=[
+  {id:"A_demonter",label:"À démonter",color:"#D73A49",bg:"#FFF5F5"},
+  {id:"Devis",label:"Devis",color:"#E8720C",bg:"#FFF8E1"},
+  {id:"En_commande",label:"En commande",color:"#1B4F8A",bg:"#EEF4FF"},
+  {id:"A_remonter",label:"À remonter",color:"#22863A",bg:"#F0FFF4"},
+  {id:"Termine",label:"Terminé",color:"#6B7280",bg:"#F5F6F8"},
+];
 
 const CHAMPS={
   "Entrée":[
@@ -141,6 +137,7 @@ const CHAMPS={
   ],
 };
 
+// ─── UTILS ──────────────────────────────────────────────────────────────
 function champVisible(c,v){return !c.condition||v[c.condition.champ]===c.condition.valeur;}
 function etapeOk(nom,v,nr){if(nr)return true;for(const c of(CHAMPS[nom]||[])){if(!c.required||!champVisible(c,v))continue;if(!v[c.id])return false;}return true;}
 function enErreur(c,val){if(c.type!=="mesure"||c.seuilMin==null)return false;const vv=parseFloat(val);return !isNaN(vv)&&vv<c.seuilMin;}
@@ -148,8 +145,38 @@ function genDE(){return "DE-"+String(Math.floor(1000+Math.random()*9000));}
 function today(){return new Date().toISOString().split("T")[0];}
 function fmt(iso){if(!iso)return "—";return new Date(iso).toLocaleDateString("fr-FR");}
 function slugCat(s){return s.toLowerCase().replace(/['\s]/g,"_").replace(/é|è|ê/g,"e").replace(/à|â/g,"a").replace(/[^a-z0-9_]/g,"");}
+function slug(s){return (s||"").replace(/\s+/g,"_").replace(/[^a-zA-Z0-9_\-]/g,"").substring(0,30);}
+function deSlug(de){return (de||"").replace(/-/g,"");}
+function cheminFiche(v){
+  const client=slug(v.client||"Client");
+  const de=deSlug(v.de||"DE");
+  const mat=slug(v.materiel_lieu||v.type_moteur||"Materiel");
+  return {client,de,mat,chemin:`${client}/${de}/${mat}`};
+}
+function statutInfo(id){return STATUTS_CHANTIER.find(s=>s.id===id)||STATUTS_CHANTIER[0];}
 function useWidth(){const [w,setW]=useState(window.innerWidth);useEffect(()=>{const h=()=>setW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return w;}
 function grilleCols(n,width){if(width<600)return 1;if(width>=900)return n;return Math.min(n,2);}
+
+// ─── PIÈCES AUTO depuis formulaire ──────────────────────────────────────
+function detecterPieces(v){
+  const pieces=[];
+  const mauvais=["Usé","HS","Cassé","Bleui","Cuit","Sale"];
+  if(v.etat_roulement_av&&mauvais.includes(v.etat_roulement_av))
+    pieces.push({designation:"Roulement avant",reference:v.type_roulement_av?.replace("Autre:","")?.trim()||"",etat:v.etat_roulement_av});
+  if(v.etat_roulement_ar&&mauvais.includes(v.etat_roulement_ar))
+    pieces.push({designation:"Roulement arrière",reference:v.type_roulement_ar?.replace("Autre:","")?.trim()||"",etat:v.etat_roulement_ar});
+  if(v.joint_av_int&&v.etat_flasque_av==="Marqué")
+    pieces.push({designation:"Joint à lèvres avant",reference:`${v.joint_av_int||"?"}x${v.joint_av_ext||"?"}x${v.joint_av_ep||"?"} ${v.joint_av_levres==="Double"?"DL":"SL"}`,etat:"Usé"});
+  if(v.joint_ar_int&&v.etat_flasque_ar==="Marqué")
+    pieces.push({designation:"Joint à lèvres arrière",reference:`${v.joint_ar_int||"?"}x${v.joint_ar_ext||"?"}x${v.joint_ar_ep||"?"} ${v.joint_ar_levres==="Double"?"DL":"SL"}`,etat:"Usé"});
+  if(v.etat_ventilateur&&mauvais.includes(v.etat_ventilateur))
+    pieces.push({designation:"Ventilateur",reference:v.taille_ventilateur||"",etat:v.etat_ventilateur});
+  if(v.etat_bobinage&&mauvais.includes(v.etat_bobinage))
+    pieces.push({designation:"Bobinage stator",reference:"",etat:v.etat_bobinage});
+  if(v.etat_rotor&&mauvais.includes(v.etat_rotor))
+    pieces.push({designation:"Rotor",reference:"",etat:v.etat_rotor});
+  return pieces;
+}
 
 const S={
   app:{fontFamily:"system-ui,-apple-system,sans-serif",background:"#F5F6F8",minHeight:"100vh",color:"#1A1A2E"},
@@ -172,6 +199,21 @@ const S={
   nr:{border:"1.5px solid #E2E6EA",borderRadius:8,padding:"8px 14px",display:"flex",alignItems:"center",gap:10,marginBottom:14,cursor:"pointer"},
 };
 
+// ─── SÉLECTEUR STATUT CHANTIER ───────────────────────────────────────────
+function SelecteurStatut({statutId,onChange,compact=false}){
+  const st=statutInfo(statutId||"A_demonter");
+  return(
+    <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+      {!compact&&<span style={{fontSize:11,fontWeight:600,color:"#6B7280",textTransform:"uppercase",letterSpacing:".06em"}}>Statut chantier</span>}
+      <select value={statutId||"A_demonter"} onChange={e=>onChange(e.target.value)}
+        style={{padding:"4px 10px",borderRadius:20,border:`1.5px solid ${st.color}`,fontSize:12,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>
+        {STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+      </select>
+    </div>
+  );
+}
+
+// ─── PIN ────────────────────────────────────────────────────────────────
 function ModalPin({onSuccess}){
   const [s,setS]=useState("");const [err,setErr]=useState(false);
   function tap(c){if(s.length>=4)return;const n=s+c;setS(n);if(n.length===4){if(n===PIN_CODE){localStorage.setItem(PIN_KEY,"1");onSuccess();}else{setErr(true);setTimeout(()=>{setS("");setErr(false);},800);}}}
@@ -223,9 +265,7 @@ function ChampTechnicien({valeur,onChange,techs}){
       <option value="">— Sélectionner</option>
       {techs.map(t=><option key={t}>{t}</option>)}
     </select>
-    {isAutre&&<div style={{marginTop:6}}>
-      <input type="text" value={autreVal} onChange={e=>{setAutreVal(e.target.value);onChange(e.target.value);}} placeholder="Initiales..." style={{...S.inp,width:120}}/>
-    </div>}
+    {isAutre&&<input type="text" value={autreVal} onChange={e=>{setAutreVal(e.target.value);onChange(e.target.value);}} placeholder="Initiales..." style={{...S.inp,width:120,marginTop:6}}/>}
   </div>);
 }
 
@@ -251,7 +291,6 @@ function SectionPhotos({etape,ficheId,cheminBase,categories,photos,onPhotoAdded}
       const count=photos.filter(p=>p.categorie_slug===catObj.slug).length+1;
       const ext=file.name.match(/\.[^.]+$/)?.[0]||".jpg";
       const nomFichier=`${catObj.slug}_${count}${ext}`;
-      // Chemin : Client/DE1042/Materiel_Lieu/nomFichier
       const path=`${cheminBase}/${nomFichier}`;
       await db.uploadPhoto(path,file);
       const photoData={fiche_id:ficheId||null,etape,categorie_slug:catObj.slug,categorie_nom:catObj.nom,nom_fichier:nomFichier,storage_path:path};
@@ -411,52 +450,154 @@ function ModalIdent({techs,onConfirm}){
   </div>);
 }
 
-function genHtml(v,photos){
+// ─── PDF ────────────────────────────────────────────────────────────────
+function genHtml(v,photos,statutChantier,commentaires,materielRecommande){
   function row2(l1,v1,l2,v2,e1,e2){const s1=e1?"color:#D73A49;font-weight:bold":"";const s2=e2?"color:#D73A49;font-weight:bold":"";return `<tr><td class="lbl">${l1}</td><td class="val" style="${s1}">${v1||"—"}</td><td class="lbl">${l2}</td><td class="val" style="${s2}">${v2||"—"}</td></tr>`;}
   function sec(n,t,tech){return `<tr class="sec"><td colspan="4"><span class="sn">${n}.</span> ${t}<span class="st">${tech?"Technicien : "+tech:""}</span></td></tr>`;}
-  const css=`*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:9.5pt;color:#1A1A2E;background:#fff;}.page{max-width:210mm;margin:0 auto;padding:12mm;}.hdr{background:#1B4F8A;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}.ht{font-size:15pt;font-weight:bold;}.hs{font-size:8pt;opacity:.75;margin-top:2px;}.hd{font-size:18pt;font-weight:bold;color:#E8720C;text-align:right;}.hdate{font-size:8pt;opacity:.75;text-align:right;}table{width:100%;border-collapse:collapse;margin-bottom:4px;}td{padding:5px 7px;border:.4px solid #DEE2E6;vertical-align:top;}tr:nth-child(even) td{background:#F8F9FA;}.lbl{font-weight:bold;font-size:9.5pt;width:22%;}.val{font-size:9.5pt;width:28%;}.sec td{background:#1B4F8A;color:#fff;font-weight:bold;padding:6px 8px;}.sn{margin-right:6px;}.st{float:right;font-size:8pt;opacity:.8;font-weight:normal;}.sub td{background:#D6E4F7;color:#1B4F8A;font-weight:bold;padding:5px 8px;}.ft{border-top:.5px solid #DEE2E6;margin-top:10px;padding-top:5px;font-size:7pt;color:#6B7280;text-align:center;}.pg{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}.pi img{width:80px;height:80px;object-fit:cover;border-radius:4px;border:.5px solid #DEE2E6;}.pi p{font-size:7pt;color:#6B7280;margin-top:2px;text-align:center;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.np{display:none!important;}}`;
+  const css=`*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:9.5pt;color:#1A1A2E;background:#fff;}.page{max-width:210mm;margin:0 auto;padding:12mm;}.hdr{background:#1B4F8A;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}.ht{font-size:15pt;font-weight:bold;}.hs{font-size:8pt;opacity:.75;margin-top:2px;}.hd{font-size:18pt;font-weight:bold;color:#E8720C;text-align:right;}.hdate{font-size:8pt;opacity:.75;text-align:right;}table{width:100%;border-collapse:collapse;margin-bottom:4px;}td{padding:5px 7px;border:.4px solid #DEE2E6;vertical-align:top;}tr:nth-child(even) td{background:#F8F9FA;}.lbl{font-weight:bold;font-size:9.5pt;width:22%;}.val{font-size:9.5pt;width:28%;}.sec td{background:#1B4F8A;color:#fff;font-weight:bold;padding:6px 8px;}.sn{margin-right:6px;}.st{float:right;font-size:8pt;opacity:.8;font-weight:normal;}.sub td{background:#D6E4F7;color:#1B4F8A;font-weight:bold;padding:5px 8px;}.ft{border-top:.5px solid #DEE2E6;margin-top:10px;padding-top:5px;font-size:7pt;color:#6B7280;text-align:center;}.pg{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}.pi img{width:80px;height:80px;object-fit:cover;border-radius:4px;border:.5px solid #DEE2E6;}.pi p{font-size:7pt;color:#6B7280;margin-top:2px;text-align:center;}.comment{background:#F8F9FA;border:.5px solid #DEE2E6;border-radius:4px;padding:8px;margin-top:8px;font-size:9pt;}.np{display:none!important;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.np{display:none!important;}}`;
   const ch=cheminFiche(v);
   const jav=`${v.joint_av_int||"?"}×${v.joint_av_ext||"?"}×${v.joint_av_ep||"?"} ${v.joint_av_levres==="Double"?"DL":"SL"}`;
   const jar=`${v.joint_ar_int||"?"}×${v.joint_ar_ext||"?"}×${v.joint_ar_ep||"?"} ${v.joint_ar_levres==="Double"?"DL":"SL"}`;
   const now=new Date().toLocaleDateString("fr-FR");
+  const st=statutInfo(statutChantier||"A_demonter");
   const photosHtml=photos.length>0?`<p style="font-weight:bold;margin:10px 0 4px;font-size:9.5pt;">Photos (${photos.length})</p><div class="pg">${photos.map(p=>`<div class="pi"><img src="${p.url}" alt="${p.categorie_nom}"/><p>${p.categorie_nom}</p></div>`).join("")}</div>`:"";
+  const commHtml=commentaires?`<p style="font-weight:bold;margin:10px 0 4px;font-size:9.5pt;">Commentaires</p><div class="comment">${commentaires}</div>`:"";
+  const matHtml=materielRecommande?`<p style="font-weight:bold;margin:10px 0 4px;font-size:9.5pt;">Matériel à recommander</p><div class="comment">${materielRecommande}</div>`:"";
   return `<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"/><title>Fiche ${v.de||""}</title><style>${css}</style></head><body><div class="page">
 <button class="np" onclick="window.print()" style="margin-bottom:10px;background:#1B4F8A;color:#fff;border:none;padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600;">📄 Imprimer / PDF</button>
 <button class="np" onclick="window.close()" style="margin-bottom:10px;margin-left:8px;background:#fff;color:#1B4F8A;border:1.5px solid #1B4F8A;padding:7px 16px;border-radius:6px;font-size:13px;cursor:pointer;font-weight:600;">✕ Fermer</button>
-<div class="hdr"><div><div class="ht">FICHE D'ENTRETIEN / EXPERTISE</div><div class="hs">Atelier PMV — ${ch.client} / ${ch.de} / ${ch.mat}</div></div><div><div class="hd">${v.de||"—"}</div><div class="hdate">${v.date_entree||now}</div></div></div>
+<div class="hdr"><div><div class="ht">FICHE D'ENTRETIEN / EXPERTISE</div><div class="hs">Atelier PMV — ${ch.client} / ${ch.de} / ${ch.mat}</div></div><div><div class="hd">${v.de||"—"}</div><div class="hdate">${v.date_entree||now} · <span style="background:${st.color};color:#fff;padding:2px 8px;border-radius:3px;font-size:7pt;">${st.label}</span></div></div></div>
 <table>${sec("1","ENTRÉE",v.tech_entree)}${row2("Client",v.client,"Téléphone",v.telephone)}${row2("Mail",v.mail,"Matériel / Lieux",v.materiel_lieu)}${row2("Marque",v.marque_moteur,"Type",v.type_moteur)}${row2("N° série",v.numero_serie,"Fixation",v.fixation)}${row2("Puissance",v.puissance?v.puissance+" kW":"","Vitesse",v.vitesse?v.vitesse+" tr/mn":"")}${row2("Tension",v.tension?v.tension+" V":"","Déposé / Enlevé",(v.depose_nos_soins||"—")+" / "+(v.enleve_nos_soins||"—"))}</table>
 <table>${sec("2","INFOS ÉLECTRIQUES",v.tech_elec)}${row2("Couplage",v.couplage,"ADX résultat",v.adx_resultat,false,v.adx_resultat==="Hors Tolérance")}${row2("Isol. masse",v.isol_masse?v.isol_masse+" MΩ":"","ADX valeur",v.adx_valeur?v.adx_valeur+" MΩ":"")}${row2("Isol. U-V",v.isol_uv?v.isol_uv+" MΩ":"","Isol. V-W",v.isol_vw?v.isol_vw+" MΩ":"",false,parseFloat(v.isol_vw)<300)}${row2("Isol. W-U",v.isol_wu?v.isol_wu+" MΩ":"","Plaque bornes",v.plaque_bornes_etat,false,v.plaque_bornes_etat==="HS")}${row2("Sonde",v.sonde_presence,"Valeur sonde",v.sonde_valeur?v.sonde_valeur+" Ω":"")}</table>
 <table>${sec("3","ROTATION AVANT DÉMONTAGE",v.tech_mesure_avant)}${row2("Essai à vide",v.essai_vide_avant,"Rotor CC",v.rotor_cc_realise+(v.rotor_cc_resultat?" — "+v.rotor_cc_resultat:""))}${row2("Int. Ph.1",v.int_p1_avant?v.int_p1_avant+" A":"","Int. Ph.2",v.int_p2_avant?v.int_p2_avant+" A":"")}${row2("Int. Ph.3",v.int_p3_avant?v.int_p3_avant+" A":"","560V Ph.1",v.int_560_p1_avant?v.int_560_p1_avant+" A":"")}${row2("560V Ph.2",v.int_560_p2_avant?v.int_560_p2_avant+" A":"","560V Ph.3",v.int_560_p3_avant?v.int_560_p3_avant+" A":"")}${row2("Vib. av. mm/s",v.vib_av_mms_avant?v.vib_av_mms_avant+" mm/s":"","Vib. av. GE",v.vib_av_ge_avant?v.vib_av_ge_avant+" GE":"")}${row2("Vib. ar. mm/s",v.vib_ar_mms_avant?v.vib_ar_mms_avant+" mm/s":"","Vib. ar. GE",v.vib_ar_ge_avant?v.vib_ar_ge_avant+" GE":"")}${row2("HP",v.nettoyage_hp,"Étuvage",v.etuvage_stator)}${row2("Isol. enroul. min.",v.isol_enroul_min?v.isol_enroul_min+" MΩ":"","","")}</table>
 <table>${sec("4","MATÉRIEL AU DÉMONTAGE",v.tech_demontage)}${row2("Ventilateur",v.ventilateur_present,"État vent.",v.etat_ventilateur)}${row2("Taille vent.",v.taille_ventilateur,"Peinture",v.peinture)}${row2("Circlips av./ar.",(v.circlips_avant||"—")+" / "+(v.circlips_arriere||"—"),"Rondelle",v.rondelle_presence)}${row2("Bobinage",v.etat_bobinage,"Rotor",v.etat_rotor)}<tr class="sub"><td colspan="2">ROULEMENT AVANT</td><td colspan="2">ROULEMENT ARRIÈRE</td></tr>${row2("Type",v.type_roulement_av?.replace("Autre:",""),"Type",v.type_roulement_ar?.replace("Autre:",""))}${row2("État",v.etat_roulement_av,"État",v.etat_roulement_ar,["HS","Cassé"].includes(v.etat_roulement_av),["HS","Cassé"].includes(v.etat_roulement_ar))}${row2("Flasque av.",v.etat_flasque_av+(v.mesure_flasque_av?" — "+v.mesure_flasque_av+" mm":""),"Flasque ar.",v.etat_flasque_ar+(v.mesure_flasque_ar?" — "+v.mesure_flasque_ar+" mm":""))}${row2("Arbre av.",v.etat_arbre_av+(v.mesure_arbre_av?" — "+v.mesure_arbre_av+" mm":""),"Arbre ar.",v.etat_arbre_ar+(v.mesure_arbre_ar?" — "+v.mesure_arbre_ar+" mm":""))}${row2("Joint av.",jav,"Joint ar.",jar)}</table>
-<table>${sec("5","ESSAIS APRÈS REMONTAGE","Remonté: "+(v.tech_remontage||"—")+" / Essayé: "+(v.tech_essai||"—"))}${row2("Essai à vide",v.essai_vide_apres,"Resserrage",v.resserage_plaque)}${row2("Int. Ph.1",v.int_p1_apres?v.int_p1_apres+" A":"","Int. Ph.2",v.int_p2_apres?v.int_p2_apres+" A":"")}${row2("Int. Ph.3",v.int_p3_apres?v.int_p3_apres+" A":"","560V Ph.1",v.int_560_p1_apres?v.int_560_p1_apres+" A":"")}${row2("560V Ph.2",v.int_560_p2_apres?v.int_560_p2_apres+" A":"","560V Ph.3",v.int_560_p3_apres?v.int_560_p3_apres+" A":"")}${row2("Vib. av. mm/s",v.vib_av_mms_apres?v.vib_av_mms_apres+" mm/s":"","Vib. av. GE",v.vib_av_ge_apres?v.vib_av_ge_apres+" GE":"")}${row2("Vib. ar. mm/s",v.vib_ar_mms_apres?v.vib_ar_mms_apres+" mm/s":"","Vib. ar. GE",v.vib_ar_ge_apres?v.vib_ar_ge_apres+" GE":"")}}</table>
-${photosHtml}<div class="ft">Fiche ${v.de||"—"} · ${ch.client}/${ch.de}/${ch.mat} · ${now} · Atelier PMV</div>
+<table>${sec("5","ESSAIS APRÈS REMONTAGE","Remonté: "+(v.tech_remontage||"—")+" / Essayé: "+(v.tech_essai||"—"))}${row2("Essai à vide",v.essai_vide_apres,"Resserrage",v.resserage_plaque)}${row2("Int. Ph.1",v.int_p1_apres?v.int_p1_apres+" A":"","Int. Ph.2",v.int_p2_apres?v.int_p2_apres+" A":"")}${row2("Int. Ph.3",v.int_p3_apres?v.int_p3_apres+" A":"","560V Ph.1",v.int_560_p1_apres?v.int_560_p1_apres+" A":"")}${row2("560V Ph.2",v.int_560_p2_apres?v.int_560_p2_apres+" A":"","560V Ph.3",v.int_560_p3_apres?v.int_560_p3_apres+" A":"")}${row2("Vib. av. mm/s",v.vib_av_mms_apres?v.vib_av_mms_apres+" mm/s":"","Vib. av. GE",v.vib_av_ge_apres?v.vib_av_ge_apres+" GE":"")}${row2("Vib. ar. mm/s",v.vib_ar_mms_apres?v.vib_ar_mms_apres+" mm/s":"","Vib. ar. GE",v.vib_ar_ge_apres?v.vib_ar_ge_apres+" GE":"")}</table>
+${photosHtml}${commHtml}${matHtml}
+<div class="ft">Fiche ${v.de||"—"} · ${ch.client}/${ch.de}/${ch.mat} · ${now} · Atelier PMV</div>
 </div></body></html>`;
 }
-
-function imprimerFiche(v,photos){const w=window.open("","_blank","width=900,height=700");w.document.write(genHtml(v,photos));w.document.close();setTimeout(()=>w.print(),800);}
-function ApercuFiche({v,photos,onClose}){
+function imprimerFiche(v,photos,sc,comm,mat){const w=window.open("","_blank","width=900,height=700");w.document.write(genHtml(v,photos,sc,comm,mat));w.document.close();setTimeout(()=>w.print(),800);}
+function ApercuFiche({v,photos,statutChantier,commentaires,materielRecommande,onClose}){
   return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:300,display:"flex",flexDirection:"column"}}>
     <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
       <span style={{fontWeight:700}}>Aperçu — {v.de}</span>
       <div style={{display:"flex",gap:10}}>
-        <button style={{background:"#E8720C",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer"}} onClick={()=>imprimerFiche(v,photos)}>📄 Imprimer / PDF</button>
+        <button style={{background:"#E8720C",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,materielRecommande)}>📄 Imprimer / PDF</button>
         <button style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer"}} onClick={onClose}>✕ Fermer</button>
       </div>
     </div>
-    <iframe srcDoc={genHtml(v,photos)} style={{flex:1,border:"none",background:"#fff"}} title="Aperçu"/>
+    <iframe srcDoc={genHtml(v,photos,statutChantier,commentaires,materielRecommande)} style={{flex:1,border:"none",background:"#fff"}} title="Aperçu"/>
   </div>);
 }
 
-// ─── PAGE ACCUEIL — EXPLORATEUR ─────────────────────────────────────────
-function statutStyle(s){if(s==="Terminée")return{background:"#F0FFF4",color:"#22863A"};if(s==="En cours")return{background:"#FFF8E1",color:"#E8720C"};if(s==="Modifiée")return{background:"#EEF4FF",color:"#1B4F8A"};return{};}
+// ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
+function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
+  const [filtTech,setFiltTech]=useState("tous");
+  const [showTermine,setShowTermine]=useState(false);
 
-// Sous-dossier : une fiche individuelle dans un DE
-function SousDossierFiche({f,onOpen,onDelete}){
+  const statuts=showTermine?STATUTS_CHANTIER:STATUTS_CHANTIER.filter(s=>s.id!=="Termine");
+
+  const fichesFiltrees=fiches.filter(f=>filtTech==="tous"||(f.tech_entree||"")==filtTech);
+
+  const parStatut={};
+  STATUTS_CHANTIER.forEach(s=>{parStatut[s.id]=[];});
+  fichesFiltrees.forEach(f=>{
+    const sid=f.statut_chantier||"A_demonter";
+    if(parStatut[sid])parStatut[sid].push(f);
+    else parStatut["A_demonter"].push(f);
+  });
+
+  const devisCount=parStatut["Devis"]?.length||0;
+  const techs=[...new Set(fiches.map(f=>f.tech_entree).filter(Boolean))];
+
+  return(<div style={{maxWidth:1200,margin:"0 auto",padding:"20px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <h2 style={{fontSize:20,fontWeight:700,margin:0}}>Planning atelier</h2>
+        {devisCount>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"3px 10px",borderRadius:20,fontWeight:600}}>⚠ {devisCount} devis en attente</span>}
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        <select value={filtTech} onChange={e=>setFiltTech(e.target.value)} style={{...S.sel,width:130,fontSize:12}}>
+          <option value="tous">Tous techs</option>
+          {techs.map(t=><option key={t}>{t}</option>)}
+        </select>
+        <button onClick={()=>setShowTermine(!showTermine)} style={{...S.p2,fontSize:12,padding:"5px 12px"}}>
+          {showTermine?"Masquer Terminé":"Afficher Terminé"}
+        </button>
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:`repeat(${statuts.length},1fr)`,gap:10,overflowX:"auto"}}>
+      {statuts.map(s=>(
+        <div key={s.id} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"10px 8px",minHeight:200}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,paddingBottom:8,borderBottom:"1px solid #E2E6EA"}}>
+            <span style={{fontSize:12,fontWeight:600,color:s.color}}>● {s.label}</span>
+            <span style={{fontSize:11,background:"#F5F6F8",border:"1px solid #E2E6EA",borderRadius:20,padding:"1px 7px",color:"#6B7280"}}>{parStatut[s.id]?.length||0}</span>
+          </div>
+          {(parStatut[s.id]||[]).length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 4px"}}>Aucun chantier</p>}
+          {(parStatut[s.id]||[]).map(f=>(
+            <div key={f.id} style={{background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:8,padding:"9px 10px",marginBottom:8}}>
+              <div style={{fontSize:12,fontWeight:700,color:"#1B4F8A",marginBottom:2}}>{f.de}</div>
+              <div style={{fontSize:12,fontWeight:600,marginBottom:2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{f.client||"—"}</div>
+              <div style={{fontSize:11,color:"#6B7280",marginBottom:6,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{f.materiel||"Moteur"}</div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                <span style={{fontSize:10,color:"#9CA3AF"}}>{fmt(f.created_at)}</span>
+                {f.tech_entree&&<span style={{fontSize:10,background:"#fff",border:"1px solid #E2E6EA",borderRadius:20,padding:"1px 6px",color:"#6B7280"}}>{f.tech_entree}</span>}
+              </div>
+              <select value={f.statut_chantier||"A_demonter"} onChange={e=>onStatutChange(f.id,e.target.value)}
+                style={{width:"100%",padding:"4px 6px",borderRadius:5,border:`1px solid ${s.color}`,fontSize:11,fontWeight:600,color:s.color,background:s.bg,cursor:"pointer",marginBottom:4}}>
+                {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
+              </select>
+              <button onClick={()=>onOuvrirFiche(f)} style={{width:"100%",fontSize:11,padding:"4px",borderRadius:5,border:"1px solid #E2E6EA",background:"#fff",cursor:"pointer",color:"#1B4F8A"}}>
+                Ouvrir la fiche →
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  </div>);
+}
+
+// ─── PAGE ACCUEIL EXPLORATEUR ───────────────────────────────────────────
+function statutStyle(s){
+  const st=STATUTS_CHANTIER.find(x=>x.id===s);
+  if(st)return{background:st.bg,color:st.color};
+  return{background:"#F5F6F8",color:"#6B7280"};
+}
+
+async function telechargerPhotosZip(photos,nomDossier){
+  if(photos.length===0){alert("Aucune photo dans ce dossier.");return;}
+  try{
+    if(!window.JSZip){
+      await new Promise((res,rej)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+    }
+    const JSZip=window.JSZip;
+    const zip=new JSZip();
+    await Promise.all(photos.map(async p=>{
+      try{
+        const r=await fetch(p.url);
+        const blob=await r.blob();
+        zip.file(p.nom_fichier,blob);
+      }catch(e){}
+    }));
+    const content=await zip.generateAsync({type:"blob"});
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(content);
+    a.download=`${nomDossier}_photos.zip`;
+    a.click();
+  }catch(e){
+    photos.forEach(p=>{const a=document.createElement("a");a.href=p.url;a.download=p.nom_fichier;a.target="_blank";a.click();});
+  }
+}
+
+function SousDossierFiche({f,onOpen,onDelete,onStatutChange}){
   const [ouvert,setOuvert]=useState(false);
   const [photos,setPhotos]=useState([]);
   const [loadingP,setLoadingP]=useState(false);
   const [confirmSuppr,setConfirmSuppr]=useState(false);
   const ch=cheminFiche({client:f.client,de:f.de,materiel_lieu:f.materiel});
+  const st=statutInfo(f.statut_chantier||"A_demonter");
 
   async function toggle(){
     if(!ouvert&&photos.length===0){
@@ -472,6 +613,7 @@ function SousDossierFiche({f,onOpen,onDelete}){
       await db.del("fiche_photos",`?fiche_id=eq.${f.id}`);
       await db.del("fiche_valeurs",`?fiche_id=eq.${f.id}`);
       await db.del("fiche_historique",`?fiche_id=eq.${f.id}`);
+      await db.del("suivi_pieces",`?fiche_id=eq.${f.id}`);
       await db.del("fiches",`?id=eq.${f.id}`);
       onDelete(f.id);
     }catch(e){alert("Erreur : "+e.message);}
@@ -484,29 +626,38 @@ function SousDossierFiche({f,onOpen,onDelete}){
         <p style={{margin:0,fontSize:13,fontWeight:600,color:"#1B4F8A",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ch.mat}</p>
         <p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{f.materiel} · {fmt(f.created_at)}</p>
       </div>
-      <span style={{...statutStyle(f.statut),fontSize:11,fontWeight:600,padding:"2px 7px",borderRadius:4,whiteSpace:"nowrap"}}>{f.statut}</span>
+      <span style={{...statutStyle(f.statut_chantier),fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:12,whiteSpace:"nowrap"}}>{st.label}</span>
       <span style={{fontSize:14,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{padding:"10px 12px",background:"#fff",borderRadius:"0 0 8px 8px",border:"1px solid #E2E6EA",borderTop:"none"}}>
+
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"8px 12px",background:"#F8F9FA",borderRadius:8,flexWrap:"wrap"}}>
+        <span style={{fontSize:12,fontWeight:600,color:"#6B7280"}}>Statut chantier :</span>
+        <SelecteurStatut statutId={f.statut_chantier||"A_demonter"} onChange={id=>onStatutChange(f.id,id)}/>
+      </div>
+
       <div style={{display:"flex",gap:10,marginBottom:10,flexWrap:"wrap"}}>
         <div style={{display:"flex",alignItems:"center",gap:8,background:"#F5F6F8",borderRadius:7,padding:"7px 12px",flex:1,minWidth:180,cursor:"pointer"}} onClick={()=>onOpen(f)}>
           <span style={{fontSize:18}}>📋</span>
           <div><p style={{margin:0,fontSize:13,fontWeight:600}}>{f.de} — Fiche d'entretien</p><p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>Ouvrir et modifier</p></div>
         </div>
       </div>
+
       {loadingP&&<p style={{fontSize:12,color:"#9CA3AF"}}>Chargement photos…</p>}
       {photos.length>0&&<div style={{marginBottom:10}}>
-        <p style={{fontSize:11,fontWeight:600,color:"#6B7280",textTransform:"uppercase",letterSpacing:".05em",margin:"0 0 6px"}}>📷 {photos.length} photo{photos.length>1?"s":""}</p>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+          <p style={{fontSize:11,fontWeight:600,color:"#6B7280",textTransform:"uppercase",letterSpacing:".05em",margin:0}}>📷 {photos.length} photo{photos.length>1?"s":""}</p>
+          <button onClick={()=>telechargerPhotosZip(photos,`${f.de}_${ch.mat}`)} style={{fontSize:11,background:"#EEF4FF",color:"#1B4F8A",border:"1px solid #D6E4F7",borderRadius:5,padding:"3px 10px",cursor:"pointer"}}>📥 Télécharger ZIP</button>
+        </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
           {photos.map((p,i)=><div key={i} style={{textAlign:"center"}}>
-            <img src={p.url} alt={p.categorie_nom} style={{width:68,height:68,objectFit:"cover",borderRadius:6,border:"1.5px solid #E2E6EA",display:"block",cursor:"pointer"}}
-              onClick={()=>window.open(p.url,"_blank")}
-              onError={e=>e.target.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='68' height='68'%3E%3Crect width='68' height='68' fill='%23eee'/%3E%3C/svg%3E"}/>
+            <img src={p.url} alt={p.categorie_nom} style={{width:68,height:68,objectFit:"cover",borderRadius:6,border:"1.5px solid #E2E6EA",display:"block",cursor:"pointer"}} onClick={()=>window.open(p.url,"_blank")} onError={e=>e.target.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='68' height='68'%3E%3Crect width='68' height='68' fill='%23eee'/%3E%3C/svg%3E"}/>
             <p style={{fontSize:9,color:"#6B7280",marginTop:2,maxWidth:68,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.categorie_nom}</p>
           </div>)}
         </div>
       </div>}
       {photos.length===0&&!loadingP&&<p style={{fontSize:12,color:"#9CA3AF",margin:"0 0 8px"}}>Aucune photo</p>}
+
       <div style={{paddingTop:8,borderTop:"1px solid #F3F4F6",display:"flex",justifyContent:"flex-end"}}>
         {!confirmSuppr
           ?<button onClick={()=>setConfirmSuppr(true)} style={S.pDanger}>🗑 Supprimer</button>
@@ -520,8 +671,7 @@ function SousDossierFiche({f,onOpen,onDelete}){
   </div>);
 }
 
-// Sous-dossier DE : contient une ou plusieurs fiches
-function DossierDE({de,fiches,onOpen,onDelete}){
+function DossierDE({de,fiches,onOpen,onDelete,onStatutChange}){
   const [ouvert,setOuvert]=useState(false);
   return(<div style={{marginLeft:16,marginBottom:10,borderLeft:"2px solid #D6E4F7",paddingLeft:12}}>
     <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"9px 12px",background:ouvert?"#D6E4F7":"#EEF4FF",borderRadius:8}} onClick={()=>setOuvert(!ouvert)}>
@@ -533,38 +683,44 @@ function DossierDE({de,fiches,onOpen,onDelete}){
       <span style={{fontSize:14,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{marginTop:6}}>
-      {fiches.map(f=><SousDossierFiche key={f.id} f={f} onOpen={onOpen} onDelete={onDelete}/>)}
+      {fiches.map(f=><SousDossierFiche key={f.id} f={f} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange}/>)}
     </div>}
   </div>);
 }
 
-// Dossier client racine
-function DossierClient({client,fiches,onOpen,onDelete}){
+function DossierClient({client,fiches,onOpen,onDelete,onStatutChange}){
   const [ouvert,setOuvert]=useState(false);
-  // Grouper par DE
   const parDE={};
   fiches.forEach(f=>{const de=deSlug(f.de||"DE");if(!parDE[de])parDE[de]=[];parDE[de].push(f);});
   const deList=Object.keys(parDE).sort();
-  const nbFiches=fiches.length;
-
   return(<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:10,overflow:"hidden"}}>
     <div style={{display:"flex",alignItems:"center",gap:10,padding:"13px 16px",cursor:"pointer"}} onClick={()=>setOuvert(!ouvert)}>
       <span style={{fontSize:22}}>{ouvert?"📂":"📁"}</span>
       <div style={{flex:1,minWidth:0}}>
         <p style={{margin:0,fontSize:14,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{client}</p>
-        <p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{deList.length} N° DE · {nbFiches} fiche{nbFiches>1?"s":""}</p>
+        <p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{deList.length} N° DE · {fiches.length} fiche{fiches.length>1?"s":""}</p>
       </div>
       <span style={{fontSize:16,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{borderTop:"1px solid #F3F4F6",padding:"10px 0 10px"}}>
-      {deList.map(de=><DossierDE key={de} de={de} fiches={parDE[de]} onOpen={onOpen} onDelete={onDelete}/>)}
+      {deList.map(de=><DossierDE key={de} de={de} fiches={parDE[de]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange}/>)}
     </div>}
   </div>);
 }
 
-function PageAccueil({onNew,onOpen}){
-  const [fiches,setFiches]=useState([]);const [loading,setLoading]=useState(true);const [q,setQ]=useState("");const [fs,setFs]=useState("Tous");
-  useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));},[]);
+function PageAccueil({fiches,setFiches,onNew,onOpen}){
+  const [loading,setLoading]=useState(true);
+  const [q,setQ]=useState("");const [fs,setFs]=useState("Tous");
+
+  useEffect(()=>{
+    db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));
+  },[]);
+
+  async function onStatutChange(ficheId,newStatut){
+    await db.patch("fiches",`?id=eq.${ficheId}`,{statut_chantier:newStatut});
+    setFiches(prev=>prev.map(f=>f.id===ficheId?{...f,statut_chantier:newStatut}:f));
+  }
+
   function onDelete(id){setFiches(prev=>prev.filter(f=>f.id!==id));}
 
   const fichesFiltrees=fiches.filter(f=>{
@@ -572,18 +728,25 @@ function PageAccueil({onNew,onOpen}){
     return(!qq||(f.de||"").replace("-","").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq))&&(fs==="Tous"||f.statut===fs);
   });
 
-  // Grouper par client
   const parClient={};
   fichesFiltrees.forEach(f=>{const c=f.client||"Sans client";if(!parClient[c])parClient[c]=[];parClient[c].push(f);});
   const clientList=Object.keys(parClient).sort();
 
+  const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
+
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-      <div><h1 style={{fontSize:22,fontWeight:800,margin:0}}>Fiches atelier</h1><p style={{fontSize:13,color:"#6B7280",margin:"3px 0 0"}}>{clientList.length} client{clientList.length>1?"s":`s`} · {fiches.length} fiche{fiches.length>1?"s":""}</p></div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div>
+          <h1 style={{fontSize:22,fontWeight:800,margin:0}}>Fiches atelier</h1>
+          <p style={{fontSize:13,color:"#6B7280",margin:"3px 0 0"}}>{clientList.length} client{clientList.length>1?"s":""} · {fiches.length} fiche{fiches.length>1?"s":""}</p>
+        </div>
+        {devisCount>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>⚠ {devisCount} devis en attente</span>}
+      </div>
       <button style={S.p1} onClick={onNew}>+ Nouvelle fiche</button>
     </div>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16,display:"flex",gap:10,flexWrap:"wrap"}}>
-      <input type="text" placeholder="🔍 Client, N° DE, matériel..." value={q} onChange={e=>setQ(e.target.value)} style={{...S.inp,flex:1,minWidth:160}}/>
+      <input type="text" placeholder="🔍 Client, N° DE..." value={q} onChange={e=>setQ(e.target.value)} style={{...S.inp,flex:1,minWidth:160}}/>
       <select value={fs} onChange={e=>setFs(e.target.value)} style={{...S.sel,width:150}}>
         <option value="Tous">Tous statuts</option>
         <option>En cours</option><option>Terminée</option><option>Modifiée</option>
@@ -591,7 +754,7 @@ function PageAccueil({onNew,onOpen}){
     </div>
     {loading&&<div style={{textAlign:"center",padding:"32px",color:"#9CA3AF"}}>Chargement…</div>}
     {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:"32px",color:"#9CA3AF"}}>{fiches.length===0?"Aucune fiche — créez la première !":"Aucun résultat."}</div>}
-    {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onDelete={onDelete}/>)}
+    {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange}/>)}
   </div>);
 }
 
@@ -611,7 +774,8 @@ function PageChoix({onChoisir,onRetour}){
   </div>);
 }
 
-function PageFiche({ficheInit,sessionTech,techs,clients,onAddClient,categories,onRetour}){
+// ─── PAGE FICHE ─────────────────────────────────────────────────────────
+function PageFiche({ficheInit,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated}){
   const [ficheId,setFicheId]=useState(ficheInit?.id||null);
   const [v,setV]=useState({de:ficheInit?.de||genDE(),date_entree:today()});
   const [actif,setActif]=useState(ficheInit?.etape_active||0);
@@ -622,18 +786,58 @@ function PageFiche({ficheInit,sessionTech,techs,clients,onAddClient,categories,o
   const [erreur,setErreur]=useState(null);
   const [apercu,setApercu]=useState(false);
   const [photos,setPhotos]=useState([]);
+  const [statutChantier,setStatutChantier]=useState(ficheInit?.statut_chantier||"A_demonter");
+  const [commentaires,setCommentaires]=useState("");
+  const [materielRecommande,setMaterielRecommande]=useState("");
+  const [savingExtra,setSavingExtra]=useState(false);
 
   useEffect(()=>{
     if(!ficheInit?.id)return;
-    db.get("fiche_valeurs",`?fiche_id=eq.${ficheInit.id}`).then(rows=>{if(!Array.isArray(rows))return;const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});setV(p=>({...p,...m}));});
-    db.get("fiche_photos",`?fiche_id=eq.${ficheInit.id}&order=created_at`).then(rows=>{if(!Array.isArray(rows))return;setPhotos(rows.map(p=>({...p,url:db.photoUrl(p.storage_path)})));});
+    db.get("fiche_valeurs",`?fiche_id=eq.${ficheInit.id}`).then(rows=>{
+      if(!Array.isArray(rows))return;
+      const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});setV(p=>({...p,...m}));
+      setCommentaires(m["__commentaires"]||"");
+      setMaterielRecommande(m["__materiel_recommande"]||"");
+    });
+    db.get("fiche_photos",`?fiche_id=eq.${ficheInit.id}&order=created_at`).then(rows=>{
+      if(!Array.isArray(rows))return;setPhotos(rows.map(p=>({...p,url:db.photoUrl(p.storage_path)})));
+    });
+    setStatutChantier(ficheInit.statut_chantier||"A_demonter");
   },[ficheInit?.id]);
 
   const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
   const onPhotoAdded=useCallback(p=>setPhotos(prev=>[...prev,p]),[]);
 
-  // Chemin Storage basé sur les valeurs actuelles
-  const chem=cheminFiche(v);
+  async function changerStatut(newStatut){
+    setStatutChantier(newStatut);
+    if(ficheId){
+      await db.patch("fiches",`?id=eq.${ficheId}`,{statut_chantier:newStatut});
+      if(onFicheUpdated)onFicheUpdated(ficheId,{statut_chantier:newStatut});
+    }
+  }
+
+  async function sauvegarderExtra(){
+    if(!ficheId)return;
+    setSavingExtra(true);
+    try{
+      await db.del("fiche_valeurs",`?fiche_id=eq.${ficheId}&champ_id=in.(__commentaires,__materiel_recommande)`);
+      const rows=[];
+      if(commentaires)rows.push({fiche_id:ficheId,champ_id:"__commentaires",valeur:commentaires});
+      if(materielRecommande)rows.push({fiche_id:ficheId,champ_id:"__materiel_recommande",valeur:materielRecommande});
+      if(rows.length>0)await db.post("fiche_valeurs",rows);
+      if(materielRecommande){
+        const pieces=detecterPieces(v);
+        const lignesManuelles=materielRecommande.split("\n").filter(l=>l.trim());
+        for(const ligne of lignesManuelles){
+          await db.post("suivi_pieces",{fiche_id:ficheId,de:v.de,client:v.client||"",designation:ligne.trim(),reference:"",statut:"Devis",source:"manuel"}).catch(()=>{});
+        }
+        for(const p of pieces){
+          await db.post("suivi_pieces",{fiche_id:ficheId,de:v.de,client:v.client||"",designation:p.designation,reference:p.reference,statut:"Devis",source:"auto"}).catch(()=>{});
+        }
+      }
+    }catch(e){}
+    setSavingExtra(false);
+  }
 
   async function save(idx){
     setSaving(true);setErreur(null);
@@ -641,58 +845,90 @@ function PageFiche({ficheInit,sessionTech,techs,clients,onAddClient,categories,o
       let fid=ficheId;
       const newVal=[...new Set([...validees,idx])];
       const toutFini=newVal.length===ETAPES.length;
+      const newStatut=toutFini?"Terminée":"En cours";
+      const newChantierStatut=toutFini&&statutChantier==="A_demonter"?"Devis":statutChantier;
       if(!fid){
-        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:"En cours",etape_active:idx+1,etapes_validees:newVal});
+        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:newStatut,statut_chantier:newChantierStatut,etape_active:idx+1,etapes_validees:newVal});
         fid=Array.isArray(res)?res[0]?.id:res?.id;
         if(!fid)throw new Error("Impossible de créer la fiche");
         setFicheId(fid);
-        for(const p of photos){
-          if(!p.fiche_id)try{await db.post("fiche_photos",{fiche_id:fid,etape:p.etape,categorie_slug:p.categorie_slug,categorie_nom:p.categorie_nom,nom_fichier:p.nom_fichier,storage_path:p.storage_path});}catch(e){}
-        }
+        for(const p of photos){if(!p.fiche_id)try{await db.post("fiche_photos",{fiche_id:fid,etape:p.etape,categorie_slug:p.categorie_slug,categorie_nom:p.categorie_nom,nom_fichier:p.nom_fichier,storage_path:p.storage_path});}catch(e){}}
       }else{
-        await db.patch("fiches",`?id=eq.${fid}`,{client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:toutFini?"Terminée":"En cours",etape_active:Math.min(idx+1,ETAPES.length-1),etapes_validees:newVal});
+        await db.patch("fiches",`?id=eq.${fid}`,{client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:newStatut,statut_chantier:newChantierStatut,etape_active:Math.min(idx+1,ETAPES.length-1),etapes_validees:newVal});
+        setStatutChantier(newChantierStatut);
       }
-      await db.del("fiche_valeurs",`?fiche_id=eq.${fid}`);
-      const vals=Object.entries(v).filter(([,val])=>val!==undefined&&val!=="").map(([champ_id,valeur])=>({fiche_id:fid,champ_id,valeur:String(valeur)}));
+      await db.del("fiche_valeurs",`?fiche_id=eq.${fid}&champ_id=not.in.(__commentaires,__materiel_recommande)`);
+      const vals=Object.entries(v).filter(([k,val])=>!k.startsWith("__")&&val!==undefined&&val!=="").map(([champ_id,valeur])=>({fiche_id:fid,champ_id,valeur:String(valeur)}));
       if(vals.length>0)await db.post("fiche_valeurs",vals);
       await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Étape validée",etape:ETAPES[idx]});
+      if(toutFini){
+        const pieces=detecterPieces(v);
+        for(const p of pieces){
+          await db.post("suivi_pieces",{fiche_id:fid,de:v.de,client:v.client||"",designation:p.designation,reference:p.reference,statut:"Devis",source:"auto"}).catch(()=>{});
+        }
+      }
       setValidees(newVal);
       if(idx+1<ETAPES.length)setActif(idx+1);
       setFlash(idx);setTimeout(()=>setFlash(null),3000);
+      if(onFicheUpdated)onFicheUpdated(fid,{statut:newStatut,statut_chantier:newChantierStatut});
     }catch(e){setErreur("Erreur : "+e.message);}
     finally{setSaving(false);}
   }
 
   const prog=Math.round((validees.length/ETAPES.length)*100);
   const info=`${v.de} · ${v.client||"Client"} · ${v.materiel_lieu||"Moteur"}`;
+  const chem=cheminFiche(v);
+  const st=statutInfo(statutChantier);
 
   return(<div style={{maxWidth:800,margin:"0 auto",paddingBottom:40}}>
-    {apercu&&<ApercuFiche v={v} photos={photos} onClose={()=>setApercu(false)}/>}
+    {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} materielRecommande={materielRecommande} onClose={()=>setApercu(false)}/>}
+
     <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:48,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div>
           <p style={{margin:0,fontSize:12,fontWeight:700}}>{info}</p>
-          <p style={{margin:0,fontSize:10,opacity:0.7}}>📁 {chem.client}/{chem.de}/{chem.mat} · Session : {sessionTech}</p>
+          <p style={{margin:0,fontSize:10,opacity:0.7}}>📁 {chem.client}/{chem.de}/{chem.mat} · {sessionTech}</p>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:100}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:`${prog}%`,transition:"width .4s"}}/></div>
-          <span style={{fontSize:12,opacity:0.85}}>{prog}%</span>
-          <button style={{...S.p2,fontSize:12,padding:"5px 12px"}} onClick={onRetour}>← Liste</button>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+          <select value={statutChantier} onChange={e=>changerStatut(e.target.value)}
+            style={{padding:"3px 8px",borderRadius:20,border:`1.5px solid ${st.color}`,fontSize:11,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>
+            {STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+          <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:`${prog}%`,transition:"width .4s"}}/></div>
+          <span style={{fontSize:11,opacity:0.85}}>{prog}%</span>
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
         </div>
       </div>
     </div>
+
     <div style={{padding:"16px 16px 0"}}>
       {flash!==null&&<div style={S.ok}>✅ Étape "{ETAPES[flash]}" enregistrée.</div>}
       {erreur&&<div style={{...S.alert,marginBottom:14}}>{erreur}</div>}
+
       {ETAPES.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>setNrMap(p=>({...p,[i]:!p[i]}))} onValider={()=>save(i)} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded}/>)}
+
+      <div style={{...S.card,marginTop:8}}>
+        <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>💬 Commentaires divers</p>
+        <textarea value={commentaires} onChange={e=>setCommentaires(e.target.value)} placeholder="Observations, remarques générales..." style={{...S.inp,minHeight:80,resize:"vertical",fontFamily:"inherit"}}/>
+        <p style={{fontSize:13,fontWeight:700,margin:"14px 0 8px"}}>🔧 Matériel à recommander</p>
+        <textarea value={materielRecommande} onChange={e=>setMaterielRecommande(e.target.value)} placeholder="Une pièce par ligne. Ex: Joint à lèvres 40x62x8 DL&#10;Roulement 6208 ZZ C3" style={{...S.inp,minHeight:80,resize:"vertical",fontFamily:"inherit"}}/>
+        <button onClick={sauvegarderExtra} disabled={savingExtra||!ficheId} style={{...S.p1,marginTop:10,opacity:ficheId?1:0.5}}>
+          {savingExtra?"Enregistrement…":"💾 Enregistrer commentaires"}
+        </button>
+        {!ficheId&&<p style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>Validez au moins une étape pour enregistrer les commentaires</p>}
+      </div>
+
       {validees.length===ETAPES.length&&<div style={{...S.card,textAlign:"center",border:"2px solid #22863A"}}>
         <div style={{fontSize:40,marginBottom:10}}>🎉</div>
         <p style={{fontSize:18,fontWeight:800,color:"#22863A",margin:"0 0 4px"}}>Fiche complète !</p>
         <p style={{fontSize:12,color:"#6B7280",margin:"0 0 4px"}}>📁 {chem.client} / {chem.de} / {chem.mat}</p>
-        <p style={{fontSize:12,color:"#9CA3AF",margin:"0 0 20px"}}>{photos.length} photo{photos.length>1?"s":""}</p>
+        <p style={{fontSize:12,color:"#9CA3AF",margin:"0 0 16px"}}>{photos.length} photo{photos.length>1?"s":""}</p>
+        <div style={{marginBottom:14}}>
+          <SelecteurStatut statutId={statutChantier} onChange={changerStatut}/>
+        </div>
         <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
           <button style={S.p1} onClick={()=>setApercu(true)}>👁 Aperçu fiche</button>
-          <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos)}>📄 Imprimer / PDF</button>
+          <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,materielRecommande)}>📄 Imprimer / PDF</button>
           <button style={S.p2}>📧 Rapport client (bientôt)</button>
           <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
         </div>
@@ -701,6 +937,7 @@ function PageFiche({ficheInit,sessionTech,techs,clients,onAddClient,categories,o
   </div>);
 }
 
+// ─── APP ────────────────────────────────────────────────────────────────
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
   const [page,setPage]=useState("accueil");
@@ -711,6 +948,7 @@ export default function App(){
   const [techs,setTechs]=useState(TECHNICIENS_FB);
   const [clients,setClients]=useState(CLIENTS_FB);
   const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));
+  const [fiches,setFiches]=useState([]);
 
   useEffect(()=>{
     db.get("techniciens","?actif=eq.true&order=initiales").then(d=>{if(Array.isArray(d)&&d.length>0)setTechs(d.map(t=>t.initiales));}).catch(()=>{});
@@ -722,20 +960,40 @@ export default function App(){
   function askIdent(fn){setDemandeIdent(true);setPending(()=>fn);}
   function confirmIdent(t){setSessionTech(t);setDemandeIdent(false);if(pending){pending(t);setPending(null);}}
 
+  function onFicheUpdated(id,updates){
+    setFiches(prev=>prev.map(f=>f.id===id?{...f,...updates}:f));
+    if(ficheOuverte?.id===id)setFicheOuverte(prev=>({...prev,...updates}));
+  }
+
+  async function onStatutChange(ficheId,newStatut){
+    await db.patch("fiches",`?id=eq.${ficheId}`,{statut_chantier:newStatut});
+    onFicheUpdated(ficheId,{statut_chantier:newStatut});
+  }
+
+  const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
+
   if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
 
   return(<div style={S.app}>
     <div style={S.hdr}>
       <div><p style={{fontSize:16,fontWeight:700,margin:0}}>⚡ Atelier PMV — Fiches d'entretien</p><p style={{fontSize:12,opacity:0.75,margin:"2px 0 0"}}>Expertise moteurs & matériels électriques</p></div>
-      {sessionTech&&<div style={{display:"flex",alignItems:"center",gap:8}}>
-        <span style={{fontSize:12,opacity:0.75}}>Session :</span>
-        <span style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:13,fontWeight:700}}>{sessionTech}</span>
-        <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:11,cursor:"pointer"}} onClick={()=>setSessionTech(null)}>Changer</button>
-      </div>}
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>setPage("accueil")} style={{background:page==="accueil"?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"1px solid rgba(255,255,255,0.3)",padding:"4px 12px",borderRadius:6,fontSize:12,cursor:"pointer",fontWeight:page==="accueil"?700:400}}>📁 Fiches</button>
+          <button onClick={()=>setPage("planning")} style={{background:page==="planning"?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"1px solid rgba(255,255,255,0.3)",padding:"4px 12px",borderRadius:6,fontSize:12,cursor:"pointer",fontWeight:page==="planning"?700:400,position:"relative"}}>
+            📋 Planning{devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{devisCount}</span>}
+          </button>
+        </div>
+        {sessionTech&&<div style={{display:"flex",alignItems:"center",gap:6}}>
+          <span style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:12,fontWeight:700}}>{sessionTech}</span>
+          <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:11,cursor:"pointer"}} onClick={()=>setSessionTech(null)}>↩</button>
+        </div>}
+      </div>
     </div>
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
-    {page==="accueil"&&<PageAccueil onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})}/>}
+    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
-    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}}/>}
+    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated}/>}
+    {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
   </div>);
 }
