@@ -152,10 +152,10 @@ function grilleCols(n,width){if(width<600)return 1;if(width>=900)return n;return
 
 function detecterPieces(v){
   const pieces=[];const mauvais=["Usé","HS","Cassé","Bleui","Cuit"];
-  if(v.etat_roulement_av&&mauvais.includes(v.etat_roulement_av))pieces.push({designation:"Roulement avant",reference:v.type_roulement_av?.replace("Autre:","")?.trim()||""});
-  if(v.etat_roulement_ar&&mauvais.includes(v.etat_roulement_ar))pieces.push({designation:"Roulement arrière",reference:v.type_roulement_ar?.replace("Autre:","")?.trim()||""});
-  if(v.joint_av_int&&v.etat_flasque_av==="Marqué")pieces.push({designation:"Joint à lèvres avant",reference:`${v.joint_av_int||"?"}x${v.joint_av_ext||"?"}x${v.joint_av_ep||"?"} ${v.joint_av_levres==="Double"?"DL":"SL"}`});
-  if(v.joint_ar_int&&v.etat_flasque_ar==="Marqué")pieces.push({designation:"Joint à lèvres arrière",reference:`${v.joint_ar_int||"?"}x${v.joint_ar_ext||"?"}x${v.joint_ar_ep||"?"} ${v.joint_ar_levres==="Double"?"DL":"SL"}`});
+  if(v.etat_roulement_av&&mauvais.includes(v.etat_roulement_av))pieces.push({designation:"Roulement avant",reference:(v.type_roulement_av||"").replace("Autre:","").trim()});
+  if(v.etat_roulement_ar&&mauvais.includes(v.etat_roulement_ar))pieces.push({designation:"Roulement arrière",reference:(v.type_roulement_ar||"").replace("Autre:","").trim()});
+  if(v.joint_av_int)pieces.push({designation:"Joint à lèvres avant",reference:(v.joint_av_int||"?")+"x"+(v.joint_av_ext||"?")+"x"+(v.joint_av_ep||"?")+" "+(v.joint_av_levres==="Double"?"DL":"SL")});
+  if(v.joint_ar_int)pieces.push({designation:"Joint à lèvres arrière",reference:(v.joint_ar_int||"?")+"x"+(v.joint_ar_ext||"?")+"x"+(v.joint_ar_ep||"?")+" "+(v.joint_ar_levres==="Double"?"DL":"SL")});
   if(v.etat_ventilateur&&mauvais.includes(v.etat_ventilateur))pieces.push({designation:"Ventilateur",reference:v.taille_ventilateur||""});
   if(v.etat_bobinage&&mauvais.includes(v.etat_bobinage))pieces.push({designation:"Bobinage stator",reference:""});
   if(v.etat_rotor&&mauvais.includes(v.etat_rotor))pieces.push({designation:"Rotor",reference:""});
@@ -311,7 +311,7 @@ function SectionMaterielCommander({v,ficheId,de,client,piecesInit,onSave}){
     try{
       await db.del("suivi_pieces","?fiche_id=eq."+ficheId);
       const cochees=pieces.filter(p=>p.checked);
-      if(cochees.length>0)await db.post("suivi_pieces",cochees.map(p=>({fiche_id:ficheId,de,client,designation:p.designation,reference:p.reference||"",statut:"Devis",source:p.source})));
+      if(cochees.length>0)await db.post("suivi_pieces",cochees.map(p=>({fiche_id:ficheId,de,client,designation:p.designation,reference:p.reference||"",statut:"A_recommander",source:p.source})));
       setSaved(true);setTimeout(()=>setSaved(false),3000);
       if(onSave)onSave(cochees);
     }catch(e){}
@@ -367,49 +367,78 @@ function SectionMaterielCommander({v,ficheId,de,client,piecesInit,onSave}){
 }
 
 import {genHtml, imprimerFiche, telechargerZip} from "./pdfUtils";
+// ─── APERÇU FICHE ───────────────────────────────────────────────────────
+function ApercuFiche({v,photos,statutChantier,commentaires,pieces,onClose}){
+  const html=genHtml(v,photos||[],statutChantier,commentaires||"",pieces||[]);
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:300,display:"flex",flexDirection:"column"}}>
+    <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,flexWrap:"wrap",gap:8}}>
+      <span style={{fontWeight:700}}>Aperçu fiche — {v.de}</span>
+      <div style={{display:"flex",gap:10}}>
+        <button style={{background:"#E8720C",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer",fontSize:13}} onClick={()=>imprimerFiche(v,photos||[],statutChantier,commentaires||"",pieces||[])}>📄 Imprimer / PDF</button>
+        <button style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer",fontSize:13}} onClick={onClose}>✕ Fermer</button>
+      </div>
+    </div>
+    <iframe srcDoc={html} style={{flex:1,border:"none",background:"#fff"}} title="Aperçu fiche"/>
+  </div>);
+}
+
 // ─── PAGE SUIVI MATÉRIEL ─────────────────────────────────────────────────
 function PageSuivi(){
-  const [pieces,setPieces]=useState([]);const [loading,setLoading]=useState(true);const [filtre,setFiltre]=useState("tous");
-  const NEXT={Devis:"En_commande",En_commande:"A_remonter",A_remonter:"Termine"};
-  const NEXT_LBL={Devis:"→ Commander",En_commande:"→ À remonter",A_remonter:"→ Terminé"};
-  const statColors={Devis:{color:"#E8720C",bg:"#FFF8E1"},En_commande:{color:"#1B4F8A",bg:"#EEF4FF"},A_remonter:{color:"#22863A",bg:"#F0FFF4"},Termine:{color:"#6B7280",bg:"#F5F6F8"}};
+  const [pieces,setPieces]=useState([]);const [loading,setLoading]=useState(true);const [filtre,setFiltre]=useState("actif");
 
-  useEffect(()=>{db.get("suivi_pieces","?order=created_at.desc").then(d=>{setPieces(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));},[]);
+  const ST={
+    A_recommander:{label:"À recommander",color:"#E8720C",bg:"#FFF8E1"},
+    Commande:{label:"Commandé",color:"#22863A",bg:"#F0FFF4"},
+  };
+
+  useEffect(()=>{
+    db.get("suivi_pieces","?order=created_at.desc").then(d=>{
+      setPieces(Array.isArray(d)?d:[]);setLoading(false);
+    }).catch(()=>setLoading(false));
+  },[]);
 
   async function changerStatut(id,statut){
     await db.patch("suivi_pieces","?id=eq."+id,{statut,updated_at:new Date().toISOString()});
     setPieces(prev=>prev.map(p=>p.id===id?{...p,statut}:p));
   }
 
-  const filtrees=filtre==="tous"?pieces.filter(p=>p.statut!=="Termine"):pieces.filter(p=>p.statut===filtre);
+  async function commander(id){
+    await changerStatut(id,"Commande");
+  }
+
+  const filtrees=filtre==="actif"
+    ?pieces.filter(p=>p.statut!=="Commande")
+    :filtre==="Commande"
+    ?pieces.filter(p=>p.statut==="Commande")
+    :pieces;
 
   // Grouper par DE
   const parDE={};
-  filtrees.forEach(p=>{if(!parDE[p.de])parDE[p.de]={de:p.de,client:p.client,pieces:[]};parDE[p.de].pieces.push(p);});
+  filtrees.forEach(p=>{
+    if(!parDE[p.de])parDE[p.de]={de:p.de,client:p.client,pieces:[]};
+    parDE[p.de].pieces.push(p);
+  });
   const deList=Object.keys(parDE).sort();
 
-  const counts={Devis:pieces.filter(p=>p.statut==="Devis").length,En_commande:pieces.filter(p=>p.statut==="En_commande").length,A_remonter:pieces.filter(p=>p.statut==="A_remonter").length,Termine:pieces.filter(p=>p.statut==="Termine").length};
+  const nAReco=pieces.filter(p=>p.statut==="A_recommander"||!p.statut).length;
+  const nCom=pieces.filter(p=>p.statut==="Commande").length;
 
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
       <h2 style={{fontSize:20,fontWeight:700,margin:0}}>Matériel à renouveler</h2>
-      {counts.Devis>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>⚠ {counts.Devis} en attente de commande</span>}
+      {nAReco>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>⚠ {nAReco} à commander</span>}
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8,marginBottom:16}}>
-      {[{id:"Devis",label:"Devis",n:counts.Devis},{id:"En_commande",label:"En commande",n:counts.En_commande},{id:"A_remonter",label:"À remonter",n:counts.A_remonter},{id:"Termine",label:"Terminé",n:counts.Termine}].map(s=>(
-        <div key={s.id} style={{background:"#fff",borderRadius:10,border:"1px solid "+(filtre===s.id?"#1B4F8A":"#E2E6EA"),padding:"10px 14px",cursor:"pointer",textAlign:"center"}} onClick={()=>setFiltre(filtre===s.id?"tous":s.id)}>
-          <div style={{fontSize:22,fontWeight:700,color:"#1A1A2E"}}>{s.n}</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
+      {[
+        {id:"actif",label:"À recommander",n:nAReco,color:"#E8720C"},
+        {id:"Commande",label:"Commandé",n:nCom,color:"#22863A"},
+        {id:"tous",label:"Tout voir",n:pieces.length,color:"#6B7280"},
+      ].map(s=>(
+        <div key={s.id} style={{background:"#fff",borderRadius:10,border:"1.5px solid "+(filtre===s.id?s.color:"#E2E6EA"),padding:"10px 14px",cursor:"pointer",textAlign:"center"}} onClick={()=>setFiltre(s.id)}>
+          <div style={{fontSize:22,fontWeight:700,color:filtre===s.id?s.color:"#1A1A2E"}}>{s.n}</div>
           <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>{s.label}</div>
         </div>
-      ))}
-    </div>
-
-    <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-      {["tous","Devis","En_commande","A_remonter","Termine"].map(f=>(
-        <button key={f} onClick={()=>setFiltre(f)} style={{fontSize:12,border:"1px solid",borderColor:filtre===f?"#1B4F8A":"#E2E6EA",background:filtre===f?"#EEF4FF":"#fff",color:filtre===f?"#1B4F8A":"#6B7280",borderRadius:20,padding:"4px 14px",cursor:"pointer",fontWeight:filtre===f?600:400}}>
-          {f==="tous"?"Tous (hors terminé)":STATUTS_CHANTIER.find(s=>s.id===f)?.label||f}
-        </button>
       ))}
     </div>
 
@@ -425,26 +454,26 @@ function PageSuivi(){
           <span style={{marginLeft:"auto",fontSize:11,color:"#9CA3AF"}}>{g.pieces.length} pièce{g.pieces.length>1?"s":""}</span>
         </div>
         {g.pieces.map(p=>{
-          const sc=statColors[p.statut]||statColors.Devis;
-          return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 16px",borderBottom:"1px solid #F3F4F6",flexWrap:"wrap"}}>
+          const estCommande=p.statut==="Commande";
+          const sc=estCommande?ST.Commande:ST.A_recommander;
+          return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:"1px solid #F3F4F6",flexWrap:"wrap",opacity:estCommande?0.65:1}}>
             <div style={{flex:1,minWidth:120}}>
-              <span style={{fontSize:13,fontWeight:600}}>{p.designation}</span>
+              <span style={{fontSize:13,fontWeight:600,textDecoration:estCommande?"line-through":"none"}}>{p.designation}</span>
               {p.reference&&<span style={{fontSize:11,color:"#6B7280",marginLeft:8,background:"#F5F6F8",border:"1px solid #E2E6EA",borderRadius:4,padding:"1px 6px"}}>{p.reference}</span>}
             </div>
             <span style={{fontSize:10,background:p.source==="auto"?"#F0FFF4":"#EEF4FF",color:p.source==="auto"?"#22863A":"#1B4F8A",borderRadius:20,padding:"2px 8px"}}>{p.source}</span>
-            <select value={p.statut} onChange={e=>changerStatut(p.id,e.target.value)} style={{padding:"4px 8px",borderRadius:5,border:"1px solid "+sc.color,fontSize:12,fontWeight:600,color:sc.color,background:sc.bg,cursor:"pointer"}}>
-              <option value="Devis">Devis</option>
-              <option value="En_commande">En commande</option>
-              <option value="A_remonter">À remonter</option>
-              <option value="Termine">Terminé</option>
-            </select>
-            {NEXT[p.statut]&&<button onClick={()=>changerStatut(p.id,NEXT[p.statut])} style={{fontSize:11,padding:"4px 10px",borderRadius:5,border:"1px solid #E2E6EA",background:"#F8F9FA",cursor:"pointer",whiteSpace:"nowrap"}}>{NEXT_LBL[p.statut]}</button>}
+            <span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color,border:"1px solid "+sc.color}}>{sc.label}</span>
+            {!estCommande
+              ?<button onClick={()=>commander(p.id)} style={{fontSize:12,padding:"5px 14px",borderRadius:6,border:"none",background:"#22863A",color:"#fff",cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>✓ Commander</button>
+              :<button onClick={()=>changerStatut(p.id,"A_recommander")} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #E2E6EA",background:"#F5F6F8",color:"#6B7280",cursor:"pointer",whiteSpace:"nowrap"}}>↩ Annuler</button>
+            }
           </div>);
         })}
       </div>);
     })}
   </div>);
 }
+
 
 // ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
 function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
@@ -649,7 +678,7 @@ function PageFiche({ficheInit,sessionTech,techs,clients,onAddClient,categories,o
   const prog=Math.round((validees.length/ETAPES.length)*100);const chem=cheminFiche(v);const st=statutInfo(statutChantier);
 
   return(<div style={{maxWidth:800,margin:"0 auto",paddingBottom:40}}>
-    {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande.filter(p=>p.statut==="Devis")} onClose={()=>setApercu(false)}/>}
+    {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} onClose={()=>setApercu(false)}/>}
     <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div><p style={{margin:0,fontSize:12,fontWeight:700}}>{v.de} · {v.client||"Client"} · {v.materiel_lieu||"Moteur"}</p><p style={{margin:0,fontSize:10,opacity:0.7}}>📁 {chem.client}/{chem.de}/{chem.mat}</p></div>
@@ -721,7 +750,7 @@ export default function App(){
   return(<div style={S.app}>
     <div style={S.hdr}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <img src={LOGO_B64} alt="PMV Services" style={{height:40,objectFit:"contain",borderRadius:4}}/>
+        <img src={LOGO_B64} alt="PMV Services" style={{height:40,objectFit:"contain",borderRadius:4,cursor:"pointer"}} onClick={()=>setPage("accueil")}/>
         <div style={{display:"none"}}>
           <p style={{fontSize:13,fontWeight:700,margin:0,lineHeight:1.2}}>Atelier PMV</p>
           <p style={{fontSize:10,opacity:0.7,margin:0}}>Fiches d'entretien</p>
