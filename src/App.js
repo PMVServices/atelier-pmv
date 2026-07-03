@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import {genHtml, imprimerFiche, telechargerZip} from "./pdfUtils";
 
 const LOGO_B64 = "data:image/jpeg;base64,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";
 const SUPA_URL = "https://pupbzngvudprcweukuoi.supabase.co";
@@ -27,7 +28,12 @@ const STATUTS_CHANTIER=[
   {id:"En_commande",label:"En commande",color:"#1B4F8A",bg:"#EEF4FF"},
   {id:"A_remonter",label:"À remonter",color:"#22863A",bg:"#F0FFF4"},
   {id:"Termine",label:"Terminé",color:"#6B7280",bg:"#F5F6F8"},
+  {id:"Abandonne",label:"Abandonné",color:"#9B59B6",bg:"#F5EEF8"},
 ];
+const SUPA_URL_STORAGE="https://pupbzngvudprcweukuoi.supabase.co";
+const SUPA_KEY_STORAGE="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1cGJ6bmd2dWRwcmN3ZXVrdW9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxODY3NDAsImV4cCI6MjA5Nzc2Mjc0MH0.jn025v42M3qNpAKfvy49cdCySBdTqwRz99b1EfaKYoo";
+const STORAGE_LIMIT_GO=1;
+const STORAGE_ALERT_PCT=70;
 
 const CHAMPS={
   "Entrée":[
@@ -602,7 +608,6 @@ function SectionMaterielCommander({v,ficheId,de,client,piecesInit,onSave,typeMat
   </div>);
 }
 
-import {genHtml, imprimerFiche, telechargerZip} from "./pdfUtils";
 // ─── APERÇU FICHE ───────────────────────────────────────────────────────
 function ApercuFiche({v,photos,statutChantier,commentaires,pieces,onClose}){
   const html=genHtml(v,photos||[],statutChantier,commentaires||"",pieces||[]);
@@ -615,6 +620,170 @@ function ApercuFiche({v,photos,statutChantier,commentaires,pieces,onClose}){
       </div>
     </div>
     <iframe srcDoc={html} style={{flex:1,border:"none",background:"#fff"}} title="Aperçu fiche"/>
+  </div>);
+}
+
+
+// ─── STOCKAGE SUPABASE ──────────────────────────────────────────────────
+async function getStorageUsage(){
+  try{
+    const SUPA_URL="https://pupbzngvudprcweukuoi.supabase.co";
+    const SUPA_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1cGJ6bmd2dWRwcmN3ZXVrdW9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxODY3NDAsImV4cCI6MjA5Nzc2Mjc0MH0.jn025v42M3qNpAKfvy49cdCySBdTqwRz99b1EfaKYoo";
+    const r=await fetch(`${SUPA_URL}/rest/v1/fiche_photos?select=storage_path`,{headers:{"apikey":SUPA_KEY,"Authorization":`Bearer ${SUPA_KEY}`}});
+    const photos=await r.json();
+    if(!Array.isArray(photos))return null;
+    // Estimation: moyenne 1.5 Mo par photo
+    const estMo=photos.length*1.5;
+    const pct=Math.round((estMo/1024)*100);
+    return {nbPhotos:photos.length,estMo:Math.round(estMo),pct:Math.min(pct,100)};
+  }catch(e){return null;}
+}
+
+function BadgeStockage({onClick}){
+  const [usage,setUsage]=React.useState(null);
+  useEffect(()=>{getStorageUsage().then(u=>setUsage(u));},[]);
+  if(!usage||usage.pct<STORAGE_ALERT_PCT)return null;
+  const color=usage.pct>=90?"#D73A49":usage.pct>=80?"#E8720C":"#856404";
+  const bg=usage.pct>=90?"#FFF5F5":usage.pct>=80?"#FFF8E1":"#FFFBEB";
+  return(<button onClick={onClick} style={{background:bg,color,border:"1.5px solid "+color,borderRadius:20,padding:"3px 12px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
+    ⚠️ Stockage {usage.pct}% ({usage.estMo} Mo / 1 Go)
+  </button>);
+}
+
+function PageStockage({fiches,onRetour}){
+  const [photos,setPhotos]=React.useState([]);
+  const [loading,setLoading]=React.useState(true);
+  const [selection,setSelection]=React.useState({});
+  const [exportEnCours,setExportEnCours]=React.useState(false);
+  const [confirmSuppr,setConfirmSuppr]=React.useState(false);
+  const [suppEnCours,setSuppEnCours]=React.useState(false);
+  const [msg,setMsg]=React.useState(null);
+
+  const CINQ_MOIS=5*30*24*60*60*1000;
+
+  useEffect(()=>{
+    db.get("fiche_photos","?select=*&order=created_at").then(p=>{
+      if(Array.isArray(p))setPhotos(p.map(pp=>({...pp,url:db.photoUrl(pp.storage_path)})));
+      setLoading(false);
+    });
+  },[]);
+
+  // Grouper les photos par fiche_id
+  const parFiche={};
+  photos.forEach(p=>{
+    if(!parFiche[p.fiche_id])parFiche[p.fiche_id]={fiche_id:p.fiche_id,photos:[]};
+    parFiche[p.fiche_id].photos.push(p);
+  });
+
+  // Fiches candidates = Terminé OU Abandonné OU > 5 mois
+  const maintenant=Date.now();
+  const candidates=fiches.filter(f=>{
+    const nbPhotos=parFiche[f.id]?.photos?.length||0;
+    if(nbPhotos===0)return false;
+    const ancienne=(maintenant-new Date(f.updated_at||f.created_at).getTime())>CINQ_MOIS;
+    return f.statut_chantier==="Termine"||f.statut_chantier==="Abandonne"||ancienne;
+  });
+
+  function toggleSel(id){setSelection(prev=>({...prev,[id]:!prev[id]}));}
+  function toutSelectionner(){const s={};candidates.forEach(f=>{s[f.id]=true;});setSelection(s);}
+  function toutDeselectionner(){setSelection({});}
+  const selectionIds=Object.keys(selection).filter(id=>selection[id]);
+  const photosSelectionnees=selectionIds.flatMap(id=>parFiche[id]?.photos||[]);
+  const estMoTotal=Math.round(photos.length*1.5);
+  const estMoSel=Math.round(photosSelectionnees.length*1.5);
+
+  async function exporter(){
+    if(photosSelectionnees.length===0)return;
+    setExportEnCours(true);
+    await telechargerZip(photosSelectionnees,null,"photos_archivage");
+    setExportEnCours(false);
+  }
+
+  async function supprimerPhotos(){
+    setSuppEnCours(true);
+    try{
+      for(const id of selectionIds){
+        await db.del("fiche_photos","?fiche_id=eq."+id);
+      }
+      setPhotos(prev=>prev.filter(p=>!selectionIds.includes(p.fiche_id)));
+      setSelection({});
+      setConfirmSuppr(false);
+      setMsg("✅ Photos supprimées. Les fiches et données sont conservées.");
+      setTimeout(()=>setMsg(null),5000);
+    }catch(e){setMsg("Erreur : "+e.message);}
+    setSuppEnCours(false);
+  }
+
+  function raisonCandidate(f){
+    const ancienne=(maintenant-new Date(f.updated_at||f.created_at).getTime())>CINQ_MOIS;
+    if(f.statut_chantier==="Termine")return{label:"Terminé",color:"#6B7280",bg:"#F5F6F8"};
+    if(f.statut_chantier==="Abandonne")return{label:"Abandonné",color:"#9B59B6",bg:"#F5EEF8"};
+    if(ancienne)return{label:"+5 mois",color:"#E8720C",bg:"#FFF8E1"};
+    return{label:"",color:"",bg:""};
+  }
+
+  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
+      <div>
+        <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🗂 Gestion du stockage</h2>
+        <p style={{fontSize:13,color:"#6B7280",margin:"4px 0 0"}}>{photos.length} photos · ~{estMoTotal} Mo utilisés sur 1 024 Mo</p>
+      </div>
+      <button style={S.p2} onClick={onRetour}>← Retour</button>
+    </div>
+
+    <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16}}>
+      <div style={{height:8,background:"#F3F4F6",borderRadius:8,overflow:"hidden",marginBottom:8}}>
+        <div style={{height:8,borderRadius:8,width:Math.min((estMoTotal/1024)*100,100)+"%",background:estMoTotal/1024>=0.9?"#D73A49":estMoTotal/1024>=0.8?"#E8720C":"#22863A",transition:"width .4s"}}/>
+      </div>
+      <p style={{fontSize:12,color:"#6B7280",margin:0}}>~{estMoTotal} Mo / 1 024 Mo ({Math.round((estMoTotal/1024)*100)}%) — estimation basée sur {photos.length} photos</p>
+    </div>
+
+    {msg&&<div style={{background:"#F0FFF4",border:"1px solid #22863A",borderRadius:8,padding:"10px 16px",marginBottom:16,fontSize:13,color:"#22863A"}}>{msg}</div>}
+
+    <div style={{display:"flex",gap:10,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
+      <span style={{fontSize:13,color:"#6B7280"}}>{candidates.length} dossier{candidates.length>1?"s":""} candidat{candidates.length>1?"s":""} · {selectionIds.length} sélectionné{selectionIds.length>1?"s":""} (~{estMoSel} Mo)</span>
+      <button onClick={toutSelectionner} style={{...S.p2,fontSize:12,padding:"4px 12px"}}>Tout sélectionner</button>
+      <button onClick={toutDeselectionner} style={{...S.p2,fontSize:12,padding:"4px 12px"}}>Tout déselectionner</button>
+    </div>
+
+    {loading&&<div style={{textAlign:"center",padding:32,color:"#9CA3AF"}}>Chargement…</div>}
+    {!loading&&candidates.length===0&&<div style={{textAlign:"center",padding:32,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>
+      <p style={{fontSize:16,margin:"0 0 8px"}}>✅ Aucun dossier à nettoyer</p>
+      <p style={{fontSize:13,color:"#9CA3AF",margin:0}}>Tous vos dossiers actifs ont moins de 5 mois</p>
+    </div>}
+
+    {candidates.map(f=>{
+      const nb=parFiche[f.id]?.photos?.length||0;
+      const raison=raisonCandidate(f);
+      const sel=!!selection[f.id];
+      return(<div key={f.id} style={{background:"#fff",borderRadius:10,border:"1.5px solid "+(sel?"#1B4F8A":"#E2E6EA"),marginBottom:8,padding:"12px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap",cursor:"pointer"}} onClick={()=>toggleSel(f.id)}>
+        <input type="checkbox" checked={sel} onChange={()=>toggleSel(f.id)} onClick={e=>e.stopPropagation()} style={{width:18,height:18,cursor:"pointer",accentColor:"#1B4F8A"}}/>
+        <div style={{flex:1,minWidth:120}}>
+          <span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{f.de}</span>
+          <span style={{fontSize:13,marginLeft:8}}>{f.client||"—"}</span>
+          <span style={{fontSize:11,marginLeft:8,color:"#9CA3AF"}}>{f.materiel||""}</span>
+        </div>
+        <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:raison.bg,color:raison.color}}>{raison.label}</span>
+        <span style={{fontSize:12,color:"#6B7280"}}>📷 {nb} photo{nb>1?"s":""} (~{Math.round(nb*1.5)} Mo)</span>
+      </div>);
+    })}
+
+    {selectionIds.length>0&&<div style={{position:"sticky",bottom:0,background:"#fff",borderTop:"1.5px solid #E2E6EA",padding:"14px 0",marginTop:16,display:"flex",gap:12,flexWrap:"wrap",alignItems:"center",justifyContent:"flex-end"}}>
+      {!confirmSuppr?(<>
+        <button onClick={exporter} disabled={exportEnCours} style={{...S.p1,background:"#22863A",opacity:exportEnCours?0.6:1}}>
+          {exportEnCours?"⏳ Export en cours…":"📥 Exporter ZIP ("+selectionIds.length+" dossier"+(selectionIds.length>1?"s":"") +")"}
+        </button>
+        <button onClick={()=>setConfirmSuppr(true)} style={S.pDanger}>🗑 Supprimer les photos ({selectionIds.length})</button>
+      </>):(<div style={{background:"#FFF5F5",border:"1.5px solid #D73A49",borderRadius:10,padding:"14px 18px",width:"100%"}}>
+        <p style={{fontSize:14,fontWeight:700,color:"#D73A49",margin:"0 0 8px"}}>⚠️ Confirmation requise</p>
+        <p style={{fontSize:13,margin:"0 0 14px"}}>Avez-vous bien sauvegardé ces photos sur votre NAS ou un autre support avant de supprimer ?</p>
+        <p style={{fontSize:12,color:"#6B7280",margin:"0 0 14px"}}>Les fiches, mesures et données seront conservées. Seules les photos seront supprimées de Supabase.</p>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={supprimerPhotos} disabled={suppEnCours} style={{...S.pDanger,opacity:suppEnCours?0.6:1}}>{suppEnCours?"Suppression…":"✅ Oui, j'ai sauvegardé — supprimer les photos"}</button>
+          <button onClick={()=>setConfirmSuppr(false)} style={S.p2}>❌ Non, annuler</button>
+        </div>
+      </div>)}
+    </div>}
   </div>);
 }
 
@@ -713,8 +882,8 @@ function PageSuivi(){
 
 // ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
 function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
-  const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);
-  const statuts=showTermine?STATUTS_CHANTIER:STATUTS_CHANTIER.filter(s=>s.id!=="Termine");
+  const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);
+  const statuts=(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");return s;})();
   const fichesFilt=fiches.filter(f=>filtTech==="tous"||(f.tech_entree||"")==filtTech);
   const parStatut={};STATUTS_CHANTIER.forEach(s=>{parStatut[s.id]=[];});
   fichesFilt.forEach(f=>{const sid=f.statut_chantier||"A_demonter";if(parStatut[sid])parStatut[sid].push(f);else parStatut["A_demonter"].push(f);});
@@ -729,7 +898,7 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         <select value={filtTech} onChange={e=>setFiltTech(e.target.value)} style={{...S.sel,width:130,fontSize:12}}><option value="tous">Tous techs</option>{techs.map(t=><option key={t}>{t}</option>)}</select>
-        <button onClick={()=>setShowTermine(!showTermine)} style={{...S.p2,fontSize:12,padding:"5px 12px"}}>{showTermine?"Masquer Terminé":"Afficher Terminé"}</button>
+        <button onClick={()=>setShowTermine(!showTermine)} style={{...S.p2,fontSize:12,padding:"5px 12px"}}>{showTermine?"Masquer Terminé":"Afficher Terminé"}</button><button onClick={()=>setShowAbandonne(!showAbandonne)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#9B59B6",borderColor:"#9B59B6"}}>{showAbandonne?"Masquer Abandonné":"Afficher Abandonné"}</button>
       </div>
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat("+statuts.length+",1fr)",gap:10,overflowX:"auto"}}>
@@ -1003,6 +1172,8 @@ export default function App(){
           </button>
         ))}
       </div>
+      <BadgeStockage onClick={()=>setPage("stockage")}/>
+      <BadgeStockage onClick={()=>setPage("stockage")}/>
       {sessionTech&&<div style={{display:"flex",alignItems:"center",gap:6}}>
         <span style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:12,fontWeight:700}}>{sessionTech}</span>
         <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:11,cursor:"pointer"}} onClick={()=>setSessionTech(null)}>↩</button>
@@ -1014,5 +1185,6 @@ export default function App(){
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
     {page==="suivi"&&<PageSuivi/>}
+    {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
   </div>);
 }
