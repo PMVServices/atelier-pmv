@@ -32,21 +32,67 @@ export function imprimerFiche(v,photos,sc,comm,pieces){
 export async function telechargerZip(photos,valeurs,nomDossier){
   if(!photos||photos.length===0){alert("Aucune photo à télécharger.");return;}
   try{
+    // Charger JSZip
     if(!window.JSZip){await new Promise(function(res,rej){var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+    // Charger jsPDF
+    if(!window.jspdf){await new Promise(function(res,rej){var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+    // Charger html2canvas
+    if(!window.html2canvas){await new Promise(function(res,rej){var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
+
     var zip=new window.JSZip();
+
+    // Télécharger les photos
     await Promise.all(photos.map(async function(p){try{var r=await fetch(p.url);var blob=await r.blob();zip.file(p.nom_fichier,blob);}catch(e){}}));
+
+    // Générer le PDF de la fiche
     if(valeurs){
-      // Générer la fiche en PDF via impression navigateur
       var html=genHtml(valeurs,photos,"A_demonter","",[]); 
-      // On génère un blob HTML qu'on met dans le ZIP
-      // Le PDF sera généré par impression depuis l'appli — ici on met la version HTML
-      var htmlBlob=new Blob([html],{type:"text/html"});
-      zip.file(nomDossier+"_fiche.pdf.html",htmlBlob);
-      zip.file(nomDossier+"_POUR_PDF.txt","Pour obtenir le PDF : ouvrez le fichier _fiche.pdf.html dans un navigateur, puis Fichier > Imprimer > Enregistrer en PDF");
+      
+      // Créer un iframe caché pour rendre le HTML
+      var iframe=document.createElement("iframe");
+      iframe.style.cssText="position:fixed;left:-9999px;top:-9999px;width:794px;height:1123px;border:none;";
+      document.body.appendChild(iframe);
+      iframe.contentDocument.open();
+      iframe.contentDocument.write(html);
+      iframe.contentDocument.close();
+      
+      await new Promise(r=>setTimeout(r,800));
+      
+      try{
+        // Capturer avec html2canvas
+        var canvas=await window.html2canvas(iframe.contentDocument.body,{
+          scale:1.5,width:794,useCORS:true,allowTaint:true,
+          backgroundColor:"#ffffff",logging:false
+        });
+        
+        var imgData=canvas.toDataURL("image/jpeg",0.85);
+        var pdf=new window.jspdf.jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+        var pdfW=pdf.internal.pageSize.getWidth();
+        var pdfH=pdf.internal.pageSize.getHeight();
+        var imgH=(canvas.height*pdfW)/canvas.width;
+        var pos=0;
+        
+        // Pagination si contenu dépasse une page
+        while(pos<imgH){
+          if(pos>0)pdf.addPage();
+          pdf.addImage(imgData,"JPEG",0,pos>0?-(pos):0,pdfW,imgH,undefined,"FAST");
+          pos+=pdfH;
+        }
+        
+        var pdfBlob=pdf.output("blob");
+        zip.file(nomDossier+"_fiche.pdf",pdfBlob);
+      }catch(e){
+        // Fallback HTML si html2canvas échoue
+        zip.file(nomDossier+"_fiche.html",html);
+      }
+      
+      document.body.removeChild(iframe);
     }
+
     var content=await zip.generateAsync({type:"blob"});
     var a=document.createElement("a");a.href=URL.createObjectURL(content);a.download=nomDossier+".zip";a.click();
   }catch(e){
+    console.error("ZIP error:",e);
     photos.forEach(function(p){var a=document.createElement("a");a.href=p.url;a.download=p.nom_fichier;a.target="_blank";a.click();});
   }
 }
