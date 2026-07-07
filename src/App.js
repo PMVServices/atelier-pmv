@@ -787,9 +787,188 @@ function PageStockage({fiches,onRetour}){
   </div>);
 }
 
+
+// ─── PAGE STATISTIQUES ──────────────────────────────────────────────────
+function PageStats({fiches,pieces}){
+  const [periode,setPeriode]=useState("total");
+
+  function filtrerParPeriode(liste){
+    if(periode==="total")return liste;
+    const now=new Date();
+    const mois=periode==="6mois"?6:12;
+    const limite=new Date(now.getFullYear(),now.getMonth()-mois,now.getDate());
+    return liste.filter(f=>new Date(f.created_at||f.updated_at)>=limite);
+  }
+
+  const fichesFilt=filtrerParPeriode(fiches);
+  const piecesFilt=filtrerParPeriode(pieces);
+
+  // Stats statuts
+  const parStatut={};
+  STATUTS_CHANTIER.forEach(s=>{parStatut[s.id]=fichesFilt.filter(f=>(f.statut_chantier||"A_demonter")===s.id).length;});
+  const total=fichesFilt.length;
+
+  // Taux conversion : Devis -> (En_commande + A_remonter + Termine)
+  const totalDevis=fichesFilt.filter(f=>["Devis","En_commande","A_remonter","Termine"].includes(f.statut_chantier||"A_demonter")).length;
+  const devisAcceptes=fichesFilt.filter(f=>["En_commande","A_remonter","Termine"].includes(f.statut_chantier)).length;
+  const tauxConversion=totalDevis>0?Math.round((devisAcceptes/totalDevis)*100):0;
+  const tauxAbandon=total>0?Math.round(((parStatut["Abandonne"]||0)/total)*100):0;
+  const tauxTermine=total>0?Math.round(((parStatut["Termine"]||0)/total)*100):0;
+
+  // Stats par technicien
+  const parTech={};
+  fichesFilt.forEach(f=>{const t=f.tech_entree||"—";if(!parTech[t])parTech[t]=0;parTech[t]++;});
+  const techList=Object.entries(parTech).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  // Top clients
+  const parClient={};
+  fichesFilt.forEach(f=>{const c=f.client||"—";if(!parClient[c])parClient[c]=0;parClient[c]++;});
+  const clientList=Object.entries(parClient).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  // Stats matériel
+  const nAReco=piecesFilt.filter(p=>p.statut==="A_recommander"||!p.statut).length;
+  const nCommande=piecesFilt.filter(p=>p.statut==="Commande").length;
+  const parPiece={};
+  piecesFilt.forEach(p=>{const d=p.designation||"—";if(!parPiece[d])parPiece[d]=0;parPiece[d]++;});
+  const pieceList=Object.entries(parPiece).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+  // Stats par mois (12 derniers mois)
+  const parMois={};
+  const now2=new Date();
+  for(let i=11;i>=0;i--){
+    const d=new Date(now2.getFullYear(),now2.getMonth()-i,1);
+    const k=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+    parMois[k]=0;
+  }
+  fiches.forEach(f=>{
+    if(f.created_at){
+      const d=new Date(f.created_at);
+      const k=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+      if(parMois[k]!==undefined)parMois[k]++;
+    }
+  });
+  const moisData=Object.entries(parMois).slice(-6);
+  const maxMois=Math.max(...moisData.map(m=>m[1]),1);
+
+  const card=(titre,valeur,detail,color="#1B4F8A")=>(
+    <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"14px 16px"}}>
+      <div style={{fontSize:11,color:"#6B7280",marginBottom:4,fontWeight:500}}>{titre}</div>
+      <div style={{fontSize:28,fontWeight:700,color,lineHeight:1}}>{valeur}</div>
+      {detail&&<div style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>{detail}</div>}
+    </div>
+  );
+
+  return(<div style={{maxWidth:1000,margin:"0 auto",padding:"20px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
+      <h2 style={{fontSize:20,fontWeight:700,margin:0}}>📊 Statistiques atelier</h2>
+      <div style={{display:"flex",gap:6}}>
+        {[["6mois","6 derniers mois"],["annee","Dernière année"],["total","Total"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setPeriode(v)} style={{padding:"6px 14px",borderRadius:20,border:"1.5px solid "+(periode===v?"#1B4F8A":"#E2E6EA"),background:periode===v?"#1B4F8A":"#fff",color:periode===v?"#fff":"#6B7280",fontSize:12,fontWeight:600,cursor:"pointer"}}>{l}</button>
+        ))}
+      </div>
+    </div>
+
+    {/* Vue globale */}
+    <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Vue globale</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:20}}>
+      {card("Total dossiers",total,"",  "#1B4F8A")}
+      {card("Taux conversion devis",tauxConversion+"%","Devis → Accepté","#22863A")}
+      {card("Taux abandon",tauxAbandon+"%","Sur total dossiers","#D73A49")}
+      {card("Taux terminé",tauxTermine+"%","Sur total dossiers","#6B7280")}
+    </div>
+
+    {/* Répartition par statut */}
+    <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Répartition par statut</div>
+    <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"14px 16px",marginBottom:20}}>
+      {STATUTS_CHANTIER.map(s=>{
+        const n=parStatut[s.id]||0;
+        const pct=total>0?Math.round((n/total)*100):0;
+        return(<div key={s.id} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+          <span style={{fontSize:12,fontWeight:600,color:s.color,width:120,flexShrink:0}}>{s.label}</span>
+          <div style={{flex:1,background:"#F5F6F8",borderRadius:20,height:8,overflow:"hidden"}}>
+            <div style={{height:8,borderRadius:20,background:s.color,width:pct+"%",transition:"width .4s"}}/>
+          </div>
+          <span style={{fontSize:12,fontWeight:700,color:"#1A1A2E",width:30,textAlign:"right"}}>{n}</span>
+          <span style={{fontSize:11,color:"#9CA3AF",width:32}}>{pct}%</span>
+        </div>);
+      })}
+    </div>
+
+    {/* Activité par mois */}
+    <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Activité — 6 derniers mois</div>
+    <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"14px 16px",marginBottom:20}}>
+      <div style={{display:"flex",alignItems:"flex-end",gap:8,height:80}}>
+        {moisData.map(([k,n])=>{
+          const h=maxMois>0?Math.round((n/maxMois)*64):0;
+          const [y,m]=k.split("-");
+          const nom=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"][parseInt(m)-1];
+          return(<div key={k} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <span style={{fontSize:10,fontWeight:700,color:"#1B4F8A"}}>{n||""}</span>
+            <div style={{width:"100%",background:"#EEF4FF",borderRadius:"4px 4px 0 0",height:h+4,minHeight:4,transition:"height .4s"}}/>
+            <span style={{fontSize:9,color:"#9CA3AF"}}>{nom}</span>
+          </div>);
+        })}
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+      {/* Par technicien */}
+      <div>
+        <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Par technicien</div>
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px"}}>
+          {techList.length===0&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:12}}>Aucune donnée</div>}
+          {techList.map(([t,n])=>(
+            <div key={t} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+              <span style={{fontSize:12,fontWeight:600,color:"#1B4F8A",width:36,flexShrink:0,background:"#EEF4FF",textAlign:"center",padding:"2px 4px",borderRadius:4}}>{t}</span>
+              <div style={{flex:1,background:"#F5F6F8",borderRadius:20,height:6,overflow:"hidden"}}>
+                <div style={{height:6,borderRadius:20,background:"#1B4F8A",width:Math.round((n/(techList[0]?.[1]||1))*100)+"%"}}/>
+              </div>
+              <span style={{fontSize:12,fontWeight:700,color:"#1A1A2E",width:24,textAlign:"right"}}>{n}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Top clients */}
+      <div>
+        <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Top 5 clients</div>
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px"}}>
+          {clientList.length===0&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:12}}>Aucune donnée</div>}
+          {clientList.map(([c,n],i)=>(
+            <div key={c} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+              <span style={{fontSize:10,color:"#9CA3AF",width:16,textAlign:"center"}}>{i+1}</span>
+              <span style={{fontSize:12,flex:1,fontWeight:500,color:"#1A1A2E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c}</span>
+              <span style={{fontSize:12,fontWeight:700,color:"#1B4F8A",background:"#EEF4FF",padding:"2px 8px",borderRadius:10}}>{n}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    {/* Matériel */}
+    <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Matériel à renouveler</div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:16}}>
+      {card("À recommander",nAReco,"Pièces en attente","#E8720C")}
+      {card("Commandées",nCommande,"Pièces commandées","#22863A")}
+      {card("Total pièces",piecesFilt.length,"Sur la période","#6B7280")}
+    </div>
+    <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"14px 16px"}}>
+      <div style={{fontSize:12,fontWeight:600,color:"#6B7280",marginBottom:8}}>Top pièces commandées</div>
+      {pieceList.length===0&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:8}}>Aucune donnée</div>}
+      {pieceList.map(([d,n],i)=>(
+        <div key={d} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5}}>
+          <span style={{fontSize:10,color:"#9CA3AF",width:16,textAlign:"center"}}>{i+1}</span>
+          <span style={{fontSize:12,flex:1,color:"#1A1A2E"}}>{d}</span>
+          <span style={{fontSize:12,fontWeight:700,color:"#E8720C",background:"#FFF8E1",padding:"2px 8px",borderRadius:10}}>{n}×</span>
+        </div>
+      ))}
+    </div>
+  </div>);
+}
+
 // ─── PAGE SUIVI MATÉRIEL ─────────────────────────────────────────────────
 function PageSuivi(){
-  const [pieces,setPieces]=useState([]);const [loading,setLoading]=useState(true);const [filtre,setFiltre]=useState("actif");
+  const [pieces,setPieces]=useState([]);const [loading,setLoading]=useState(true);const [filtre,setFiltre]=useState("actif");const [ouverts,setOuverts]=useState({});
 
   const ST={
     A_recommander:{label:"À recommander",color:"#E8720C",bg:"#FFF8E1"},
@@ -807,9 +986,7 @@ function PageSuivi(){
     setPieces(prev=>prev.map(p=>p.id===id?{...p,statut}:p));
   }
 
-  async function commander(id){
-    await changerStatut(id,"Commande");
-  }
+  async function commander(id){await changerStatut(id,"Commande");}
 
   const filtrees=filtre==="actif"
     ?pieces.filter(p=>p.statut!=="Commande")
@@ -817,7 +994,6 @@ function PageSuivi(){
     ?pieces.filter(p=>p.statut==="Commande")
     :pieces;
 
-  // Grouper par DE
   const parDE={};
   filtrees.forEach(p=>{
     if(!parDE[p.de])parDE[p.de]={de:p.de,client:p.client,pieces:[]};
@@ -828,10 +1004,12 @@ function PageSuivi(){
   const nAReco=pieces.filter(p=>p.statut==="A_recommander"||!p.statut).length;
   const nCom=pieces.filter(p=>p.statut==="Commande").length;
 
+  function toggleDE(de){setOuverts(prev=>({...prev,[de]:!prev[de]}));}
+
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
       <h2 style={{fontSize:20,fontWeight:700,margin:0}}>Matériel à renouveler</h2>
-      {nAReco>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>⚠ {nAReco} à commander</span>}
+      {nAReco>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>{nAReco} à recommander</span>}
     </div>
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
@@ -840,7 +1018,7 @@ function PageSuivi(){
         {id:"Commande",label:"Commandé",n:nCom,color:"#22863A"},
         {id:"tous",label:"Tout voir",n:pieces.length,color:"#6B7280"},
       ].map(s=>(
-        <div key={s.id} style={{background:"#fff",borderRadius:10,border:"1.5px solid "+(filtre===s.id?s.color:"#E2E6EA"),padding:"10px 14px",cursor:"pointer",textAlign:"center"}} onClick={()=>setFiltre(s.id)}>
+        <div key={s.id} onClick={()=>setFiltre(s.id)} style={{background:"#fff",borderRadius:10,border:"1.5px solid "+(filtre===s.id?s.color:"#E2E6EA"),padding:"12px",cursor:"pointer",textAlign:"center",transition:"border-color .15s"}}>
           <div style={{fontSize:22,fontWeight:700,color:filtre===s.id?s.color:"#1A1A2E"}}>{s.n}</div>
           <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>{s.label}</div>
         </div>
@@ -852,28 +1030,34 @@ function PageSuivi(){
 
     {deList.map(de=>{
       const g=parDE[de];
-      return(<div key={de} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:12,overflow:"hidden"}}>
-        <div style={{background:"#F8F9FA",padding:"10px 16px",borderBottom:"1px solid #E2E6EA",display:"flex",alignItems:"center",gap:10}}>
-          <span style={{fontSize:14,fontWeight:700,color:"#1B4F8A"}}>{de}</span>
+      const isOpen=!!ouverts[de];
+      const nReco=g.pieces.filter(p=>p.statut==="A_recommander"||!p.statut).length;
+      return(<div key={de} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,overflow:"hidden"}}>
+        <div onClick={()=>toggleDE(de)} style={{background:"#F8F9FA",padding:"10px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",borderBottom:isOpen?"1px solid #E2E6EA":"none"}}>
+          <span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{de}</span>
           <span style={{fontSize:13,color:"#6B7280"}}>— {g.client||"—"}</span>
-          <span style={{marginLeft:"auto",fontSize:11,color:"#9CA3AF"}}>{g.pieces.length} pièce{g.pieces.length>1?"s":""}</span>
+          <span style={{marginLeft:"auto",fontSize:11,background:"#F5F6F8",padding:"2px 8px",borderRadius:12,color:"#6B7280"}}>{g.pieces.length} pièce{g.pieces.length>1?"s":""}</span>
+          {nReco>0&&<span style={{fontSize:10,background:"#FFF8E1",color:"#E8720C",padding:"2px 6px",borderRadius:10,fontWeight:600}}>{nReco} à reco.</span>}
+          <span style={{fontSize:14,color:"#9CA3AF"}}>{isOpen?"▲":"▼"}</span>
         </div>
-        {g.pieces.map(p=>{
-          const estCommande=p.statut==="Commande";
-          const sc=estCommande?ST.Commande:ST.A_recommander;
-          return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:"1px solid #F3F4F6",flexWrap:"wrap",opacity:estCommande?0.65:1}}>
-            <div style={{flex:1,minWidth:120}}>
-              <span style={{fontSize:13,fontWeight:600,textDecoration:estCommande?"line-through":"none"}}>{p.designation}</span>
-              {p.reference&&<span style={{fontSize:11,color:"#6B7280",marginLeft:8,background:"#F5F6F8",border:"1px solid #E2E6EA",borderRadius:4,padding:"1px 6px"}}>{p.reference}</span>}
-            </div>
-            <span style={{fontSize:10,background:p.source==="auto"?"#F0FFF4":"#EEF4FF",color:p.source==="auto"?"#22863A":"#1B4F8A",borderRadius:20,padding:"2px 8px"}}>{p.source}</span>
-            <span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color,border:"1px solid "+sc.color}}>{sc.label}</span>
-            {!estCommande
-              ?<button onClick={()=>commander(p.id)} style={{fontSize:12,padding:"5px 14px",borderRadius:6,border:"none",background:"#22863A",color:"#fff",cursor:"pointer",fontWeight:600,whiteSpace:"nowrap"}}>✓ Commander</button>
-              :<button onClick={()=>changerStatut(p.id,"A_recommander")} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #E2E6EA",background:"#F5F6F8",color:"#6B7280",cursor:"pointer",whiteSpace:"nowrap"}}>↩ Annuler</button>
-            }
-          </div>);
-        })}
+        {isOpen&&<div>
+          {g.pieces.map(p=>{
+            const estCommande=p.statut==="Commande";
+            const sc=estCommande?ST.Commande:ST.A_recommander;
+            return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:"1px solid #F5F6F8"}}>
+              <div style={{flex:1,minWidth:120}}>
+                <span style={{fontSize:13,fontWeight:600,textDecoration:estCommande?"line-through":"none",color:estCommande?"#9CA3AF":"#1A1A2E"}}>{p.designation}</span>
+                {p.reference&&<span style={{fontSize:11,color:"#6B7280",marginLeft:8,background:"#F5F6F8",padding:"1px 6px",borderRadius:4}}>{p.reference}</span>}
+              </div>
+              <span style={{fontSize:10,background:p.source==="auto"?"#F0FFF4":"#EEF4FF",color:p.source==="auto"?"#22863A":"#1B4F8A",padding:"2px 6px",borderRadius:10}}>{p.source==="auto"?"Auto":"Manuel"}</span>
+              <span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color}}>{sc.label}</span>
+              {!estCommande
+                ?<button onClick={()=>commander(p.id)} style={{fontSize:12,padding:"5px 14px",borderRadius:6,border:"none",background:"#22863A",color:"#fff",cursor:"pointer",fontWeight:600}}>✓ Commander</button>
+                :<button onClick={()=>changerStatut(p.id,"A_recommander")} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #E2E6EA",background:"#fff",color:"#6B7280",cursor:"pointer"}}>↩ Annuler</button>
+              }
+            </div>);
+          })}
+        </div>}
       </div>);
     })}
   </div>);
@@ -883,43 +1067,87 @@ function PageSuivi(){
 // ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
 function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
   const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);
+  const [dragId,setDragId]=useState(null);const [dragOver,setDragOver]=useState(null);
   const statuts=(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");return s;})();
   const fichesFilt=fiches.filter(f=>filtTech==="tous"||(f.tech_entree||"")==filtTech);
   const parStatut={};STATUTS_CHANTIER.forEach(s=>{parStatut[s.id]=[];});
-  fichesFilt.forEach(f=>{const sid=f.statut_chantier||"A_demonter";if(parStatut[sid])parStatut[sid].push(f);else parStatut["A_demonter"].push(f);});
+  fichesFilt.forEach(f=>{const sid=f.statut_chantier||"A_demonter";if(parStatut[sid])parStatut[sid].push(f);});
   const devisCount=parStatut["Devis"]?.length||0;
   const techs=[...new Set(fiches.map(f=>f.tech_entree).filter(Boolean))];
 
+  function handleDragStart(e,ficheId){
+    setDragId(ficheId);
+    e.dataTransfer.effectAllowed="move";
+    e.dataTransfer.setData("text/plain",ficheId);
+  }
+  function handleDragOver(e,statutId){
+    e.preventDefault();e.dataTransfer.dropEffect="move";
+    setDragOver(statutId);
+  }
+  function handleDrop(e,statutId){
+    e.preventDefault();
+    if(dragId&&dragId!==statutId){
+      onStatutChange(dragId,statutId);
+    }
+    setDragId(null);setDragOver(null);
+  }
+  function handleDragEnd(){setDragId(null);setDragOver(null);}
+
+  // Touch drag & drop pour tablette
+  function handleTouchStart(e,ficheId){setDragId(ficheId);}
+  function handleTouchEnd(e,ficheId){
+    const touch=e.changedTouches[0];
+    const el=document.elementFromPoint(touch.clientX,touch.clientY);
+    const col=el?.closest("[data-statut]");
+    if(col){const newStatut=col.getAttribute("data-statut");if(newStatut&&newStatut!==ficheId)onStatutChange(ficheId,newStatut);}
+    setDragId(null);setDragOver(null);
+  }
+
   return(<div style={{maxWidth:1200,margin:"0 auto",padding:"20px 16px"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <h2 style={{fontSize:20,fontWeight:700,margin:0}}>Planning atelier</h2>
         {devisCount>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"3px 10px",borderRadius:20,fontWeight:600}}>⚠ {devisCount} devis en attente</span>}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-        <select value={filtTech} onChange={e=>setFiltTech(e.target.value)} style={{...S.sel,width:130,fontSize:12}}><option value="tous">Tous techs</option>{techs.map(t=><option key={t}>{t}</option>)}</select>
-        <button onClick={()=>setShowTermine(!showTermine)} style={{...S.p2,fontSize:12,padding:"5px 12px"}}>{showTermine?"Masquer Terminé":"Afficher Terminé"}</button><button onClick={()=>setShowAbandonne(!showAbandonne)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#9B59B6",borderColor:"#9B59B6"}}>{showAbandonne?"Masquer Abandonné":"Afficher Abandonné"}</button>
+        <select value={filtTech} onChange={e=>setFiltTech(e.target.value)} style={{...S.sel,width:130}}>
+          <option value="tous">Tous</option>
+          {techs.map(t=><option key={t} value={t}>{t}</option>)}
+        </select>
+        <button onClick={()=>setShowTermine(!showTermine)} style={{...S.p2,fontSize:12,padding:"5px 12px"}}>{showTermine?"Masquer Terminé":"Afficher Terminé"}</button>
+        <button onClick={()=>setShowAbandonne(!showAbandonne)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#9B59B6",borderColor:"#9B59B6"}}>{showAbandonne?"Masquer Abandonné":"Afficher Abandonné"}</button>
       </div>
     </div>
+    <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px",textAlign:"right"}}>💡 Glissez les cartes entre les colonnes pour changer le statut</p>
     <div style={{display:"grid",gridTemplateColumns:"repeat("+statuts.length+",1fr)",gap:10,overflowX:"auto"}}>
       {statuts.map(s=>(
-        <div key={s.id} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"10px 8px",minHeight:150}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,paddingBottom:8,borderBottom:"1px solid #E2E6EA"}}>
+        <div key={s.id}
+          data-statut={s.id}
+          onDragOver={e=>handleDragOver(e,s.id)}
+          onDrop={e=>handleDrop(e,s.id)}
+          onDragEnd={handleDragEnd}
+          style={{background:dragOver===s.id?"#EEF4FF":"#fff",borderRadius:10,border:"1.5px solid "+(dragOver===s.id?"#1B4F8A":"#E2E6EA"),padding:"10px 8px",minHeight:120,transition:"background .15s,border-color .15s"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
             <span style={{fontSize:12,fontWeight:600,color:s.color}}>● {s.label}</span>
-            <span style={{fontSize:11,background:"#F5F6F8",border:"1px solid #E2E6EA",borderRadius:20,padding:"1px 7px",color:"#6B7280"}}>{parStatut[s.id]?.length||0}</span>
+            <span style={{fontSize:11,background:"#F5F6F8",border:"1px solid #E2E6EA",borderRadius:20,padding:"1px 8px",color:"#6B7280"}}>{(parStatut[s.id]||[]).length}</span>
           </div>
-          {(parStatut[s.id]||[]).length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"12px 4px"}}>Aucun</p>}
-          {(parStatut[s.id]||[]).map(f=><CarteKanban key={f.id} f={f} s={s} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange}/>)}
+          {(parStatut[s.id]||[]).length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
+          {(parStatut[s.id]||[]).map(f=><CarteKanban key={f.id} f={f} s={s} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id}/>)}
         </div>
       ))}
     </div>
   </div>);
 }
-
-function CarteKanban({f,s,onOuvrirFiche,onStatutChange}){
+function CarteKanban({f,s,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging}){
   const [ouvert,setOuvert]=useState(false);
-  return(<div style={{background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:8,marginBottom:8,overflow:"hidden"}}>
+  return(<div
+    draggable={true}
+    onDragStart={e=>onDragStart(e,f.id)}
+    onTouchStart={()=>onTouchStart(null,f.id)}
+    onTouchEnd={e=>onTouchEnd(e,f.id)}
+    style={{background:isDragging?"#EEF4FF":"#F8F9FA",border:"1px solid "+(isDragging?"#1B4F8A":"#E2E6EA"),borderRadius:8,marginBottom:8,cursor:"grab",opacity:isDragging?0.6:1,transition:"opacity .15s,border-color .15s",userSelect:"none"}}>
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer"}} onClick={()=>setOuvert(!ouvert)}>
+      <span style={{fontSize:13,color:"#9CA3AF",cursor:"grab"}}>⠿</span>
       <div style={{flex:1,minWidth:0}}>
         <span style={{fontSize:12,fontWeight:700,color:"#1B4F8A"}}>{f.de}</span>
         <span style={{fontSize:12,color:"#1A1A2E",marginLeft:6,fontWeight:500}}>{f.client||"—"}</span>
@@ -929,10 +1157,10 @@ function CarteKanban({f,s,onOuvrirFiche,onStatutChange}){
     {ouvert&&<div style={{padding:"8px 10px",borderTop:"1px solid #E2E6EA",background:"#fff"}}>
       <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{f.materiel||"Moteur"}</div>
       <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>Entrée le {fmt(f.created_at)}</div>
-      <select value={f.statut_chantier||"A_demonter"} onChange={e=>onStatutChange(f.id,e.target.value)} style={{width:"100%",padding:"4px 6px",borderRadius:5,border:"1px solid "+s.color,fontSize:11,fontWeight:600,color:s.color,background:s.bg,cursor:"pointer",marginBottom:6}}>
+      <select value={f.statut_chantier||"A_demonter"} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
         {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
       </select>
-      <button onClick={()=>onOuvrirFiche(f)} style={{width:"100%",fontSize:11,padding:"5px",borderRadius:5,border:"1px solid #E2E6EA",background:"#EEF4FF",cursor:"pointer",color:"#1B4F8A",fontWeight:600}}>Ouvrir la fiche →</button>
+      <button onClick={()=>onOuvrirFiche(f)} style={{width:"100%",fontSize:11,padding:"5px",borderRadius:6,border:"1px solid #1B4F8A",background:"#EEF4FF",color:"#1B4F8A",cursor:"pointer",fontWeight:600}}>📂 Ouvrir la fiche</button>
     </div>}
   </div>);
 }
@@ -1131,12 +1359,13 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
 
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
-  const [page,setPage]=useState("accueil");const [sessionTech,setSessionTech]=useState(null);const [ficheOuverte,setFicheOuverte]=useState(null);const [typeMat,setTypeMat]=useState("Moteur");const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);
+  const [page,setPage]=useState("accueil");const [sessionTech,setSessionTech]=useState(null);const [ficheOuverte,setFicheOuverte]=useState(null);const [typeMat,setTypeMat]=useState("Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);
 
   useEffect(()=>{
     db.get("techniciens","?actif=eq.true&order=initiales").then(d=>{if(Array.isArray(d)&&d.length>0)setTechs(d.map(t=>t.initiales));}).catch(()=>{});
     db.get("clients","?order=nom").then(d=>{if(Array.isArray(d)&&d.length>0)setClients(d.map(c=>c.nom));}).catch(()=>{});
-    db.get("categories_photos","?actif=eq.true&order=ordre").then(d=>{if(Array.isArray(d)&&d.length>0)setCategories(d);}).catch(()=>{});
+    db.get("categories_photos","?actif=eq.true&order=ordre").then(d=>{if(Array.isArray(d)&&d.length>0)setCategories(d);
+    db.get("suivi_pieces","?order=created_at.desc").then(d=>{if(Array.isArray(d))setPieces(d);});}).catch(()=>{});
   },[]);
 
   function onAddClient(nom){setClients(prev=>[...prev,nom].sort());}
@@ -1153,6 +1382,7 @@ export default function App(){
     {id:"accueil",label:"📁 Fiches"},
     {id:"planning",label:"📋 Planning"},
     {id:"suivi",label:"🔧 Matériel"},
+    {id:"stats",label:"📊 Stats"},
   ];
 
   return(<div style={S.app}>
@@ -1173,7 +1403,6 @@ export default function App(){
         ))}
       </div>
       <BadgeStockage onClick={()=>setPage("stockage")}/>
-      <BadgeStockage onClick={()=>setPage("stockage")}/>
       {sessionTech&&<div style={{display:"flex",alignItems:"center",gap:6}}>
         <span style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:12,fontWeight:700}}>{sessionTech}</span>
         <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:11,cursor:"pointer"}} onClick={()=>setSessionTech(null)}>↩</button>
@@ -1186,5 +1415,7 @@ export default function App(){
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
     {page==="suivi"&&<PageSuivi/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
+    {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
+    {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
   </div>);
 }
