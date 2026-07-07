@@ -1452,7 +1452,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
         for(let i=0;i<rows.length;i+=50){await db.post("fiche_valeurs",rows.slice(i,i+50));}
       }
       await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Sauvegarde partielle étape "+(idx+1)});
-      setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);
+      setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);if(fid)onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur"});
     }catch(e){setErreur(e.message||"Erreur de sauvegarde");}
     setSaving(false);
   }
@@ -1464,13 +1464,13 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
         const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:idx+1,etapes_validees:newVal,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;if(!fid)throw new Error("Impossible de créer la fiche");setFicheId(fid);
         for(const p of photos){if(!p.fiche_id)try{await db.post("fiche_photos",{fiche_id:fid,etape:p.etape,categorie_slug:p.categorie_slug,categorie_nom:p.categorie_nom,nom_fichier:p.nom_fichier,storage_path:p.storage_path});}catch(e){}}
-      }else{await db.patch("fiches","?id=eq."+fid,{client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:Math.min(idx+1,etapesActives.length-1),etapes_validees:newVal});setStatutChantier(newSC);}
+      }else{await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:Math.min(idx+1,etapesActives.length-1),etapes_validees:newVal});setStatutChantier(newSC);}
       await db.del("fiche_valeurs","?fiche_id=eq."+fid+"&champ_id=not.in.(__commentaires)");
       const vals=Object.entries(v).filter(([k,val])=>!k.startsWith("__")&&val!==undefined&&val!=="").map(([champ_id,valeur])=>({fiche_id:fid,champ_id,valeur:String(valeur)}));
       if(vals.length>0)await db.post("fiche_valeurs",vals);
       await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Étape validée",etape:ETAPES[idx]});
       if(onFicheUpdated)onFicheUpdated(fid,{statut:toutFini?"Terminée":"En cours",statut_chantier:newSC});
-      setValidees(newVal);if(idx+1<etapesActives.length)setActif(idx+1);setFlash(idx);setTimeout(()=>setFlash(null),3000);
+      setValidees(newVal);if(idx+1<etapesActives.length)setActif(idx+1);setFlash(idx);setTimeout(()=>setFlash(null),3000);onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut_chantier:newSC});
     }catch(e){setErreur("Erreur : "+e.message);}finally{setSaving(false);}
   }
 
@@ -1602,7 +1602,6 @@ export default function App(){
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
     {page==="suivi"&&<PageSuivi/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
-    {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
     {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
   </div>);
 }
