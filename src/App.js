@@ -1464,7 +1464,7 @@ export default function App(){
   const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
 
   const width=useWidth();
-  const isMobile=width<640;
+  const isMobile=width<900;
   const [menuOuvert,setMenuOuvert]=useState(false);
   if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
 
