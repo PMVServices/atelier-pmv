@@ -641,12 +641,21 @@ async function getStorageUsage(){
 
 function BadgeStockage({onClick}){
   const [usage,setUsage]=React.useState(null);
-  useEffect(()=>{getStorageUsage().then(u=>setUsage(u));},[]);
-  if(!usage||usage.pct<STORAGE_ALERT_PCT)return null;
-  const color=usage.pct>=90?"#D73A49":usage.pct>=80?"#E8720C":"#856404";
-  const bg=usage.pct>=90?"#FFF5F5":usage.pct>=80?"#FFF8E1":"#FFFBEB";
-  return(<button onClick={onClick} style={{background:bg,color,border:"1.5px solid "+color,borderRadius:20,padding:"3px 12px",fontSize:12,fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",gap:6}}>
-    ⚠️ Stockage {usage.pct}% ({usage.estMo} Mo / 1 Go)
+  useEffect(()=>{
+    getStorageUsage().then(u=>setUsage(u));
+    const t=setInterval(()=>getStorageUsage().then(u=>setUsage(u)),60000);
+    return()=>clearInterval(t);
+  },[]);
+  const pct=usage?.pct||0;
+  const estMo=usage?.estMo||0;
+  const barColor=pct>=90?"#D73A49":pct>=70?"#E8720C":"#22863A";
+  return(<button onClick={onClick} style={{display:"flex",alignItems:"center",gap:7,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"4px 12px",cursor:"pointer",color:"#fff",fontSize:11}}>
+    <span style={{fontWeight:600,whiteSpace:"nowrap"}}>📦 {estMo} Mo</span>
+    <div style={{width:60,height:6,background:"rgba(255,255,255,0.2)",borderRadius:6,overflow:"hidden"}}>
+      <div style={{height:6,borderRadius:6,background:barColor,width:Math.min(pct,100)+"%",transition:"width .5s"}}/>
+    </div>
+    <span style={{fontSize:10,opacity:0.8,whiteSpace:"nowrap"}}>{pct}%</span>
+    <span style={{fontSize:10,opacity:0.7}}>Gérer</span>
   </button>);
 }
 
@@ -708,7 +717,7 @@ function PageStockage({fiches,onRetour}){
       setPhotos(prev=>prev.filter(p=>!selectionIds.includes(p.fiche_id)));
       setSelection({});
       setConfirmSuppr(false);
-      setMsg("✅ Photos supprimées. Les fiches et données sont conservées.");
+      setMsg("✅ Photos supprimées — les fiches et toutes les données sont conservées intactes.");
       setTimeout(()=>setMsg(null),5000);
     }catch(e){setMsg("Erreur : "+e.message);}
     setSuppEnCours(false);
@@ -773,7 +782,7 @@ function PageStockage({fiches,onRetour}){
         <button onClick={exporter} disabled={exportEnCours} style={{...S.p1,background:"#22863A",opacity:exportEnCours?0.6:1}}>
           {exportEnCours?"⏳ Export en cours…":"📥 Exporter ZIP ("+selectionIds.length+" dossier"+(selectionIds.length>1?"s":"") +")"}
         </button>
-        <button onClick={()=>setConfirmSuppr(true)} style={S.pDanger}>🗑 Supprimer les photos ({selectionIds.length})</button>
+        <button onClick={()=>setConfirmSuppr(true)} style={S.pDanger}>📷 Supprimer les photos ({selectionIds.length})</button>
       </>):(<div style={{background:"#FFF5F5",border:"1.5px solid #D73A49",borderRadius:10,padding:"14px 18px",width:"100%"}}>
         <p style={{fontSize:14,fontWeight:700,color:"#D73A49",margin:"0 0 8px"}}>⚠️ Confirmation requise</p>
         <p style={{fontSize:13,margin:"0 0 14px"}}>Avez-vous bien sauvegardé ces photos sur votre NAS ou un autre support avant de supprimer ?</p>
@@ -1166,78 +1175,156 @@ function CarteKanban({f,s,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,
 }
 
 // ─── PAGE ACCUEIL EXPLORATEUR ───────────────────────────────────────────
-function SousDossierFiche({f,onOpen,onDelete,onStatutChange}){
-  const [ouvert,setOuvert]=useState(false);const [photos,setPhotos]=useState([]);const [loadingP,setLoadingP]=useState(false);const [confirmSuppr,setConfirmSuppr]=useState(false);const [valeurs,setValeurs]=useState({});
-  const ch=cheminFiche({client:f.client,de:f.de,materiel_lieu:f.materiel});const st=statutInfo(f.statut_chantier||"A_demonter");
+function SousDossierFiche({f,onOpen,onDelete,onStatutChange,categories}){
+  const [ouvert,setOuvert]=useState(false);
+  const [photos,setPhotos]=useState([]);
+  const [loadingP,setLoadingP]=useState(false);
+  const [confirmSupprPhotos,setConfirmSupprPhotos]=useState(false);
+  const [confirmSupprFiche,setConfirmSupprFiche]=useState(false);
+  const [ajoutPhoto,setAjoutPhoto]=useState(false);
+  const [catPhoto,setCatPhoto]=useState("");
+  const [uploadEnCours,setUploadEnCours]=useState(false);
+  const fileRef=React.useRef();
+  const ch=cheminFiche({client:f.client,de:f.de,materiel_lieu:f.materiel});
+  const st=statutInfo(f.statut_chantier);
+
   async function toggle(){
-    if(!ouvert&&photos.length===0){setLoadingP(true);try{const p=await db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at");if(Array.isArray(p))setPhotos(p.map(pp=>({...pp,url:db.photoUrl(pp.storage_path)})));const vals=await db.get("fiche_valeurs","?fiche_id=eq."+f.id);if(Array.isArray(vals)){const m={};vals.forEach(r=>{m[r.champ_id]=r.valeur;});setValeurs(m);}}catch(e){}setLoadingP(false);}
+    if(!ouvert&&photos.length===0){
+      setLoadingP(true);
+      try{const p=await db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at");
+      if(Array.isArray(p))setPhotos(p.map(pp=>({...pp,url:db.photoUrl(pp.storage_path)})));}
+      catch(e){}
+      setLoadingP(false);
+    }
     setOuvert(!ouvert);
   }
-  async function supprimer(){
-    try{await db.del("fiche_photos","?fiche_id=eq."+f.id);await db.del("fiche_valeurs","?fiche_id=eq."+f.id);await db.del("fiche_historique","?fiche_id=eq."+f.id);await db.del("suivi_pieces","?fiche_id=eq."+f.id);await db.del("fiches","?id=eq."+f.id);onDelete(f.id);}catch(e){alert("Erreur : "+e.message);}
+
+  async function supprimerPhotos(){
+    try{
+      await db.del("fiche_photos","?fiche_id=eq."+f.id);
+      setPhotos([]);setConfirmSupprPhotos(false);
+    }catch(e){alert("Erreur: "+e.message);}
   }
+
+  async function supprimerFiche(){
+    try{
+      await db.del("fiche_photos","?fiche_id=eq."+f.id);
+      await db.del("fiche_valeurs","?fiche_id=eq."+f.id);
+      await db.del("suivi_pieces","?fiche_id=eq."+f.id);
+      await db.del("fiche_historique","?fiche_id=eq."+f.id);
+      await db.del("fiches","?id=eq."+f.id);
+      onDelete(f.id);
+    }catch(e){alert("Erreur: "+e.message);}
+  }
+
+  async function uploadPhoto(e){
+    const file=e.target.files[0];if(!file||!catPhoto)return;
+    setUploadEnCours(true);
+    try{
+      const ext=file.name.split(".").pop();
+      const slug=catPhoto.toLowerCase().replace(/[^a-z0-9]/g,"_");
+      const path=ch.chemin+"/"+slug+"_"+Date.now()+"."+ext;
+      const {data,error}=await window._supabase.storage.from("photos").upload(path,file,{upsert:true});
+      if(error)throw error;
+      const rec=await db.post("fiche_photos",{fiche_id:f.id,storage_path:path,nom_fichier:file.name,categorie_nom:catPhoto,etape:""});
+      if(rec&&rec[0])setPhotos(prev=>[...prev,{...rec[0],url:db.photoUrl(path)}]);
+      setAjoutPhoto(false);setCatPhoto("");
+    }catch(err){alert("Erreur upload: "+err.message);}
+    setUploadEnCours(false);
+  }
+
   return(<div style={{marginLeft:16,marginBottom:8,borderLeft:"2px solid #E2E6EA",paddingLeft:12}}>
-    <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 10px",background:ouvert?"#EEF4FF":"#F8F9FA",borderRadius:8}} onClick={toggle}>
+    <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 10px",background:"#fff",borderRadius:8,border:"1px solid #E2E6EA"}} onClick={toggle}>
       <span style={{fontSize:16}}>{ouvert?"📂":"📁"}</span>
-      <div style={{flex:1,minWidth:0}}><p style={{margin:0,fontSize:13,fontWeight:600,color:"#1B4F8A",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{ch.mat}</p><p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{f.materiel} · {fmt(f.created_at)}</p></div>
-      <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:12,whiteSpace:"nowrap",color:st.color,background:st.bg}}>{st.label}</span>
+      <div style={{flex:1,minWidth:0}}>
+        <p style={{margin:0,fontSize:13,fontWeight:600,color:"#1B4F8A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.materiel||"Moteur"}</p>
+        <p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{fmt(f.created_at)} · {photos.length} photo{photos.length>1?"s":""}</p>
+      </div>
+      <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:12,whiteSpace:"nowrap",background:st.bg,color:st.color}}>{st.label}</span>
       <span style={{fontSize:14,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
+
     {ouvert&&<div style={{padding:"10px 12px",background:"#fff",borderRadius:"0 0 8px 8px",border:"1px solid #E2E6EA",borderTop:"none"}}>
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,padding:"8px 12px",background:"#F8F9FA",borderRadius:8,flexWrap:"wrap"}}>
+      
+      {/* Statut */}
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 12px",background:"#F8F9FA",borderRadius:8}}>
         <span style={{fontSize:12,fontWeight:600,color:"#6B7280"}}>Statut :</span>
-        <SelecteurStatut statutId={f.statut_chantier||"A_demonter"} onChange={id=>onStatutChange(f.id,id)}/>
+        <select value={f.statut_chantier||"A_demonter"} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,flex:1,fontSize:12}}>
+          {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
+        </select>
       </div>
-      <div style={{display:"flex",gap:10,marginBottom:10,flexWrap:"wrap"}}>
-        <div style={{display:"flex",alignItems:"center",gap:8,background:"#F5F6F8",borderRadius:7,padding:"7px 12px",flex:1,minWidth:180,cursor:"pointer"}} onClick={()=>onOpen(f)}>
-          <span style={{fontSize:18}}>📋</span>
-          <div><p style={{margin:0,fontSize:13,fontWeight:600}}>{f.de} — Fiche d'entretien</p><p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>Ouvrir et modifier</p></div>
-        </div>
+
+      {/* Boutons actions */}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
+        <button onClick={()=>onOpen(f)} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>📝 Ouvrir la fiche</button>
+        <button onClick={async()=>{if(!ouvert||photos.length===0){setLoadingP(true);const p=await db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at");if(Array.isArray(p))setPhotos(p.map(pp=>({...pp,url:db.photoUrl(pp.storage_path)})));setLoadingP(false);}await telechargerZip(photos,null,ch.chemin.replace(/\//g,"_"));}} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📥 ZIP</button>
+        <button onClick={()=>setAjoutPhoto(!ajoutPhoto)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>📷 Ajouter photo</button>
+        <button onClick={()=>setConfirmSupprPhotos(true)} disabled={photos.length===0} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#E8720C",borderColor:"#E8720C",opacity:photos.length===0?0.4:1}}>🗑 Suppr. photos</button>
+        <button onClick={()=>setConfirmSupprFiche(true)} style={{...S.pDanger,fontSize:12,padding:"6px 12px"}}>🗑 Suppr. fiche</button>
       </div>
-      {loadingP&&<p style={{fontSize:12,color:"#9CA3AF"}}>Chargement…</p>}
-      {photos.length>0&&<div style={{marginBottom:10}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-          <p style={{fontSize:11,fontWeight:600,color:"#6B7280",textTransform:"uppercase",letterSpacing:".05em",margin:0}}>📷 {photos.length} photo{photos.length>1?"s":""}</p>
-          <button onClick={()=>telechargerZip(photos,valeurs,f.de+"_"+ch.mat)} style={{fontSize:11,background:"#EEF4FF",color:"#1B4F8A",border:"1px solid #D6E4F7",borderRadius:5,padding:"3px 10px",cursor:"pointer"}}>📥 Télécharger ZIP + fiche</button>
-        </div>
-        <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-          {photos.map((p,i)=><div key={i} style={{textAlign:"center"}}><img src={p.url} alt={p.categorie_nom} style={{width:68,height:68,objectFit:"cover",borderRadius:6,border:"1.5px solid #E2E6EA",display:"block",cursor:"pointer"}} onClick={()=>window.open(p.url,"_blank")} onError={e=>e.target.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='68' height='68'%3E%3Crect width='68' height='68' fill='%23eee'/%3E%3C/svg%3E"}/><p style={{fontSize:9,color:"#6B7280",marginTop:2,maxWidth:68,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.categorie_nom}</p></div>)}
+
+      {/* Ajout photo */}
+      {ajoutPhoto&&<div style={{background:"#F0FFF4",border:"1px solid #22863A",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+        <div style={{fontSize:12,fontWeight:600,color:"#22863A",marginBottom:8}}>📷 Ajouter une photo</div>
+        <select value={catPhoto} onChange={e=>setCatPhoto(e.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
+          <option value="">— Choisir une catégorie</option>
+          {(categories||[]).map(c=><option key={c.nom} value={c.nom}>{c.nom}</option>)}
+        </select>
+        {catPhoto&&<div style={{display:"flex",gap:8}}>
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={uploadPhoto} style={{display:"none"}}/>
+          <button onClick={()=>fileRef.current.click()} disabled={uploadEnCours} style={{...S.p1,fontSize:12,background:"#22863A",opacity:uploadEnCours?0.6:1}}>{uploadEnCours?"⏳ Upload...":"📷 Choisir photo"}</button>
+          <button onClick={()=>{setAjoutPhoto(false);setCatPhoto("");}} style={{...S.p2,fontSize:12}}>Annuler</button>
+        </div>}
+      </div>}
+
+      {/* Confirmation suppression photos */}
+      {confirmSupprPhotos&&<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+        <p style={{fontSize:12,fontWeight:700,color:"#E8720C",margin:"0 0 6px"}}>⚠️ Supprimer les {photos.length} photos ?</p>
+        <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>La fiche et toutes les données sont conservées. Uniquement les photos seront supprimées.</p>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={supprimerPhotos} style={{...S.p1,fontSize:12,background:"#E8720C"}}>✅ Confirmer</button>
+          <button onClick={()=>setConfirmSupprPhotos(false)} style={{...S.p2,fontSize:12}}>Annuler</button>
         </div>
       </div>}
-      {photos.length===0&&!loadingP&&<p style={{fontSize:12,color:"#9CA3AF",margin:"0 0 8px"}}>Aucune photo</p>}
-      <div style={{paddingTop:8,borderTop:"1px solid #F3F4F6",display:"flex",justifyContent:"flex-end"}}>
-        {!confirmSuppr?<button onClick={()=>setConfirmSuppr(true)} style={S.pDanger}>🗑 Supprimer</button>:<div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:12,color:"#D73A49",fontWeight:600}}>Supprimer fiche + photos ?</span><button onClick={supprimer} style={S.pDanger}>Confirmer</button><button onClick={()=>setConfirmSuppr(false)} style={S.p2}>Annuler</button></div>}
-      </div>
+
+      {/* Confirmation suppression fiche complète */}
+      {confirmSupprFiche&&<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+        <p style={{fontSize:12,fontWeight:700,color:"#D73A49",margin:"0 0 6px"}}>⚠️ Supprimer toute la fiche ?</p>
+        <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>Cette action supprime définitivement la fiche, toutes ses données, mesures, photos et historique. Irréversible.</p>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={supprimerFiche} style={{...S.pDanger,fontSize:12}}>🗑 Oui, tout supprimer</button>
+          <button onClick={()=>setConfirmSupprFiche(false)} style={{...S.p2,fontSize:12}}>Annuler</button>
+        </div>
+      </div>}
+
+      {/* Photos */}
+      {loadingP&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:12}}>Chargement photos…</div>}
+      {photos.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:6,marginTop:8}}>
+        {photos.map((p,i)=><div key={i} style={{position:"relative"}}>
+          <img src={p.url} alt={p.categorie_nom||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA",cursor:"pointer"}} onClick={()=>window.open(p.url,"_blank")}/>
+          {p.categorie_nom&&<div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:9,padding:"2px 4px",borderRadius:"0 0 6px 6px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.categorie_nom}</div>}
+        </div>)}
+      </div>}
+      {!loadingP&&photos.length===0&&ouvert&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:12}}>Aucune photo</div>}
+    </div>}
+  </div>);
+}
+function DossierClient({client,fiches,onOpen,onDelete,onStatutChange,categories}){
+  const [ouvert,setOuvert]=useState(false);
+  return(<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,overflow:"hidden"}}>
+    <div onClick={()=>setOuvert(!ouvert)} style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:"#F8F9FA"}}>
+      <span style={{fontSize:16}}>{ouvert?"📂":"📁"}</span>
+      <span style={{fontSize:14,fontWeight:700,color:"#1B4F8A",flex:1}}>{client}</span>
+      <span style={{fontSize:11,color:"#9CA3AF"}}>{fiches.length} fiche{fiches.length>1?"s":""}</span>
+      <span style={{fontSize:14,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
+    </div>
+    {ouvert&&<div style={{padding:"0 0 8px 0"}}>
+      {fiches.map(f=><SousDossierFiche key={f.id} f={f} onOpen={onOpen} onDelete={id=>onDelete(id)} onStatutChange={onStatutChange} categories={categories}/>)}
     </div>}
   </div>);
 }
 
-function DossierDE({de,fiches,onOpen,onDelete,onStatutChange}){
-  const [ouvert,setOuvert]=useState(false);
-  return(<div style={{marginLeft:16,marginBottom:10,borderLeft:"2px solid #D6E4F7",paddingLeft:12}}>
-    <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"9px 12px",background:ouvert?"#D6E4F7":"#EEF4FF",borderRadius:8}} onClick={()=>setOuvert(!ouvert)}>
-      <span style={{fontSize:18}}>{ouvert?"📂":"📁"}</span>
-      <div style={{flex:1}}><p style={{margin:0,fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{de}</p><p style={{margin:0,fontSize:11,color:"#6B7280"}}>{fiches.length} fiche{fiches.length>1?"s":""}</p></div>
-      <span style={{fontSize:14,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
-    </div>
-    {ouvert&&<div style={{marginTop:6}}>{fiches.map(f=><SousDossierFiche key={f.id} f={f} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange}/>)}</div>}
-  </div>);
-}
-
-function DossierClient({client,fiches,onOpen,onDelete,onStatutChange}){
-  const [ouvert,setOuvert]=useState(false);
-  const parDE={};fiches.forEach(f=>{const de=deSlug(f.de||"DE");if(!parDE[de])parDE[de]=[];parDE[de].push(f);});const deList=Object.keys(parDE).sort();
-  return(<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:10,overflow:"hidden"}}>
-    <div style={{display:"flex",alignItems:"center",gap:10,padding:"13px 16px",cursor:"pointer"}} onClick={()=>setOuvert(!ouvert)}>
-      <span style={{fontSize:22}}>{ouvert?"📂":"📁"}</span>
-      <div style={{flex:1,minWidth:0}}><p style={{margin:0,fontSize:14,fontWeight:700,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{client}</p><p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{deList.length} N° DE · {fiches.length} fiche{fiches.length>1?"s":""}</p></div>
-      <span style={{fontSize:16,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
-    </div>
-    {ouvert&&<div style={{borderTop:"1px solid #F3F4F6",padding:"10px 0 10px"}}>{deList.map(de=><DossierDE key={de} de={de} fiches={parDE[de]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange}/>)}</div>}
-  </div>);
-}
-
-function PageAccueil({fiches,setFiches,onNew,onOpen}){
+function PageAccueil({fiches,setFiches,onNew,onOpen,onStatutChange,categories}){
   const [loading,setLoading]=useState(true);const [q,setQ]=useState("");const [fs,setFs]=useState("Tous");
   useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));},[]);
   async function onStatutChange(ficheId,newStatut){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});setFiches(prev=>prev.map(f=>f.id===ficheId?{...f,statut_chantier:newStatut}:f));}
@@ -1256,7 +1343,7 @@ function PageAccueil({fiches,setFiches,onNew,onOpen}){
     </div>
     {loading&&<div style={{textAlign:"center",padding:"32px",color:"#9CA3AF"}}>Chargement…</div>}
     {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:"32px",color:"#9CA3AF"}}>{fiches.length===0?"Aucune fiche — créez la première !":"Aucun résultat."}</div>}
-    {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange}/>)}
+    {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
   </div>);
 }
 
@@ -1409,7 +1496,7 @@ export default function App(){
       </div>}
     </div>
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
-    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})}/>}
+    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
