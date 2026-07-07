@@ -334,7 +334,7 @@ const CHAMPS_POMPE={
 function champVisible(c,v){return !c.condition||v[c.condition.champ]===c.condition.valeur;}
 function etapeOk(nom,v,nr,cs){if(nr)return true;for(const c of((cs||CHAMPS)[nom]||[])){if(!c.required||!champVisible(c,v))continue;if(!v[c.id])return false;}return true;}
 function enErreur(c,val){if(c.type!=="mesure"||c.seuilMin==null)return false;const vv=parseFloat(val);return !isNaN(vv)&&vv<c.seuilMin;}
-function genDE(){return "DE-"+String(Math.floor(1000+Math.random()*9000));}
+function genDE(){return "DE"+String(Math.floor(1000+Math.random()*9000));}
 function today(){return new Date().toISOString().split("T")[0];}
 function fmt(iso){if(!iso)return "—";return new Date(iso).toLocaleDateString("fr-FR");}
 function slugCat(s){return s.toLowerCase().replace(/['\s]/g,"_").replace(/é|è|ê/g,"e").replace(/à|â/g,"a").replace(/[^a-z0-9_]/g,"");}
@@ -1485,7 +1485,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
           <select value={statutChantier} onChange={e=>changerStatut(e.target.value)} style={{padding:"3px 8px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:11,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:prog+"%",transition:"width .4s"}}/></div>
           <span style={{fontSize:11,opacity:0.85}}>{prog}%</span>
-          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>setApercu(true)}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
         </div>
       </div>
     </div>
