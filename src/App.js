@@ -511,7 +511,7 @@ function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBas
   return <>{rendus}</>;
 }
 
-function SectionEtape({nom,idx,actif,validees,v,nr,onChange,onNR,onValider,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,champsSource}){
+function SectionEtape({nom,idx,actif,validees,v,nr,onChange,onNR,onValider,onSauvegarder,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,champsSource}){
   const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
   function resume(){return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${c.unite?" "+c.unite:""}`).join(" · ");}
   if(estLock)return<div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
@@ -1175,7 +1175,9 @@ function CarteKanban({f,s,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,
 }
 
 // ─── PAGE ACCUEIL EXPLORATEUR ───────────────────────────────────────────
-function SousDossierFiche({f,onOpen,onDelete,onStatutChange,categories}){
+
+// ─── FICHE ITEM (niveau 3 : Lieu/Identification) ────────────────────────
+function FicheItem({f,onOpen,onDelete,onStatutChange,categories}){
   const [ouvert,setOuvert]=useState(false);
   const [photos,setPhotos]=useState([]);
   const [loadingP,setLoadingP]=useState(false);
@@ -1193,17 +1195,14 @@ function SousDossierFiche({f,onOpen,onDelete,onStatutChange,categories}){
       setLoadingP(true);
       try{const p=await db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at");
       if(Array.isArray(p))setPhotos(p.map(pp=>({...pp,url:db.photoUrl(pp.storage_path)})));}
-      catch(e){}
-      setLoadingP(false);
+      catch(e){}finally{setLoadingP(false);}
     }
     setOuvert(!ouvert);
   }
 
   async function supprimerPhotos(){
-    try{
-      await db.del("fiche_photos","?fiche_id=eq."+f.id);
-      setPhotos([]);setConfirmSupprPhotos(false);
-    }catch(e){alert("Erreur: "+e.message);}
+    try{await db.del("fiche_photos","?fiche_id=eq."+f.id);setPhotos([]);setConfirmSupprPhotos(false);}
+    catch(e){alert("Erreur: "+e.message);}
   }
 
   async function supprimerFiche(){
@@ -1233,33 +1232,48 @@ function SousDossierFiche({f,onOpen,onDelete,onStatutChange,categories}){
     setUploadEnCours(false);
   }
 
-  return(<div style={{marginLeft:16,marginBottom:8,borderLeft:"2px solid #E2E6EA",paddingLeft:12}}>
+  async function handleZip(){
+    // Charger les photos si pas encore fait
+    let phots=photos;
+    if(phots.length===0){
+      try{const p=await db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at");
+      if(Array.isArray(p)){phots=p.map(pp=>({...pp,url:db.photoUrl(pp.storage_path)}));setPhotos(phots);}}
+      catch(e){}
+    }
+    // Télécharger même sans photos — on passe les valeurs pour le PDF
+    const vals=await db.get("fiche_valeurs","?fiche_id=eq."+f.id+"&order=created_at");
+    const v=Array.isArray(vals)?Object.fromEntries(vals.map(r=>[r.champ_id,r.valeur])):{};
+    v.de=f.de;v.client=f.client;v.materiel_lieu=f.materiel;
+    await telechargerZip(phots,v,ch.chemin.replace(/\//g,"_")||f.de);
+  }
+
+  return(<div style={{marginLeft:20,marginBottom:6,borderLeft:"2px solid #E2E6EA",paddingLeft:12}}>
+    {/* En-tête lieu/identification */}
     <div style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 10px",background:"#fff",borderRadius:8,border:"1px solid #E2E6EA"}} onClick={toggle}>
-      <span style={{fontSize:16}}>{ouvert?"📂":"📁"}</span>
+      <span style={{fontSize:15}}>{ouvert?"📂":"📁"}</span>
       <div style={{flex:1,minWidth:0}}>
-        <p style={{margin:0,fontSize:13,fontWeight:600,color:"#1B4F8A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.materiel||"Moteur"}</p>
-        <p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{fmt(f.created_at)} · {photos.length} photo{photos.length>1?"s":""}</p>
+        <p style={{margin:0,fontSize:13,fontWeight:600,color:"#1B4F8A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.materiel||"Sans identification"}</p>
+        <p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{fmt(f.created_at)}</p>
       </div>
       <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:12,whiteSpace:"nowrap",background:st.bg,color:st.color}}>{st.label}</span>
-      <span style={{fontSize:14,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
+      <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
 
     {ouvert&&<div style={{padding:"10px 12px",background:"#fff",borderRadius:"0 0 8px 8px",border:"1px solid #E2E6EA",borderTop:"none"}}>
-      
       {/* Statut */}
-      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 12px",background:"#F8F9FA",borderRadius:8}}>
-        <span style={{fontSize:12,fontWeight:600,color:"#6B7280"}}>Statut :</span>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,padding:"6px 10px",background:"#F8F9FA",borderRadius:6}}>
+        <span style={{fontSize:12,fontWeight:600,color:"#6B7280",flexShrink:0}}>Statut :</span>
         <select value={f.statut_chantier||"A_demonter"} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,flex:1,fontSize:12}}>
-          {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
+          {STATUTS_CHANTIER.map(st2=><option key={st2.id} value={st2.id}>{st2.label}</option>)}
         </select>
       </div>
 
-      {/* Boutons actions */}
-      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
-        <button onClick={()=>onOpen(f)} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>📝 Ouvrir la fiche</button>
-        <button onClick={async()=>{if(!ouvert||photos.length===0){setLoadingP(true);const p=await db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at");if(Array.isArray(p))setPhotos(p.map(pp=>({...pp,url:db.photoUrl(pp.storage_path)})));setLoadingP(false);}await telechargerZip(photos,null,ch.chemin.replace(/\//g,"_"));}} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📥 ZIP</button>
+      {/* Actions */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+        <button onClick={()=>onOpen(f)} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>📝 Ouvrir fiche</button>
+        <button onClick={handleZip} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📥 ZIP + PDF</button>
         <button onClick={()=>setAjoutPhoto(!ajoutPhoto)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>📷 Ajouter photo</button>
-        <button onClick={()=>setConfirmSupprPhotos(true)} disabled={photos.length===0} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#E8720C",borderColor:"#E8720C",opacity:photos.length===0?0.4:1}}>🗑 Suppr. photos</button>
+        <button onClick={()=>setConfirmSupprPhotos(true)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#E8720C",borderColor:"#E8720C"}}>🗑 Suppr. photos</button>
         <button onClick={()=>setConfirmSupprFiche(true)} style={{...S.pDanger,fontSize:12,padding:"6px 12px"}}>🗑 Suppr. fiche</button>
       </div>
 
@@ -1277,20 +1291,18 @@ function SousDossierFiche({f,onOpen,onDelete,onStatutChange,categories}){
         </div>}
       </div>}
 
-      {/* Confirmation suppression photos */}
+      {/* Confirmations */}
       {confirmSupprPhotos&&<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
-        <p style={{fontSize:12,fontWeight:700,color:"#E8720C",margin:"0 0 6px"}}>⚠️ Supprimer les {photos.length} photos ?</p>
-        <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>La fiche et toutes les données sont conservées. Uniquement les photos seront supprimées.</p>
+        <p style={{fontSize:12,fontWeight:700,color:"#E8720C",margin:"0 0 6px"}}>⚠️ Supprimer les photos ?</p>
+        <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>La fiche et toutes les données sont conservées.</p>
         <div style={{display:"flex",gap:8}}>
           <button onClick={supprimerPhotos} style={{...S.p1,fontSize:12,background:"#E8720C"}}>✅ Confirmer</button>
           <button onClick={()=>setConfirmSupprPhotos(false)} style={{...S.p2,fontSize:12}}>Annuler</button>
         </div>
       </div>}
-
-      {/* Confirmation suppression fiche complète */}
       {confirmSupprFiche&&<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
         <p style={{fontSize:12,fontWeight:700,color:"#D73A49",margin:"0 0 6px"}}>⚠️ Supprimer toute la fiche ?</p>
-        <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>Cette action supprime définitivement la fiche, toutes ses données, mesures, photos et historique. Irréversible.</p>
+        <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>Irréversible — fiche, données, photos et historique supprimés.</p>
         <div style={{display:"flex",gap:8}}>
           <button onClick={supprimerFiche} style={{...S.pDanger,fontSize:12}}>🗑 Oui, tout supprimer</button>
           <button onClick={()=>setConfirmSupprFiche(false)} style={{...S.p2,fontSize:12}}>Annuler</button>
@@ -1298,51 +1310,94 @@ function SousDossierFiche({f,onOpen,onDelete,onStatutChange,categories}){
       </div>}
 
       {/* Photos */}
-      {loadingP&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:12}}>Chargement photos…</div>}
-      {photos.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:6,marginTop:8}}>
-        {photos.map((p,i)=><div key={i} style={{position:"relative"}}>
-          <img src={p.url} alt={p.categorie_nom||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA",cursor:"pointer"}} onClick={()=>window.open(p.url,"_blank")}/>
-          {p.categorie_nom&&<div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:9,padding:"2px 4px",borderRadius:"0 0 6px 6px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.categorie_nom}</div>}
-        </div>)}
+      {loadingP&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:8}}>Chargement…</div>}
+      {photos.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(72px,1fr))",gap:6,marginTop:6}}>
+        {photos.map((p,i)=>(
+          <div key={i} style={{position:"relative",cursor:"pointer"}} onClick={()=>window.open(p.url,"_blank")}>
+            <img src={p.url} alt={p.categorie_nom||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA"}}/>
+            {p.categorie_nom&&<div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:8,padding:"2px 3px",borderRadius:"0 0 6px 6px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.categorie_nom}</div>}
+          </div>
+        ))}
       </div>}
-      {!loadingP&&photos.length===0&&ouvert&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:12}}>Aucune photo</div>}
-    </div>}
-  </div>);
-}
-function DossierClient({client,fiches,onOpen,onDelete,onStatutChange,categories}){
-  const [ouvert,setOuvert]=useState(false);
-  return(<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,overflow:"hidden"}}>
-    <div onClick={()=>setOuvert(!ouvert)} style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:"#F8F9FA"}}>
-      <span style={{fontSize:16}}>{ouvert?"📂":"📁"}</span>
-      <span style={{fontSize:14,fontWeight:700,color:"#1B4F8A",flex:1}}>{client}</span>
-      <span style={{fontSize:11,color:"#9CA3AF"}}>{fiches.length} fiche{fiches.length>1?"s":""}</span>
-      <span style={{fontSize:14,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
-    </div>
-    {ouvert&&<div style={{padding:"0 0 8px 0"}}>
-      {fiches.map(f=><SousDossierFiche key={f.id} f={f} onOpen={onOpen} onDelete={id=>onDelete(id)} onStatutChange={onStatutChange} categories={categories}/>)}
+      {!loadingP&&photos.length===0&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:8}}>Aucune photo — utilisez "Ajouter photo" ou prenez des photos dans la fiche</div>}
     </div>}
   </div>);
 }
 
+// ─── DOSSIER DE (niveau 2) ───────────────────────────────────────────────
+function DossierDE({de,fiches,onOpen,onDelete,onStatutChange,categories}){
+  const [ouvert,setOuvert]=useState(false);
+  return(<div style={{marginLeft:16,marginBottom:6,borderLeft:"2px solid #D6E4F7",paddingLeft:12}}>
+    <div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 12px",background:"#EEF4FF",borderRadius:8,border:"1px solid #D6E4F7"}}>
+      <span style={{fontSize:15}}>{ouvert?"📂":"📁"}</span>
+      <span style={{fontSize:13,fontWeight:700,color:"#1B4F8A",flex:1}}>{de}</span>
+      <span style={{fontSize:11,color:"#6B7280",background:"#fff",padding:"2px 8px",borderRadius:10,border:"1px solid #E2E6EA"}}>{fiches.length} fiche{fiches.length>1?"s":""}</span>
+      <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
+    </div>
+    {ouvert&&<div style={{marginTop:6}}>
+      {fiches.map(f=><FicheItem key={f.id} f={f} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
+    </div>}
+  </div>);
+}
+
+// ─── DOSSIER CLIENT (niveau 1) ───────────────────────────────────────────
+function DossierClient({client,fiches,onOpen,onDelete,onStatutChange,categories}){
+  const [ouvert,setOuvert]=useState(false);
+  // Grouper par DE
+  const parDE={};
+  fiches.forEach(f=>{const d=f.de||"Sans DE";if(!parDE[d])parDE[d]=[];parDE[d].push(f);});
+  const deList=Object.keys(parDE).sort();
+  const nbDE=deList.length;
+  return(<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,overflow:"hidden"}}>
+    <div onClick={()=>setOuvert(!ouvert)} style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:"#F8F9FA"}}>
+      <span style={{fontSize:16}}>{ouvert?"📂":"📁"}</span>
+      <div style={{flex:1,minWidth:0}}>
+        <p style={{margin:0,fontSize:14,fontWeight:700,color:"#1A1A2E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{client}</p>
+        <p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{nbDE} N° DE · {fiches.length} fiche{fiches.length>1?"s":""}</p>
+      </div>
+      <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
+    </div>
+    {ouvert&&<div style={{padding:"8px 0 8px 0"}}>
+      {deList.map(de=><DossierDE key={de} de={de} fiches={parDE[de]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
+    </div>}
+  </div>);
+}
+
+// ─── PAGE ACCUEIL ────────────────────────────────────────────────────────
 function PageAccueil({fiches,setFiches,onNew,onOpen,onStatutChange,categories}){
   const [loading,setLoading]=useState(true);const [q,setQ]=useState("");const [fs,setFs]=useState("Tous");
   useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));},[]);
   async function onStatutChange(ficheId,newStatut){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});setFiches(prev=>prev.map(f=>f.id===ficheId?{...f,statut_chantier:newStatut}:f));}
   function onDelete(id){setFiches(prev=>prev.filter(f=>f.id!==id));}
-  const filtrees=fiches.filter(f=>{const qq=q.toLowerCase();return(!qq||(f.de||"").replace("-","").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq))&&(fs==="Tous"||f.statut===fs);});
-  const parClient={};filtrees.forEach(f=>{const c=f.client||"Sans client";if(!parClient[c])parClient[c]=[];parClient[c].push(f);});const clientList=Object.keys(parClient).sort();
+  const filtrees=fiches.filter(f=>{
+    const qq=q.toLowerCase();
+    const matchQ=!qq||(f.de||"").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq);
+    const matchS=fs==="Tous"||(f.statut_chantier||"A_demonter")===fs;
+    return matchQ&&matchS;
+  });
+  const parClient={};filtrees.forEach(f=>{const c=f.client||"Sans client";if(!parClient[c])parClient[c]=[];parClient[c].push(f);});
+  const clientList=Object.keys(parClient).sort();
   const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
-      <div style={{display:"flex",alignItems:"center",gap:12}}><div><h1 style={{fontSize:22,fontWeight:800,margin:0}}>Fiches atelier</h1><p style={{fontSize:13,color:"#6B7280",margin:"3px 0 0"}}>{clientList.length} client{clientList.length>1?"s":""} · {fiches.length} fiche{fiches.length>1?"s":""}</p></div>{devisCount>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>⚠ {devisCount} devis en attente</span>}</div>
+      <div style={{display:"flex",alignItems:"center",gap:12}}>
+        <div>
+          <h1 style={{fontSize:22,fontWeight:800,margin:0}}>Fiches atelier</h1>
+          <p style={{fontSize:13,color:"#6B7280",margin:"3px 0 0"}}>{clientList.length} client{clientList.length>1?"s":""} · {fiches.length} fiche{fiches.length>1?"s":""}</p>
+        </div>
+        {devisCount>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>⚠ {devisCount} devis en attente</span>}
+      </div>
       <button style={S.p1} onClick={onNew}>+ Nouvelle fiche</button>
     </div>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16,display:"flex",gap:10,flexWrap:"wrap"}}>
-      <input type="text" placeholder="🔍 Client, N° DE..." value={q} onChange={e=>setQ(e.target.value)} style={{...S.inp,flex:1,minWidth:160}}/>
-      <select value={fs} onChange={e=>setFs(e.target.value)} style={{...S.sel,width:150}}><option value="Tous">Tous statuts</option><option>En cours</option><option>Terminée</option><option>Modifiée</option></select>
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={{...S.inp,flex:1,minWidth:160}}/>
+      <select value={fs} onChange={e=>setFs(e.target.value)} style={{...S.sel,width:160}}>
+        <option value="Tous">Tous statuts</option>
+        {STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+      </select>
     </div>
-    {loading&&<div style={{textAlign:"center",padding:"32px",color:"#9CA3AF"}}>Chargement…</div>}
-    {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:"32px",color:"#9CA3AF"}}>{fiches.length===0?"Aucune fiche — créez la première !":"Aucun résultat."}</div>}
+    {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>Chargement…</div>}
+    {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{fiches.length===0?"Aucune fiche — créez la première !":"Aucun résultat."}</div>}
     {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
   </div>);
 }
@@ -1380,6 +1435,27 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
     setSavingComm(false);
   }
 
+  async function savePartiel(idx){
+    setSaving(true);setErreur(null);
+    try{
+      let fid=ficheId;
+      if(!fid){
+        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:"En cours",statut_chantier:statutChantier||"A_demonter",etape_active:idx,etapes_validees:validees,type_materiel:typeMateriel||"Moteur"});
+        fid=Array.isArray(res)?res[0]?.id:res?.id;if(!fid)throw new Error("Impossible de créer la fiche");setFicheId(fid);
+      }else{
+        await db.patch("fiches","?id=eq."+fid,{client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:"En cours",etape_active:idx});
+      }
+      const champs=Object.keys(v).filter(k=>v[k]!==undefined&&v[k]!=="");
+      if(champs.length>0){
+        await db.del("fiche_valeurs","?fiche_id=eq."+fid);
+        const rows=champs.map(k=>({fiche_id:fid,champ_id:k,valeur:String(v[k])}));
+        for(let i=0;i<rows.length;i+=50){await db.post("fiche_valeurs",rows.slice(i,i+50));}
+      }
+      await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Sauvegarde partielle étape "+(idx+1)});
+      setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);
+    }catch(e){setErreur(e.message||"Erreur de sauvegarde");}
+    setSaving(false);
+  }
   async function save(idx){
     setSaving(true);setErreur(null);
     try{
@@ -1414,9 +1490,9 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
       </div>
     </div>
     <div style={{padding:"16px 16px 0"}}>
-      {flash!==null&&<div style={S.ok}>✅ Étape "{etapesActives[flash]}" enregistrée.</div>}
+      {flash==="saved_partiel"&&<div style={{...S.ok,background:"#EEF4FF",color:"#1B4F8A",border:"1px solid #D6E4F7"}}>💾 Données sauvegardées.</div>}{flash!==null&&flash!=="saved_partiel"&&<div style={S.ok}>✅ Étape "{etapesActives[flash]}" enregistrée.</div>}
       {erreur&&<div style={{...S.alert,marginBottom:14}}>{erreur}</div>}
-      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>setNrMap(p=>({...p,[i]:!p[i]}))} onValider={()=>save(i)} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={champsActifs}/>)}
+      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>setNrMap(p=>({...p,[i]:!p[i]}))} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={champsActifs}/>)}
 
       <SectionMaterielCommander v={v} ficheId={ficheId} de={v.de} client={v.client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeMateriel}/>
 
