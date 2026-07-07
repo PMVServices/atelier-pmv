@@ -1463,6 +1463,9 @@ export default function App(){
 
   const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
 
+  const width=useWidth();
+  const isMobile=width<640;
+  const [menuOuvert,setMenuOuvert]=useState(false);
   if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
 
   const navItems=[
@@ -1473,28 +1476,49 @@ export default function App(){
   ];
 
   return(<div style={S.app}>
-    <div style={S.hdr}>
-      <div style={{display:"flex",alignItems:"center",gap:10}}>
-        <img src={LOGO_B64} alt="PMV Services" style={{height:40,objectFit:"contain",borderRadius:4,cursor:"pointer"}} onClick={()=>setPage("accueil")}/>
-        <div style={{display:"none"}}>
-          <p style={{fontSize:13,fontWeight:700,margin:0,lineHeight:1.2}}>Atelier PMV</p>
-          <p style={{fontSize:10,opacity:0.7,margin:0}}>Fiches d'entretien</p>
-        </div>
-      </div>
-      <div style={{display:"flex",alignItems:"center",gap:6}}>
+    {/* ── HEADER ── */}
+    <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
+      {/* Logo */}
+      <img src={LOGO_B64} alt="PMV" style={{height:isMobile?30:40,objectFit:"contain",borderRadius:4,cursor:"pointer",flexShrink:0}} onClick={()=>{setPage("accueil");setMenuOuvert(false);}}/>
+
+      {/* Onglets — masqués sur mobile */}
+      {!isMobile&&<div style={{display:"flex",alignItems:"center",gap:4,flex:1,justifyContent:"center"}}>
         {navItems.map(n=>(
-          <button key={n.id} onClick={()=>setPage(n.id)} style={{background:page===n.id?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"1px solid rgba(255,255,255,0.3)",padding:"7px 16px",borderRadius:8,fontSize:13,cursor:"pointer",fontWeight:page===n.id?700:400,position:"relative",whiteSpace:"nowrap"}}>
+          <button key={n.id} onClick={()=>setPage(n.id)} style={{background:page===n.id?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"none",padding:"6px 14px",borderRadius:6,fontSize:13,cursor:"pointer",fontWeight:page===n.id?700:400,position:"relative",whiteSpace:"nowrap"}}>
             {n.label}
-            {n.id==="planning"&&devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:"50%",width:16,height:16,fontSize:9,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700}}>{devisCount}</span>}
+            {n.id==="planning"&&devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{devisCount}</span>}
           </button>
         ))}
-      </div>
-      <BadgeStockage onClick={()=>setPage("stockage")}/>
-      {sessionTech&&<div style={{display:"flex",alignItems:"center",gap:6}}>
-        <span style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:12,fontWeight:700}}>{sessionTech}</span>
-        <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:11,cursor:"pointer"}} onClick={()=>setSessionTech(null)}>↩</button>
       </div>}
+
+      {/* Droite */}
+      <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:"auto",flexShrink:0}}>
+        <BadgeStockage onClick={()=>setPage("stockage")}/>
+        {!isMobile&&sessionTech&&<>
+          <span style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:12,fontWeight:700,color:"#fff"}}>{sessionTech}</span>
+          <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:11,cursor:"pointer"}} onClick={()=>setSessionTech(null)}>↩</button>
+        </>}
+        {/* Hamburger mobile */}
+        {isMobile&&<button onClick={()=>setMenuOuvert(o=>!o)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",width:36,height:36,borderRadius:8,cursor:"pointer",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
+          {menuOuvert?"✕":"☰"}
+        </button>}
+      </div>
     </div>
+
+    {/* ── MENU SANDWICH MOBILE ── */}
+    {isMobile&&menuOuvert&&<div style={{position:"sticky",top:52,zIndex:99,background:"#1B4F8A",boxShadow:"0 4px 12px rgba(0,0,0,0.3)"}}>
+      {navItems.map(n=>(
+        <button key={n.id} onClick={()=>{setPage(n.id);setMenuOuvert(false);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:page===n.id?"rgba(255,255,255,0.15)":"transparent",color:"#fff",border:"none",borderBottom:"1px solid rgba(255,255,255,0.1)",padding:"14px 20px",fontSize:15,fontWeight:page===n.id?700:400,cursor:"pointer",textAlign:"left"}}>
+          <span>{n.label}</span>
+          {n.id==="planning"&&devisCount>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{devisCount}</span>}
+        </button>
+      ))}
+      {sessionTech&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 20px",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
+        <span style={{color:"#fff",fontSize:13}}>👤 {sessionTech}</span>
+        <button onClick={()=>{setSessionTech(null);setMenuOuvert(false);}} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",padding:"5px 12px",borderRadius:6,fontSize:12,cursor:"pointer"}}>↩ Changer</button>
+      </div>}
+    </div>}
+
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
