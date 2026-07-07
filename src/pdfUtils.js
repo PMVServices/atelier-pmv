@@ -35,7 +35,15 @@ export async function telechargerZip(photos,valeurs,nomDossier){
     if(!window.JSZip){await new Promise(function(res,rej){var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
     var zip=new window.JSZip();
     await Promise.all(photos.map(async function(p){try{var r=await fetch(p.url);var blob=await r.blob();zip.file(p.nom_fichier,blob);}catch(e){}}));
-    if(valeurs){var html=genHtml(valeurs,photos,"A_demonter","",[]); zip.file(nomDossier+"_fiche.html",html);}
+    if(valeurs){
+      // Générer la fiche en PDF via impression navigateur
+      var html=genHtml(valeurs,photos,"A_demonter","",[]); 
+      // On génère un blob HTML qu'on met dans le ZIP
+      // Le PDF sera généré par impression depuis l'appli — ici on met la version HTML
+      var htmlBlob=new Blob([html],{type:"text/html"});
+      zip.file(nomDossier+"_fiche.pdf.html",htmlBlob);
+      zip.file(nomDossier+"_POUR_PDF.txt","Pour obtenir le PDF : ouvrez le fichier _fiche.pdf.html dans un navigateur, puis Fichier > Imprimer > Enregistrer en PDF");
+    }
     var content=await zip.generateAsync({type:"blob"});
     var a=document.createElement("a");a.href=URL.createObjectURL(content);a.download=nomDossier+".zip";a.click();
   }catch(e){
