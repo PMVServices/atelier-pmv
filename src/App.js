@@ -1428,7 +1428,12 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
     setStatutChantier(ficheInit.statut_chantier||"A_demonter");
   },[ficheInit?.id]);
 
-  const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
+const autoSaveTimer=useRef(null);
+const onChange=useCallback((id,val)=>{
+  setV(p=>({...p,[id]:val}));
+  if(autoSaveTimer.current)clearTimeout(autoSaveTimer.current);
+  autoSaveTimer.current=setTimeout(()=>savePartiel(null),2000);
+},[]);
   const onPhotoAdded=useCallback(p=>setPhotos(prev=>[...prev,p]),[]);
 
   async function changerStatut(newStatut){setStatutChantier(newStatut);if(ficheId){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});if(onFicheUpdated)onFicheUpdated(ficheId,{statut_chantier:newStatut});}}
