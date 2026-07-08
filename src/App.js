@@ -17,7 +17,8 @@ const db = {
   async upsert(table,body,conflict){
     const r=await fetch(SUPA_URL+"/rest/v1/"+table+"?on_conflict="+conflict,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(body)});
     if(!r.ok){const e=await r.text();throw new Error(e);}
-    return r.status===204?null:await r.json();
+    if(!r.ok){const e=await r.text();throw new Error(e);}
+return null;
   }
 };
 
