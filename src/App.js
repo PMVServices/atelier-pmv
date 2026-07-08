@@ -1243,7 +1243,7 @@ function FicheItem({f,onOpen,onDelete,onStatutChange,categories}){
     // Télécharger même sans photos — on passe les valeurs pour le PDF
     const vals=await db.get("fiche_valeurs","?fiche_id=eq."+f.id+"&order=created_at");
     const v=Array.isArray(vals)?Object.fromEntries(vals.map(r=>[r.champ_id,r.valeur])):{};
-    v.de=f.de;v.client=f.client;v.materiel_lieu=f.materiel;
+    v.de=f.de;v.client=f.client;v.materiel_lieu=f.materiel;v._type=f.type_materiel||"Moteur";
     await telechargerZip(phots,v,ch.chemin.replace(/\//g,"_")||f.de);
   }
 
@@ -1270,7 +1270,17 @@ function FicheItem({f,onOpen,onDelete,onStatutChange,categories}){
 
       {/* Actions */}
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-        <button onClick={()=>onOpen(f)} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>📝 Ouvrir fiche</button><button onClick={async()=>{const vals=await db.get("fiche_valeurs","?fiche_id=eq."+f.id+"&order=created_at");const v2=Array.isArray(vals)?Object.fromEntries(vals.map(r=>[r.champ_id,r.valeur])):{};v2.de=f.de;v2.client=f.client;v2.materiel_lieu=f.materiel;const ph=await db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at");const photos2=Array.isArray(ph)?ph.map(p=>({...p,url:db.photoUrl(p.storage_path)})):[];imprimerFiche(v2,photos2,f.statut_chantier||"A_demonter","",[])}} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>👁 Aperçu</button>
+        <button onClick={()=>onOpen(f)} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>📝 Ouvrir fiche</button>
+        <button onClick={async()=>{
+          try{
+            const rows=await db.get("fiche_valeurs","?fiche_id=eq."+f.id+"&order=created_at");
+            const vv=Array.isArray(rows)?Object.fromEntries(rows.map(r=>[r.champ_id,r.valeur])):{};            vv.de=f.de;vv.client=f.client;vv.materiel_lieu=f.materiel;vv._type=f.type_materiel||"Moteur";
+            const ph=await db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at");
+            const photos2=Array.isArray(ph)?ph.map(p=>({...p,url:db.photoUrl(p.storage_path)})):[];
+            const pieces2=await db.get("suivi_pieces","?fiche_id=eq."+f.id);
+            imprimerFiche(vv,photos2,f.statut_chantier||"A_demonter","",Array.isArray(pieces2)?pieces2:[]);
+          }catch(e){alert("Erreur aperçu: "+e.message);}
+        }} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>👁 Aperçu</button>
         <button onClick={handleZip} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📥 ZIP + PDF</button>
         <button onClick={()=>setAjoutPhoto(!ajoutPhoto)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>📷 Ajouter photo</button>
         <button onClick={()=>setConfirmSupprPhotos(true)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#E8720C",borderColor:"#E8720C"}}>🗑 Suppr. photos</button>
@@ -1485,7 +1495,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
           <select value={statutChantier} onChange={e=>changerStatut(e.target.value)} style={{padding:"3px 8px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:11,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:prog+"%",transition:"width .4s"}}/></div>
           <span style={{fontSize:11,opacity:0.85}}>{prog}%</span>
-          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>setApercu(true)}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>{const nrM={};etapesActives.forEach((nom,i)=>{if(nrMap[i])nrM[String(i+1)]=true;});imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,nrM);}}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>setApercu(true)}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
         </div>
       </div>
     </div>
@@ -1513,7 +1523,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
         <div style={{marginBottom:12}}><SelecteurStatut statutId={statutChantier} onChange={changerStatut}/></div>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <button style={S.p1} onClick={()=>setApercu(true)}>👁 Aperçu fiche</button>
-          <button style={{...S.p1,background:"#22863A"}} onClick={()=>{const nrM={};etapesActives.forEach((nom,i)=>{if(nrMap[i])nrM[String(i+1)]=true;});imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,nrM);}}>📄 Imprimer / PDF</button>
+          <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande)}>📄 Imprimer / PDF</button>
           <button style={S.p2}>📧 Rapport client (bientôt)</button>
           <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
         </div>
@@ -1598,7 +1608,7 @@ export default function App(){
     </div>}
 
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
-    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
+    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
