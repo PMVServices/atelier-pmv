@@ -13,7 +13,12 @@ const db = {
   async patch(t,p,b){try{const r=await fetch(SUPA_URL+"/rest/v1/"+t+p,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(b)});return r.json();}catch(e){return null;}},
   async del(t,p){try{await fetch(SUPA_URL+"/rest/v1/"+t+p,{method:"DELETE",headers:H});}catch(e){}},
   async uploadPhoto(path,file){const r=await fetch(SUPA_URL+"/storage/v1/object/photos/"+path,{method:"POST",headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Content-Type":file.type,"x-upsert":"true"},body:file});if(!r.ok){const e=await r.text();throw new Error(e);}return true;},
-  photoUrl(path){return SUPA_URL+"/storage/v1/object/public/photos/"+path;}
+  photoUrl(path){return SUPA_URL+"/storage/v1/object/public/photos/"+path;},
+  async upsert(table,body,conflict){
+    const r=await fetch(SUPA_URL+"/rest/v1/"+table+"?on_conflict="+conflict,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(body)});
+    if(!r.ok){const e=await r.text();throw new Error(e);}
+    return r.status===204?null:await r.json();
+  }
 };
 
 const PIN_CODE="3739",PIN_KEY="pmv_pin_ok";
@@ -1447,24 +1452,28 @@ const onChange=useCallback((id,val)=>{
     setSavingComm(false);
   }
 
-  async function savePartiel(idx){
+  async function savePartiel(idxEtape){
+    if(saving)return;
     setSaving(true);setErreur(null);
     try{
       let fid=ficheId;
       if(!fid){
-        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:"En cours",statut_chantier:statutChantier||"A_demonter",etape_active:idx,etapes_validees:validees,type_materiel:typeMateriel||"Moteur"});
-        fid=Array.isArray(res)?res[0]?.id:res?.id;if(!fid)throw new Error("Impossible de créer la fiche");setFicheId(fid);
+        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:"En cours",statut_chantier:statutChantier||"A_demonter",etape_active:idxEtape,etapes_validees:validees,type_materiel:typeMateriel||"Moteur"});
+        fid=Array.isArray(res)?res[0]?.id:res?.id;
+        if(!fid)throw new Error("Impossible de créer la fiche");
+        setFicheId(fid);
       }else{
-        await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:"En cours",etape_active:idx});
+        await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:"En cours"});
       }
       const champs=Object.keys(v).filter(k=>v[k]!==undefined&&v[k]!=="");
       if(champs.length>0){
-        await db.del("fiche_valeurs","?fiche_id=eq."+fid);
         const rows=champs.map(k=>({fiche_id:fid,champ_id:k,valeur:String(v[k])}));
-        for(let i=0;i<rows.length;i+=50){await db.post("fiche_valeurs",rows.slice(i,i+50));}
+        for(let i=0;i<rows.length;i+=50){
+          await db.upsert("fiche_valeurs",rows.slice(i,i+50),"fiche_id,champ_id");
+        }
       }
-      await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Sauvegarde partielle étape "+(idx+1)});
-      setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);if(fid)onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur"});
+      setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);
+      if(fid)onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur"});
     }catch(e){setErreur(e.message||"Erreur de sauvegarde");}
     setSaving(false);
   }
