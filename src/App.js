@@ -13,7 +13,10 @@ const db = {
   async patch(t,p,b){try{const r=await fetch(SUPA_URL+"/rest/v1/"+t+p,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(b)});return r.json();}catch(e){return null;}},
   async del(t,p){try{await fetch(SUPA_URL+"/rest/v1/"+t+p,{method:"DELETE",headers:H});}catch(e){}},
   async uploadPhoto(path,file){const r=await fetch(SUPA_URL+"/storage/v1/object/photos/"+path,{method:"POST",headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Content-Type":file.type,"x-upsert":"true"},body:file});if(!r.ok){const e=await r.text();throw new Error(e);}return true;},
-  photoUrl(path){return SUPA_URL+"/storage/v1/object/public/photos/"+path;}
+  photoUrl(path){return SUPA_URL+"/storage/v1/object/public/photos/"+path;},
+  async lockFiche(ficheId,tech){try{await this.del("fiche_locks","?fiche_id=eq."+ficheId);await this.post("fiche_locks",{fiche_id:ficheId,technicien:tech});}catch(e){}},
+  async unlockFiche(ficheId){try{await this.del("fiche_locks","?fiche_id=eq."+ficheId);}catch(e){}},
+  async getLocks(){try{const r=await this.get("fiche_locks","?select=*");return Array.isArray(r)?r:[];}catch(e){return[];}}
 };
 
 const PIN_CODE="3739",PIN_KEY="pmv_pin_ok";
@@ -432,12 +435,52 @@ function ChampClient({valeur,onChange,clients,onAddClient}){
 
 function ChampTechnicien({valeur,onChange,techs}){
   const knownTechs=techs.filter(t=>t!=="Autre");const isAutre=valeur&&!knownTechs.includes(valeur);const [autreVal,setAutreVal]=useState(isAutre?valeur:"");
-  return(<div><select value={isAutre?"Autre":(valeur||"")} onChange={e=>{if(e.target.value==="Autre")onChange("");else onChange(e.target.value);}} style={S.sel}><option value="">— Sélectionner</option>{techs.map(t=><option key={t}>{t}</option>)}</select>{isAutre&&<input type="text" value={autreVal} onChange={e=>{setAutreVal(e.target.value);onChange(e.target.value);}} placeholder="Initiales..." style={{...S.inp,width:120,marginTop:6}}/>}</div>);
+  return(<div><select value={isAutre?"Autre":(valeur||"")} onChange={e=>{if(e.target.value==="Autre")onChange("");else onChange(e.target.value);}} style={S.sel}><option value="">— Sélectionner</option>{techs.map(t=>{const N={"AD":"Aurélien D.","CB":"Christophe B.","JM":"Jean-Marc","KD":"Kévin D.","CD":"Christophe D.","RC":"Romain C.","MC":"Mathieu C.","DN":"Denis N.","EL":"Emeric L.","SC":"Sandrine C.","TV":"Thomas V.","LD":"Ludovic D.","TP":"Thibaud P."};return <option key={t} value={t}>{t}{N[t]?" — "+N[t]:""}</option>;})}</select>{isAutre&&<input type="text" value={autreVal} onChange={e=>{setAutreVal(e.target.value);onChange(e.target.value);}} placeholder="Initiales..." style={{...S.inp,width:120,marginTop:6}}/>}</div>);
 }
 
 function ChampRoulement({valeur,onChange}){
-  const isAutre=valeur&&!ROULEMENTS.slice(0,-1).includes(valeur);
-  return(<div style={{display:"flex",flexDirection:"column",gap:6}}><select value={isAutre?"Autre":(valeur||"")} onChange={e=>{if(e.target.value==="Autre")onChange("Autre:");else onChange(e.target.value);}} style={S.sel}><option value="">— Sélectionner</option>{ROULEMENTS.map(r=><option key={r}>{r}</option>)}</select>{(isAutre||valeur?.startsWith("Autre:"))&&<input type="text" placeholder="Référence précise..." value={valeur?.replace("Autre:","")||""} onChange={e=>onChange("Autre:"+e.target.value)} style={S.inp}/>}</div>);
+  const isA=valeur&&!ROULEMENTS.slice(0,-1).includes(valeur);
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      <select value={isA?"Autre":(valeur||"")} onChange={e=>{if(e.target.value==="Autre")onChange("Autre:");else onChange(e.target.value);}} style={S.sel}>
+        <option value="">— Sélectionner</option>
+        {ROULEMENTS.map(r=><option key={r}>{r}</option>)}
+      </select>
+      {(isA||valeur?.startsWith("Autre:"))&&<input type="text" placeholder="Référence..." value={valeur?.replace("Autre:","")||""} onChange={e=>onChange("Autre:"+e.target.value)} style={S.inp}/>}
+    </div>
+  );
+}
+
+function ChampJoint({prefix,v,onChange}){
+  const tk=prefix+"_levres",ik=prefix+"_int",ek=prefix+"_ext",epk=prefix+"_ep";
+  const t=v[tk]||"";
+  function sf(k,val){onChange(k,val);}
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+      <select value={t} onChange={e=>{
+        sf(tk,e.target.value);
+        if(e.target.value==="VA"||e.target.value==="VS"){sf(ek,"");sf(epk,"");}
+      }} style={S.sel}>
+        <option value="">— Type joint</option>
+        <option value="VA">VA</option>
+        <option value="VS">VS</option>
+        <option value="Simple">Simple lèvre</option>
+        <option value="Double">Double lèvre</option>
+      </select>
+      {(t==="VA"||t==="VS")&&<div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <input type="number" placeholder="Ø int." value={v[ik]||""} onChange={e=>sf(ik,e.target.value)} style={{...S.inp,width:80}}/>
+        <span style={{fontSize:12,color:"#6B7280"}}>{t}{v[ik]||"?"}</span>
+      </div>}
+      {(t==="Simple"||t==="Double")&&<div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+        <input type="number" placeholder="Ø int." value={v[ik]||""} onChange={e=>sf(ik,e.target.value)} style={{...S.inp,width:70}}/>
+        <span>x</span>
+        <input type="number" placeholder="Ø ext." value={v[ek]||""} onChange={e=>sf(ek,e.target.value)} style={{...S.inp,width:70}}/>
+        <span>x</span>
+        <input type="number" placeholder="Ep." value={v[epk]||""} onChange={e=>sf(epk,e.target.value)} style={{...S.inp,width:60}}/>
+        <span style={{fontSize:11,color:"#9CA3AF"}}>{t==="Double"?"DL":"SL"}</span>
+      </div>}
+    </div>
+  );
 }
 
 function ChampGarnitureMobile({valeur,onChange}){
@@ -486,7 +529,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient}){
   let ctrl;
   if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={nv=>onChange(c.id,nv)} clients={clients} onAddClient={onAddClient}/>;
   else if(c.type==="technicien")ctrl=<ChampTechnicien valeur={val} onChange={nv=>onChange(c.id,nv)} techs={techs}/>;
-  else if(c.type==="roulement")ctrl=<ChampRoulement valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
+  else if(c.type==="roulement")ctrl=<ChampRoulement valeur={val} onChange={nv=>onChange(c.id,nv)}/>;else if(c.type==="joint")ctrl=<ChampJoint prefix={c.groupe||c.id} v={v} onChange={onChange}/>;
   else if(c.type==="garniture_mobile")ctrl=<ChampGarnitureMobile valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
   else if(c.type==="garniture_fixe")ctrl=<ChampGarnitureFixe valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
   else if(c.type==="calcul"){
@@ -504,7 +547,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient}){
   return <div style={{marginBottom:12}}>{lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>Champ obligatoire</div>}</div>;
 }
 
-function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos,onPhotoAdded,champsSource}){
+function RenduChamps({nom,v,onChange,onAutoSave,techs,clients,onAddClient,ficheId,cheminBase,categories,photos,onPhotoAdded,champsSource}){
   const width=useWidth();const champs=(champsSource||CHAMPS)[nom]||[];const rendus=[];const vus=new Set();
   for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(cc=><UnChamp key={cc.id} c={cc} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient}/>)}</div>);}else{vus.add(c.id);rendus.push(<UnChamp key={c.id} c={c} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient}/>);}}
   rendus.push(<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom)} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})}/>);
@@ -515,8 +558,8 @@ function SectionEtape({nom,idx,actif,validees,v,nr,onChange,onNR,onValider,onSau
   const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
   function resume(){return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${c.unite?" "+c.unite:""}`).join(" · ");}
   if(estLock)return<div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
-  if(estVal&&!estAct)return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>✅</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}}</span></div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modification tracée dans l'historique.</div><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={cs2}/></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
-  return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div><div style={S.nr} onClick={onNR}><input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/><div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché, les champs ne sont plus obligatoires</p></div></div><div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={cs2}/></div>{!ok&&!nr&&<div style={{...S.alert,marginBottom:10}}>⚠ Des champs obligatoires (*) sont manquants.</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{(ok||nr)&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{!ok&&!nr&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ Remplissez les champs obligatoires (*) pour continuer</div>}</div>);
+  if(estVal&&!estAct)return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>✅</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}}</span></div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modification tracée dans l'historique.</div><RenduChamps nom={nom} v={v} onChange={onChange} onAutoSave={onSauvegarder} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={cs2}/></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
+  return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div><div style={S.nr} onClick={onNR}><input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/><div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché, les champs ne sont plus obligatoires</p></div></div><div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}><RenduChamps nom={nom} v={v} onChange={onChange} onAutoSave={onSauvegarder} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={cs2}/></div>{!ok&&!nr&&<div style={{...S.alert,marginBottom:10}}>⚠ Des champs obligatoires (*) sont manquants.</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{(ok||nr)&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{!ok&&!nr&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ Remplissez les champs obligatoires (*) pour continuer</div>}</div>);
 }
 
 function ModalIdent({techs,onConfirm}){
@@ -1177,7 +1220,7 @@ function CarteKanban({f,s,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,
 // ─── PAGE ACCUEIL EXPLORATEUR ───────────────────────────────────────────
 
 // ─── FICHE ITEM (niveau 3 : Lieu/Identification) ────────────────────────
-function FicheItem({f,onOpen,onDelete,onStatutChange,categories}){
+function FicheItem({f,onOpen,onDelete,onStatutChange,categories,locks}){
   const [ouvert,setOuvert]=useState(false);
   const [photos,setPhotos]=useState([]);
   const [loadingP,setLoadingP]=useState(false);
@@ -1270,7 +1313,7 @@ function FicheItem({f,onOpen,onDelete,onStatutChange,categories}){
 
       {/* Actions */}
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-        <button onClick={()=>onOpen(f)} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>📝 Ouvrir fiche</button>
+        <button onClick={()=>{if(locks&&locks[f.id]){alert("🔒 En cours par "+locks[f.id]);return;}onOpen(f);}} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>{locks&&locks[f.id]?"🔒 "+locks[f.id]:"📝 Ouvrir fiche"}</button>
         <button onClick={handleZip} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📥 ZIP + PDF</button>
         <button onClick={()=>setAjoutPhoto(!ajoutPhoto)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>📷 Ajouter photo</button>
         <button onClick={()=>setConfirmSupprPhotos(true)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#E8720C",borderColor:"#E8720C"}}>🗑 Suppr. photos</button>
@@ -1325,7 +1368,7 @@ function FicheItem({f,onOpen,onDelete,onStatutChange,categories}){
 }
 
 // ─── DOSSIER DE (niveau 2) ───────────────────────────────────────────────
-function DossierDE({de,fiches,onOpen,onDelete,onStatutChange,categories}){
+function DossierDE({de,fiches,onOpen,onDelete,onStatutChange,categories,locks}){
   const [ouvert,setOuvert]=useState(false);
   return(<div style={{marginLeft:16,marginBottom:6,borderLeft:"2px solid #D6E4F7",paddingLeft:12}}>
     <div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 12px",background:"#EEF4FF",borderRadius:8,border:"1px solid #D6E4F7"}}>
@@ -1335,13 +1378,13 @@ function DossierDE({de,fiches,onOpen,onDelete,onStatutChange,categories}){
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{marginTop:6}}>
-      {fiches.map(f=><FicheItem key={f.id} f={f} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
+      {fiches.map(f=><FicheItem key={f.id} f={f} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories} locks={locks}/>)}
     </div>}
   </div>);
 }
 
 // ─── DOSSIER CLIENT (niveau 1) ───────────────────────────────────────────
-function DossierClient({client,fiches,onOpen,onDelete,onStatutChange,categories}){
+function DossierClient({client,fiches,onOpen,onDelete,onStatutChange,categories,locks}){
   const [ouvert,setOuvert]=useState(false);
   // Grouper par DE
   const parDE={};
@@ -1358,13 +1401,13 @@ function DossierClient({client,fiches,onOpen,onDelete,onStatutChange,categories}
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{padding:"8px 0 8px 0"}}>
-      {deList.map(de=><DossierDE key={de} de={de} fiches={parDE[de]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
+      {deList.map(de=><DossierDE key={de} de={de} fiches={parDE[de]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories} locks={locks}/>)}
     </div>}
   </div>);
 }
 
 // ─── PAGE ACCUEIL ────────────────────────────────────────────────────────
-function PageAccueil({fiches,setFiches,onNew,onOpen,onStatutChange,categories}){
+function PageAccueil({fiches,setFiches,onNew,onOpen,onStatutChange,categories,locks}){
   const [loading,setLoading]=useState(true);const [q,setQ]=useState("");const [fs,setFs]=useState("Tous");
   useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));},[]);
   async function onStatutChange(ficheId,newStatut){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});setFiches(prev=>prev.map(f=>f.id===ficheId?{...f,statut_chantier:newStatut}:f));}
@@ -1398,7 +1441,7 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onStatutChange,categories}){
     </div>
     {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>Chargement…</div>}
     {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{fiches.length===0?"Aucune fiche — créez la première !":"Aucun résultat."}</div>}
-    {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
+    {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories} locks={locks}/>)}
   </div>);
 }
 
@@ -1411,7 +1454,9 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const isPompe=typeMateriel==="Pompe";
   const etapesActives=isPompe?ETAPES_POMPE:ETAPES;
   const champsActifs=isPompe?CHAMPS_POMPE:CHAMPS;
-  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState({de:ficheInit?.de||genDE(),date_entree:today()});const [actif,setActif]=useState(ficheInit?.etape_active||0);const [validees,setValidees]=useState(ficheInit?.etapes_validees||[]);const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(ficheInit?.statut_chantier||"A_demonter");const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
+  const [ficheId,setFicheId]=useState(ficheInit?.id||null);
+  useEffect(()=>{if(ficheInit?.id&&sessionTech){db.lockFiche(ficheInit.id,sessionTech);return()=>{db.unlockFiche(ficheInit.id);};}},[]);// eslint-disable-line
+  const [v,setV]=useState({de:ficheInit?.de||genDE(),date_entree:today()});const [actif,setActif]=useState(ficheInit?.etape_active||0);const [validees,setValidees]=useState(ficheInit?.etapes_validees||[]);const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(ficheInit?.statut_chantier||"A_demonter");const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
 
   useEffect(()=>{
     if(!ficheInit?.id)return;
@@ -1443,7 +1488,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
         const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:"En cours",statut_chantier:statutChantier||"A_demonter",etape_active:idx,etapes_validees:validees,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;if(!fid)throw new Error("Impossible de créer la fiche");setFicheId(fid);
       }else{
-        await db.patch("fiches","?id=eq."+fid,{client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:"En cours",etape_active:idx});
+        await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:"En cours",etape_active:idx});
       }
       const champs=Object.keys(v).filter(k=>v[k]!==undefined&&v[k]!=="");
       if(champs.length>0){
@@ -1504,31 +1549,34 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
         </div>
       </div>
 
-      {validees.length===etapesActives.length&&<div style={{...S.card,textAlign:"center",border:"2px solid #22863A"}}>
-        <div style={{fontSize:40,marginBottom:10}}>🎉</div>
-        <p style={{fontSize:18,fontWeight:800,color:"#22863A",margin:"0 0 4px"}}>Fiche complète !</p>
-        <p style={{fontSize:12,color:"#6B7280",margin:"0 0 16px"}}>📁 {chem.client} / {chem.de} / {chem.mat} · {photos.length} photo{photos.length>1?"s":""}</p>
-        <div style={{marginBottom:14}}><SelecteurStatut statutId={statutChantier} onChange={changerStatut}/></div>
-        <div style={{display:"flex",gap:12,justifyContent:"center",flexWrap:"wrap"}}>
+      <div style={{...S.card,border:"2px solid "+(validees.length===etapesActives.length?"#22863A":"#E2E6EA")}}>
+        {validees.length===etapesActives.length&&<div style={{textAlign:"center",marginBottom:16}}>
+          <div style={{fontSize:32,marginBottom:6}}>🎉</div>
+          <p style={{fontSize:16,fontWeight:800,color:"#22863A",margin:0}}>Fiche complète !</p>
+        </div>}
+        <p style={{fontSize:12,color:"#6B7280",margin:"0 0 10px"}}>📁 {chem.client} / {chem.de} / {chem.mat} · {photos.length} photo{photos.length>1?"s":""}</p>
+        <div style={{marginBottom:12}}><SelecteurStatut statutId={statutChantier} onChange={changerStatut}/></div>
+        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <button style={S.p1} onClick={()=>setApercu(true)}>👁 Aperçu fiche</button>
           <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande)}>📄 Imprimer / PDF</button>
           <button style={S.p2}>📧 Rapport client (bientôt)</button>
           <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
         </div>
-      </div>}
+      </div>
     </div>
   </div>);
 }
 
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
-  const [page,setPage]=useState("accueil");const [sessionTech,setSessionTech]=useState(null);const [ficheOuverte,setFicheOuverte]=useState(null);const [typeMat,setTypeMat]=useState("Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);
+  const [page,setPage]=useState("accueil");const [sessionTech,setSessionTech]=useState(null);const [ficheOuverte,setFicheOuverte]=useState(null);const [typeMat,setTypeMat]=useState("Moteur");const [pieces,setPieces]=useState([]);const [locks,setLocks]=useState({});const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);
 
   useEffect(()=>{
     db.get("techniciens","?actif=eq.true&order=initiales").then(d=>{if(Array.isArray(d)&&d.length>0)setTechs(d.map(t=>t.initiales));}).catch(()=>{});
     db.get("clients","?order=nom").then(d=>{if(Array.isArray(d)&&d.length>0)setClients(d.map(c=>c.nom));}).catch(()=>{});
     db.get("categories_photos","?actif=eq.true&order=ordre").then(d=>{if(Array.isArray(d)&&d.length>0)setCategories(d);
-    db.get("suivi_pieces","?order=created_at.desc").then(d=>{if(Array.isArray(d))setPieces(d);});}).catch(()=>{});
+    db.get("suivi_pieces","?order=created_at.desc").then(d=>{if(Array.isArray(d))setPieces(d);});
+    const _ll=()=>db.getLocks().then(l=>{if(Array.isArray(l)){const m={};l.forEach(lk=>{m[lk.fiche_id]=lk.technicien;});setLocks(m);}});_ll();setInterval(_ll,30000);}).catch(()=>{});
   },[]);
 
   function onAddClient(nom){setClients(prev=>[...prev,nom].sort());}
@@ -1596,7 +1644,7 @@ export default function App(){
     </div>}
 
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
-    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
+    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} locks={locks} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>askIdent(t=>{setSessionTech(t);setFicheOuverte(f);setPage("fiche");})} onStatutChange={onStatutChange}/>}
