@@ -1495,7 +1495,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const isPompe=typeMateriel==="Pompe";
   const etapesActives=isPompe?ETAPES_POMPE:ETAPES;
   const champsActifs=isPompe?CHAMPS_POMPE:CHAMPS;
-  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState({de:ficheInit?.de||genDE(),date_entree:today()});const [actif,setActif]=useState(ficheInit?.etape_active||0);const [validees,setValidees]=useState(ficheInit?.etapes_validees||[]);const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(ficheInit?.statut_chantier||"A_demonter");const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
+  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [photosLoaded,setPhotosLoaded]=useState(!ficheInit?.id);const [v,setV]=useState({de:ficheInit?.de||genDE(),date_entree:today()});const [actif,setActif]=useState(ficheInit?.etape_active||0);const [validees,setValidees]=useState(ficheInit?.etapes_validees||[]);const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(ficheInit?.statut_chantier||"A_demonter");const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
 
   useEffect(()=>{
     if(ouvrirApercu&&ficheInit?.id){
@@ -1505,18 +1505,16 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
     }
   },[ouvrirApercu]);
   useEffect(()=>{
-    if(ouvrirZip&&ficheInit?.id){
-      const t=setTimeout(()=>{
-        const cb2=(v.client||ficheInit.client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(v.de||ficheInit.de||"de")+"/"+(v.materiel_lieu||ficheInit.materiel||"fiche").replace(/[^a-z0-9]/gi,"_");telechargerZip(photos,v,cb2.replace(/\//g,"_"));
-        onClearZip&&onClearZip();
-      },1500);
-      return()=>clearTimeout(t);
+    if(ouvrirZip&&ficheInit?.id&&photosLoaded){
+      const cb2=(v.client||ficheInit.client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(v.de||ficheInit.de||"de")+"/"+(v.materiel_lieu||ficheInit.materiel||"fiche").replace(/[^a-z0-9]/gi,"_");
+      telechargerZip(photos,v,cb2.replace(/\//g,"_"));
+      onClearZip&&onClearZip();
     }
-  },[ouvrirZip]);
+  },[ouvrirZip,photosLoaded]);
   useEffect(()=>{
     if(!ficheInit?.id)return;
     db.get("fiche_valeurs","?fiche_id=eq."+ficheInit.id).then(rows=>{if(!Array.isArray(rows))return;const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});setV(p=>({...p,...m}));setCommentaires(m["__commentaires"]||"");});
-    db.get("fiche_photos","?fiche_id=eq."+ficheInit.id+"&order=created_at").then(rows=>{if(!Array.isArray(rows))return;setPhotos(rows.map(p=>({...p,url:db.photoUrl(p.storage_path)})));});
+    db.get("fiche_photos","?fiche_id=eq."+ficheInit.id+"&order=created_at").then(rows=>{if(!Array.isArray(rows))return;setPhotosLoaded(true);setPhotos(rows.map(p=>({...p,url:db.photoUrl(p.storage_path)})));});
     db.get("suivi_pieces","?fiche_id=eq."+ficheInit.id).then(rows=>{if(Array.isArray(rows))setPiecesCommande(rows);});
     setStatutChantier(ficheInit.statut_chantier||"A_demonter");
   },[ficheInit?.id]);
