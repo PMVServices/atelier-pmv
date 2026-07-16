@@ -1261,7 +1261,7 @@ function CarteKanban({f,s,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,
 // ─── PAGE ACCUEIL EXPLORATEUR ───────────────────────────────────────────
 
 // ─── FICHE ITEM (niveau 3 : Lieu/Identification) ────────────────────────
-function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories}){
+function FicheItem({f,onOpen,onApercu,onZip,onDelete,onStatutChange,categories}){
   const [ouvert,setOuvert]=useState(false);
   const [photos,setPhotos]=useState([]);
   const [loadingP,setLoadingP]=useState(false);
@@ -1355,7 +1355,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories}){
       {/* Actions */}
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
         <button onClick={()=>onOpen(f)} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>📝 Ouvrir fiche</button><button onClick={()=>{onApercu(f);}} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>👁 Aperçu</button>
-        <button onClick={handleZip} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📥 ZIP + PDF</button>
+        <button onClick={()=>onZip(f)} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📥 ZIP + PDF</button>
         <button onClick={()=>setAjoutPhoto(!ajoutPhoto)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>📷 Ajouter photo</button>
         <button onClick={()=>setConfirmSupprPhotos(true)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#E8720C",borderColor:"#E8720C"}}>🗑 Suppr. photos</button>
         <button onClick={()=>setConfirmSupprFiche(true)} style={{...S.pDanger,fontSize:12,padding:"6px 12px"}}>🗑 Suppr. fiche</button>
@@ -1409,7 +1409,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories}){
 }
 
 // ─── DOSSIER DE (niveau 2) ───────────────────────────────────────────────
-function DossierDE({de,fiches,onOpen,onApercu,onDelete,onStatutChange,categories}){
+function DossierDE({de,fiches,onOpen,onApercu,onZip,onDelete,onStatutChange,categories}){
   const [ouvert,setOuvert]=useState(false);
   return(<div style={{marginLeft:16,marginBottom:6,borderLeft:"2px solid #D6E4F7",paddingLeft:12}}>
     <div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 12px",background:"#EEF4FF",borderRadius:8,border:"1px solid #D6E4F7"}}>
@@ -1419,13 +1419,13 @@ function DossierDE({de,fiches,onOpen,onApercu,onDelete,onStatutChange,categories
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{marginTop:6}}>
-      {fiches.map(f=><FicheItem key={f.id} f={f} onOpen={onOpen} onApercu={onApercu} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
+      {fiches.map(f=><FicheItem key={f.id} f={f} onOpen={onOpen} onApercu={onApercu} onZip={onZip} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
     </div>}
   </div>);
 }
 
 // ─── DOSSIER CLIENT (niveau 1) ───────────────────────────────────────────
-function DossierClient({client,fiches,onOpen,onApercu,onDelete,onStatutChange,categories}){
+function DossierClient({client,fiches,onOpen,onApercu,onZip,onDelete,onStatutChange,categories}){
   const [ouvert,setOuvert]=useState(false);
   // Grouper par DE
   const parDE={};
@@ -1442,13 +1442,13 @@ function DossierClient({client,fiches,onOpen,onApercu,onDelete,onStatutChange,ca
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{padding:"8px 0 8px 0"}}>
-      {deList.map(de=><DossierDE key={de} de={de} fiches={parDE[de]} onOpen={onOpen} onApercu={onApercu} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
+      {deList.map(de=><DossierDE key={de} de={de} fiches={parDE[de]} onOpen={onOpen} onApercu={onApercu} onZip={onZip} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
     </div>}
   </div>);
 }
 
 // ─── PAGE ACCUEIL ────────────────────────────────────────────────────────
-function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,categories}){
+function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onZip,onStatutChange,categories}){
   const [loading,setLoading]=useState(true);const [q,setQ]=useState("");const [fs,setFs]=useState("Tous");
   useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));},[]);
   async function onStatutChange(ficheId,newStatut){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});setFiches(prev=>prev.map(f=>f.id===ficheId?{...f,statut_chantier:newStatut}:f));}
@@ -1482,7 +1482,7 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
     </div>
     {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>Chargement…</div>}
     {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{fiches.length===0?"Aucune fiche — créez la première !":"Aucun résultat."}</div>}
-    {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onApercu={onApercu} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
+    {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onApercu={onApercu} onZip={onZip} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories}/>)}
   </div>);
 }
 
@@ -1491,7 +1491,7 @@ function PageChoix({onChoisir,onRetour}){
   return(<div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px"}}><button style={{...S.p2,marginBottom:20}} onClick={onRetour}>← Retour</button><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>Nouvelle fiche — quel matériel ?</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>{mats.map(m=><div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}><div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div><p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.id}</p><p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>{m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}</div>)}</div></div>);
 }
 
-function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu}){
+function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,ouvrirZip,onClearZip}){
   const isPompe=typeMateriel==="Pompe";
   const etapesActives=isPompe?ETAPES_POMPE:ETAPES;
   const champsActifs=isPompe?CHAMPS_POMPE:CHAMPS;
@@ -1504,6 +1504,15 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
       return()=>clearTimeout(t);
     }
   },[ouvrirApercu]);
+  useEffect(()=>{
+    if(ouvrirZip&&ficheInit?.id){
+      const t=setTimeout(()=>{
+        const cb2=(v.client||ficheInit.client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(v.de||ficheInit.de||"de")+"/"+(v.materiel_lieu||ficheInit.materiel||"fiche").replace(/[^a-z0-9]/gi,"_");telechargerZip(photos,v,cb2.replace(/\//g,"_"));
+        onClearZip&&onClearZip();
+      },1500);
+      return()=>clearTimeout(t);
+    }
+  },[ouvrirZip]);
   useEffect(()=>{
     if(!ficheInit?.id)return;
     db.get("fiche_valeurs","?fiche_id=eq."+ficheInit.id).then(rows=>{if(!Array.isArray(rows))return;const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});setV(p=>({...p,...m}));setCommentaires(m["__commentaires"]||"");});
@@ -1841,7 +1850,7 @@ function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,o
 
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
-  const [page,setPage]=useState("accueil");const [sessionTech,setSessionTech]=useState(null);const [ficheOuverte,setFicheOuverte]=useState(null);const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState("Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);
+  const [page,setPage]=useState("accueil");const [sessionTech,setSessionTech]=useState(null);const [ficheOuverte,setFicheOuverte]=useState(null);const [ouvrirApercu,setOuvrirApercu]=useState(false);const [ouvrirZip,setOuvrirZip]=useState(false);const [typeMat,setTypeMat]=useState("Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);
 
   useEffect(()=>{
     db.get("techniciens","?actif=eq.true&order=initiales").then(d=>{if(Array.isArray(d)&&d.length>0)setTechs(d.map(t=>t.initiales));}).catch(()=>{});
@@ -1915,9 +1924,9 @@ export default function App(){
     </div>}
 
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
-    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
+    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onZip={f=>{setOuvrirZip(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
-    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)}/>}
+    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} ouvrirZip={ouvrirZip} onClearZip={()=>setOuvrirZip(false)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="suivi"&&<PageSuivi/>}
     {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
