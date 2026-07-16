@@ -26,7 +26,6 @@ const PIN_CODE="3739",PIN_KEY="pmv_pin_ok";
 const TECHNICIENS_FB=["AD","CB","JM","KD","CD","RC","MC","DN","EL","Autre"];
 const CATS_FB=["Vue d'ensemble","Plaque moteur","Plaque pompe","Plaque ventilation","Plaque réducteur","Autre plaque","Stator avant","Stator arrière","Rotor","Flasque avant","Flasque arrière","Arbre avant","Arbre arrière","Divers"];
 const ROULEMENTS=["608 ZZ C3","608 RSH","6000 ZZ C3","6001 ZZ C3","6002 ZZ C3","6003 ZZ C3","6004 ZZ C3","6005 ZZ C3","6006 ZZ C3","6007 ZZ C3","6008 ZZ C3","6009 ZZ C3","6010 ZZ C3","6011 ZZ C3","6200 ZZ C3","6201 ZZ C3","6202 ZZ C3","6203 ZZ C3","6204 ZZ C3","6205 ZZ C3","6206 ZZ C3","6207 ZZ C3","6208 ZZ C3","6209 ZZ C3","6210 ZZ C3","6211 ZZ C3","6212 ZZ C3","6213 ZZ C3","6214 ZZ C3","6215 ZZ C3","6216 ZZ C3","6217 ZZ C3","6217 C3","6218 ZZ C3","6218 C3","6219 ZZ C3","6219 C3","6300 ZZ C3","6301 ZZ C3","6302 ZZ C3","6303 ZZ C3","6304 ZZ C3","6305 ZZ C3","6306 ZZ C3","6307 ZZ C3","6308 ZZ C3","6309 ZZ C3","6310 ZZ C3","6311 ZZ C3","6312 ZZ C3","6313 ZZ C3","6314 ZZ C3","6315 ZZ C3","6316 ZZ C3","6317 ZZ C3","6317 C3","6318 ZZ C3","6318 C3","6319 ZZ C3","6319 C3","NU 206 C3","NU 208 C3","NU 209 C3","NU 210 C3","NU 212 C3","NU 213 C3","NU 214 C3","NU 215 C3","NU 308 C3","NU 309 C3","NU 310 C3","NU 311 C3","NU 312 C3","NU 313 C3","NU 314 C3","NU 315 C3","NU 316 C3","NU 319 C3","NU 322 C3","Autre"];
-const SEUIL_OMEGA=300;
 const ETAPES=["Entrée","Infos électriques","Information rotation avant démontage","Information matériel au démontage","Information des essais après remontage"];
 const STATUTS_CHANTIER=[
   {id:"A_demonter",label:"À démonter",color:"#D73A49",bg:"#FFF5F5"},
@@ -62,16 +61,13 @@ const CHAMPS={
   ],
   "Infos électriques":[
     {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
-    {id:"isol_masse",label:"Isolement enroulement/masse",type:"mesure",unite:"MΩ",seuilMin:SEUIL_OMEGA,required:true},
-    {id:"isol_uv",label:"Isolement U-V",type:"mesure",unite:"MΩ",seuilMin:SEUIL_OMEGA,required:true},
-    {id:"isol_vw",label:"Isolement V-W",type:"mesure",unite:"MΩ",seuilMin:SEUIL_OMEGA,required:true},
-    {id:"isol_wu",label:"Isolement W-U",type:"mesure",unite:"MΩ",seuilMin:SEUIL_OMEGA,required:true},
+    {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true},{id:"isol_masse_dar",label:"DAR masse",type:"number",required:false},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true},{id:"isol_uv_dar",label:"DAR U-V",type:"number",required:false},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true},{id:"isol_vw_dar",label:"DAR V-W",type:"number",required:false},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true},{id:"isol_wu_dar",label:"DAR W-U",type:"number",required:false},
     {id:"adx_resultat",label:"ADX mesure isol. — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true},
-    {id:"adx_valeur",label:"ADX mesure isol. — valeur",type:"mesure",unite:"MΩ",seuilMin:SEUIL_OMEGA,required:true},
+    {id:"adx_valeur",label:"ADX mesure isol. — valeur",type:"ohm",required:true},
     {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
     {id:"plaque_bornes_taille",label:"Plaque à bornes — taille",type:"text",required:true,condition:{champ:"plaque_bornes_etat",valeur:"HS"}},
     {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
-    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",seuilMin:null,required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
+    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
     {id:"tech_elec",label:"Technicien",type:"technicien",required:true},
   ],
   "Information rotation avant démontage":[
@@ -79,20 +75,20 @@ const CHAMPS={
     {id:"essai_vide_avant_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,condition:{champ:"essai_vide_avant",valeur:"Non"}},
     {id:"rotor_cc_realise",label:"Vérif rotor court-circuit — réalisée",type:"select",options:["Oui","Non"],required:true},
     {id:"rotor_cc_resultat",label:"Vérif rotor court-circuit — résultat",type:"select",options:["OK","HS"],required:true,condition:{champ:"rotor_cc_realise",valeur:"Oui"}},
-    {id:"int_p1_avant",label:"Intensité Phase 1",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_avant"},
-    {id:"int_p2_avant",label:"Intensité Phase 2",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_avant"},
-    {id:"int_p3_avant",label:"Intensité Phase 3",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_avant"},
-    {id:"vib_av_mms_avant",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_avant"},
-    {id:"vib_av_ge_avant",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_avant"},
-    {id:"vib_ar_mms_avant",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_arriere"},
-    {id:"vib_ar_ge_avant",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_arriere"},
-    {id:"int_560_p1_avant",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_avant"},
-    {id:"int_560_p2_avant",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_avant"},
-    {id:"int_560_p3_avant",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_avant"},
+    {id:"int_p1_avant",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_avant"},
+    {id:"int_p2_avant",label:"Intensité Phase 2",type:"mesure",unite:"A",required:true,groupe:"int_avant"},
+    {id:"int_p3_avant",label:"Intensité Phase 3",type:"mesure",unite:"A",required:true,groupe:"int_avant"},
+    {id:"vib_av_mms_avant",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_avant"},
+    {id:"vib_av_ge_avant",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant"},
+    {id:"vib_ar_mms_avant",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere"},
+    {id:"vib_ar_ge_avant",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere"},
+    {id:"int_560_p1_avant",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
+    {id:"int_560_p2_avant",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
+    {id:"int_560_p3_avant",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
     {id:"nettoyage_hp",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true},
     {id:"etuvage_stator",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true},
-    {id:"isol_masse_hp",label:"Mesure isolement masse (suite HP)",type:"mesure",unite:"MΩ",seuilMin:SEUIL_OMEGA,required:true,condition:{champ:"etuvage_stator",valeur:"Oui"}},
-    {id:"isol_enroul_min",label:"Isolement enroulements — plus petite valeur",type:"mesure",unite:"MΩ",seuilMin:SEUIL_OMEGA,required:true},
+    {id:"isol_masse_hp",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator",valeur:"Oui"}},
+    {id:"isol_enroul_min",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true},
     {id:"tech_mesure_avant",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Information matériel au démontage":[
@@ -110,41 +106,35 @@ const CHAMPS={
     {id:"etat_arbre_av",label:"État visuel arbre avant",type:"select",options:["OK","Marqué"],required:true},
     {id:"mesure_flasque_av",label:"Mesure flasque avant",type:"number",unite:"mm",required:true},
     {id:"mesure_arbre_av",label:"Mesure arbre avant",type:"number",unite:"mm",required:true},
-    {id:"joint_av_int",label:"Joint avant — Ø int.",type:"number",unite:"mm",required:true,groupe:"joint_av"},
-    {id:"joint_av_ext",label:"Joint avant — Ø ext.",type:"number",unite:"mm",required:true,groupe:"joint_av"},
-    {id:"joint_av_ep",label:"Joint avant — ép.",type:"number",unite:"mm",required:true,groupe:"joint_av"},
-    {id:"joint_av_levres",label:"Joint avant — lèvres",type:"select",options:["Simple","Double"],required:true,groupe:"joint_av"},
+    {id:"joint_av",label:"Joints avant",type:"joints",required:false,groupe:"joint_av"},
     {id:"type_roulement_ar",label:"Type roulement arrière",type:"roulement",required:true},
     {id:"etat_roulement_ar",label:"État roulement arrière",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
     {id:"etat_flasque_ar",label:"État visuel flasque arrière",type:"select",options:["OK","Marqué"],required:true},
     {id:"etat_arbre_ar",label:"État visuel arbre arrière",type:"select",options:["OK","Marqué"],required:true},
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true},
-    {id:"joint_ar_int",label:"Joint arrière — Ø int.",type:"number",unite:"mm",required:true,groupe:"joint_ar"},
-    {id:"joint_ar_ext",label:"Joint arrière — Ø ext.",type:"number",unite:"mm",required:true,groupe:"joint_ar"},
-    {id:"joint_ar_ep",label:"Joint arrière — ép.",type:"number",unite:"mm",required:true,groupe:"joint_ar"},
-    {id:"joint_ar_levres",label:"Joint arrière — lèvres",type:"select",options:["Simple","Double"],required:true,groupe:"joint_ar"},
+    {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar"},
     {id:"peinture",label:"Peinture à faire",type:"oui_non",required:true},
     {id:"etat_bobinage",label:"État visuel bobinage",type:"select",options:["RAS","Cuit","Sale","Vieux","HS"],required:true},
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS"],required:false},
-    {id:"tech_demontage",label:"Qui a démonté",type:"technicien",required:true},
+    {id:"skf_av_dem",label:"Screen SKF avant démontage",type:"photo_skf",categorie:"Screen SKF avant au démontage",required:false},{id:"skf_ar_dem",label:"Screen SKF arrière démontage",type:"photo_skf",categorie:"Screen SKF arrière au démontage",required:false},{id:"tech_demontage",label:"Qui a démonté",type:"technicien",required:true},
   ],
   "Information des essais après remontage":[
     {id:"tech_remontage",label:"Qui a remonté",type:"technicien",required:true},
     {id:"essai_vide_apres",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
     {id:"essai_vide_apres_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,condition:{champ:"essai_vide_apres",valeur:"Non"}},
-    {id:"int_p1_apres",label:"Intensité Phase 1",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_apres"},
-    {id:"int_p2_apres",label:"Intensité Phase 2",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_apres"},
-    {id:"int_p3_apres",label:"Intensité Phase 3",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_apres"},
-    {id:"int_560_p1_apres",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_apres"},
-    {id:"int_560_p2_apres",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_apres"},
-    {id:"int_560_p3_apres",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_apres"},
-    {id:"vib_av_mms_apres",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_av_apres"},
-    {id:"vib_av_ge_apres",label:"Vibration avant — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_av_apres"},
-    {id:"vib_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_ar_apres"},
-    {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_ar_apres"},
+    {id:"int_p1_apres",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_apres"},
+    {id:"int_p2_apres",label:"Intensité Phase 2",type:"mesure",unite:"A",required:true,groupe:"int_apres"},
+    {id:"int_p3_apres",label:"Intensité Phase 3",type:"mesure",unite:"A",required:true,groupe:"int_apres"},
+    {id:"int_560_p1_apres",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_apres"},
+    {id:"int_560_p2_apres",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_apres"},
+    {id:"int_560_p3_apres",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_apres"},
+    {id:"vib_av_mms_apres",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_av_apres"},
+    {id:"vib_av_ge_apres",label:"Vibration avant — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_av_apres"},
+    {id:"vib_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_ar_apres"},
+    {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_ar_apres"},
     {id:"resserage_plaque",label:"Resserrage plaque à bornes",type:"text",required:false},
-    {id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
+    {id:"skf_av_rem",label:"Screen SKF avant remontage",type:"photo_skf",categorie:"Screen SKF avant au remontage",required:false},{id:"skf_ar_rem",label:"Screen SKF arrière remontage",type:"photo_skf",categorie:"Screen SKF arrière au remontage",required:false},{id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
   ],
 }
 
@@ -182,18 +172,15 @@ const CHAMPS_POMPE={
   "Infos électriques":[
     {id:"sur_variateur",label:"Sur variateur",type:"oui_non",required:true},
     {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
-    {id:"isol_masse",label:"Isolement enroulement/masse",type:"mesure",unite:"MΩ",seuilMin:300,required:true},
-    {id:"isol_uv",label:"Isolement U-V",type:"mesure",unite:"MΩ",seuilMin:300,required:true},
-    {id:"isol_vw",label:"Isolement V-W",type:"mesure",unite:"MΩ",seuilMin:300,required:true},
-    {id:"isol_wu",label:"Isolement W-U",type:"mesure",unite:"MΩ",seuilMin:300,required:true},
+    {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true},{id:"isol_masse_dar",label:"DAR masse",type:"number",required:false},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true},{id:"isol_uv_dar",label:"DAR U-V",type:"number",required:false},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true},{id:"isol_vw_dar",label:"DAR V-W",type:"number",required:false},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true},{id:"isol_wu_dar",label:"DAR W-U",type:"number",required:false},
     {id:"adx_resultat_var",label:"ADX mesure isol. avec variateur 2800V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
-    {id:"adx_valeur_var",label:"ADX mesure isol. avec variateur 2800V — valeur",type:"mesure",unite:"MΩ",seuilMin:300,required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
+    {id:"adx_valeur_var",label:"ADX mesure isol. avec variateur 2800V — valeur",type:"ohm",required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
     {id:"adx_resultat_novar",label:"ADX mesure isol. sans variateur 2000V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Non"}},
-    {id:"adx_valeur_novar",label:"ADX mesure isol. sans variateur 2000V — valeur",type:"mesure",unite:"MΩ",seuilMin:300,required:true,condition:{champ:"sur_variateur",valeur:"Non"}},
+    {id:"adx_valeur_novar",label:"ADX mesure isol. sans variateur 2000V — valeur",type:"ohm",required:true,condition:{champ:"sur_variateur",valeur:"Non"}},
     {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
     {id:"plaque_bornes_taille",label:"Plaque à bornes — taille",type:"text",required:true,condition:{champ:"plaque_bornes_etat",valeur:"HS"}},
     {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
-    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",seuilMin:null,required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
+    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
     {id:"tech_elec",label:"Technicien",type:"technicien",required:true},
   ],
   "Rotation avant démontage moteur":[
@@ -201,48 +188,48 @@ const CHAMPS_POMPE={
     {id:"essai_vide_avant_m_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,condition:{champ:"essai_vide_avant_m",valeur:"Non"}},
     {id:"rotor_cc_realise_m",label:"Vérif rotor court-circuit — réalisée",type:"select",options:["Oui","Non"],required:true},
     {id:"rotor_cc_resultat_m",label:"Vérif rotor court-circuit — résultat",type:"select",options:["OK","HS"],required:true,condition:{champ:"rotor_cc_realise_m",valeur:"Oui"}},
-    {id:"int_p1_avant_m",label:"Intensité Phase 1",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_avant_m"},
-    {id:"int_p2_avant_m",label:"Intensité Phase 2",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_avant_m"},
-    {id:"int_p3_avant_m",label:"Intensité Phase 3",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_avant_m"},
-    {id:"vib_av_mms_avant_m",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_avant_m"},
-    {id:"vib_av_ge_avant_m",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_avant_m"},
-    {id:"vib_ar_mms_avant_m",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_arriere_m"},
-    {id:"vib_ar_ge_avant_m",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_arriere_m"},
-    {id:"int_560_p1_avant_m",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_avant_m"},
-    {id:"int_560_p2_avant_m",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_avant_m"},
-    {id:"int_560_p3_avant_m",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_avant_m"},
+    {id:"int_p1_avant_m",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_avant_m"},
+    {id:"int_p2_avant_m",label:"Intensité Phase 2",type:"mesure",unite:"A",required:true,groupe:"int_avant_m"},
+    {id:"int_p3_avant_m",label:"Intensité Phase 3",type:"mesure",unite:"A",required:true,groupe:"int_avant_m"},
+    {id:"vib_av_mms_avant_m",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_avant_m"},
+    {id:"vib_av_ge_avant_m",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant_m"},
+    {id:"vib_ar_mms_avant_m",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere_m"},
+    {id:"vib_ar_ge_avant_m",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere_m"},
+    {id:"int_560_p1_avant_m",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
+    {id:"int_560_p2_avant_m",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
+    {id:"int_560_p3_avant_m",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
     {id:"nettoyage_hp_m",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true},
     {id:"etuvage_stator_m",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true},
-    {id:"isol_masse_hp_m",label:"Mesure isolement masse (suite HP)",type:"mesure",unite:"MΩ",seuilMin:300,required:true,condition:{champ:"etuvage_stator_m",valeur:"Oui"}},
-    {id:"isol_enroul_min_m",label:"Isolement enroulements — plus petite valeur",type:"mesure",unite:"MΩ",seuilMin:300,required:true},
+    {id:"isol_masse_hp_m",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator_m",valeur:"Oui"}},
+    {id:"isol_enroul_min_m",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true},
     {id:"tech_mesure_avant_m",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Rotation avant démontage pompe":[
     {id:"essai_vide_avant_p",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
     {id:"essai_vide_avant_p_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,condition:{champ:"essai_vide_avant_p",valeur:"Non"}},
-    {id:"int_p1_avant_p",label:"Intensité Phase 1",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_avant_p"},
-    {id:"int_p2_avant_p",label:"Intensité Phase 2",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int_avant_p"},
-    {id:"int_p3_avant_p",label:"Intensité Phase 3",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int_avant_p"},
-    {id:"vib_av_mms_avant_p",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_avant_p"},
-    {id:"vib_av_ge_avant_p",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_avant_p"},
-    {id:"vib_ar_mms_avant_p",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_arriere_p"},
-    {id:"vib_ar_ge_avant_p",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_arriere_p"},
-    {id:"int_560_p1_avant_p",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_avant_p"},
-    {id:"int_560_p2_avant_p",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_avant_p"},
-    {id:"int_560_p3_avant_p",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_avant_p"},
+    {id:"int_p1_avant_p",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_avant_p"},
+    {id:"int_p2_avant_p",label:"Intensité Phase 2",type:"mesure",unite:"A",required:false,groupe:"int_avant_p"},
+    {id:"int_p3_avant_p",label:"Intensité Phase 3",type:"mesure",unite:"A",required:false,groupe:"int_avant_p"},
+    {id:"vib_av_mms_avant_p",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_avant_p"},
+    {id:"vib_av_ge_avant_p",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant_p"},
+    {id:"vib_ar_mms_avant_p",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere_p"},
+    {id:"vib_ar_ge_avant_p",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere_p"},
+    {id:"int_560_p1_avant_p",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_p"},
+    {id:"int_560_p2_avant_p",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_p"},
+    {id:"int_560_p3_avant_p",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_p"},
     {id:"pression_essai_avant",label:"Essai en eau / air",type:"select",options:["Eau","Air"],required:true},
-    {id:"pression_nom_max",label:"Pression nominale maximum",type:"mesure",unite:"bar",seuilMin:null,required:true},
-    {id:"pression_courbe_0",label:"Pression max courbe à débit nul (0 m³/h)",type:"mesure",unite:"bar",seuilMin:null,required:true},
-    {id:"pression_ville",label:"Pression de ville",type:"mesure",unite:"bar",seuilMin:null,required:true,groupe:"delta_p"},
-    {id:"pression_pompe",label:"Pression de pompe",type:"mesure",unite:"bar",seuilMin:null,required:true,groupe:"delta_p"},
+    {id:"pression_nom_max",label:"Pression nominale maximum",type:"mesure",unite:"bar",required:true},
+    {id:"pression_courbe_0",label:"Pression max courbe à débit nul (0 m³/h)",type:"mesure",unite:"bar",required:true},
+    {id:"pression_ville",label:"Pression de ville",type:"mesure",unite:"bar",required:true,groupe:"delta_p"},
+    {id:"pression_pompe",label:"Pression de pompe",type:"mesure",unite:"bar",required:true,groupe:"delta_p"},
     {id:"delta_p_result",label:"Delta P (calculé auto)",type:"calcul",required:false,calcul:"pression_pompe-pression_ville",unite:"bar"},
     {id:"delta_p_etat",label:"Delta P — état",type:"select",options:["OK","HS"],required:true},
-    {id:"diametre_nez_roue",label:"Diamètre nez de roue",type:"mesure",unite:"mm",seuilMin:null,required:true,groupe:"dim_roue"},
-    {id:"diametre_volute",label:"Diamètre volute intérieur",type:"mesure",unite:"mm",seuilMin:null,required:true,groupe:"dim_roue"},
-    {id:"vib_p_av_mms",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_p_avant"},
-    {id:"vib_p_av_ge",label:"Vibration avant — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_p_avant"},
-    {id:"vib_p_ar_mms",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_p_arriere"},
-    {id:"vib_p_ar_ge",label:"Vibration arrière — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_p_arriere"},
+    {id:"diametre_nez_roue",label:"Diamètre nez de roue",type:"mesure",unite:"mm",required:true,groupe:"dim_roue"},
+    {id:"diametre_volute",label:"Diamètre volute intérieur",type:"mesure",unite:"mm",required:true,groupe:"dim_roue"},
+    {id:"vib_p_av_mms",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_p_avant"},
+    {id:"vib_p_av_ge",label:"Vibration avant — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_p_avant"},
+    {id:"vib_p_ar_mms",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_p_arriere"},
+    {id:"vib_p_ar_ge",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_p_arriere"},
     {id:"tech_mesure_avant_p",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Matériel au démontage moteur":[
@@ -260,20 +247,14 @@ const CHAMPS_POMPE={
     {id:"etat_arbre_av",label:"État visuel arbre avant",type:"select",options:["OK","Marqué"],required:true},
     {id:"mesure_flasque_av",label:"Mesure flasque avant",type:"number",unite:"mm",required:true},
     {id:"mesure_arbre_av",label:"Mesure arbre avant",type:"number",unite:"mm",required:true},
-    {id:"joint_av_int",label:"Joint avant — Ø int.",type:"number",unite:"mm",required:true,groupe:"joint_av"},
-    {id:"joint_av_ext",label:"Joint avant — Ø ext.",type:"number",unite:"mm",required:true,groupe:"joint_av"},
-    {id:"joint_av_ep",label:"Joint avant — ép.",type:"number",unite:"mm",required:true,groupe:"joint_av"},
-    {id:"joint_av_levres",label:"Joint avant — lèvres",type:"select",options:["Simple","Double"],required:true,groupe:"joint_av"},
+    {id:"joint_av",label:"Joints avant",type:"joints",required:false,groupe:"joint_av"},
     {id:"type_roulement_ar",label:"Type roulement arrière",type:"roulement",required:true},
     {id:"etat_roulement_ar",label:"État roulement arrière",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
     {id:"etat_flasque_ar",label:"État visuel flasque arrière",type:"select",options:["OK","Marqué"],required:true},
     {id:"etat_arbre_ar",label:"État visuel arbre arrière",type:"select",options:["OK","Marqué"],required:true},
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true},
-    {id:"joint_ar_int",label:"Joint arrière — Ø int.",type:"number",unite:"mm",required:true,groupe:"joint_ar"},
-    {id:"joint_ar_ext",label:"Joint arrière — Ø ext.",type:"number",unite:"mm",required:true,groupe:"joint_ar"},
-    {id:"joint_ar_ep",label:"Joint arrière — ép.",type:"number",unite:"mm",required:true,groupe:"joint_ar"},
-    {id:"joint_ar_levres",label:"Joint arrière — lèvres",type:"select",options:["Simple","Double"],required:true,groupe:"joint_ar"},
+    {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar"},
     {id:"peinture",label:"Peinture à faire",type:"oui_non",required:true},
     {id:"etat_bobinage",label:"État visuel bobinage",type:"select",options:["RAS","Cuit","Sale","Vieux","HS"],required:true},
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS"],required:false},
@@ -286,54 +267,48 @@ const CHAMPS_POMPE={
     {id:"type_gm_fixe",label:"Type GM fixe",type:"garniture_fixe",required:true},
     {id:"diametre_gm_fixe",label:"Diamètre arbre GM fixe",type:"number",unite:"mm",required:true},
     {id:"etat_gm_fixe",label:"État GM fixe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
-    {id:"diametre_portee_fixe",label:"Diamètre de la portée GM fixe",type:"mesure",unite:"mm",seuilMin:null,required:true},
+    {id:"diametre_portee_fixe",label:"Diamètre de la portée GM fixe",type:"mesure",unite:"mm",required:true},
     {id:"type_gm_mobile",label:"Type GM mobile",type:"garniture_mobile",required:true},
     {id:"diametre_gm_mobile",label:"Diamètre arbre GM mobile",type:"number",unite:"mm",required:true},
     {id:"etat_gm_mobile",label:"État GM mobile",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
-    {id:"diametre_portee_mobile",label:"Diamètre de la portée GM mobile",type:"mesure",unite:"mm",seuilMin:null,required:true},
+    {id:"diametre_portee_mobile",label:"Diamètre de la portée GM mobile",type:"mesure",unite:"mm",required:true},
     {id:"type_roulement_av_p",label:"Type roulement avant pompe",type:"roulement",required:true},
     {id:"etat_roulement_av_p",label:"État roulement avant pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
-    {id:"joint_av_int_p",label:"Joint avant pompe — Ø int.",type:"number",unite:"mm",required:true,groupe:"joint_av_p"},
-    {id:"joint_av_ext_p",label:"Joint avant pompe — Ø ext.",type:"number",unite:"mm",required:true,groupe:"joint_av_p"},
-    {id:"joint_av_ep_p",label:"Joint avant pompe — ép.",type:"number",unite:"mm",required:true,groupe:"joint_av_p"},
-    {id:"joint_av_levres_p",label:"Joint avant pompe — lèvres",type:"select",options:["Simple","Double"],required:true,groupe:"joint_av_p"},
+    {id:"joint_av_p",label:"Joints avant pompe",type:"joints",required:false,groupe:"joint_av_p"},
     {id:"type_roulement_ar_p",label:"Type roulement arrière pompe",type:"roulement",required:true},
     {id:"etat_roulement_ar_p",label:"État roulement arrière pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
-    {id:"joint_ar_int_p",label:"Joint arrière pompe — Ø int.",type:"number",unite:"mm",required:true,groupe:"joint_ar_p"},
-    {id:"joint_ar_ext_p",label:"Joint arrière pompe — Ø ext.",type:"number",unite:"mm",required:true,groupe:"joint_ar_p"},
-    {id:"joint_ar_ep_p",label:"Joint arrière pompe — ép.",type:"number",unite:"mm",required:true,groupe:"joint_ar_p"},
-    {id:"joint_ar_levres_p",label:"Joint arrière pompe — lèvres",type:"select",options:["Simple","Double"],required:true,groupe:"joint_ar_p"},
+    {id:"joint_ar_p",label:"Joints arrière pompe",type:"joints",required:false,groupe:"joint_ar_p"},
     {id:"tech_demontage_p",label:"Qui a démonté la pompe",type:"technicien",required:true},
   ],
   "Essais après remontage":[
     {id:"tech_remontage",label:"Qui a remonté",type:"technicien",required:true},
     {id:"essai_vide_apres",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
     {id:"essai_vide_apres_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,condition:{champ:"essai_vide_apres",valeur:"Non"}},
-    {id:"int_p1_apres",label:"Intensité Phase 1",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_apres"},
-    {id:"int_p2_apres",label:"Intensité Phase 2",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_apres"},
-    {id:"int_p3_apres",label:"Intensité Phase 3",type:"mesure",unite:"A",seuilMin:null,required:true,groupe:"int_apres"},
-    {id:"int_560_p1_apres",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_apres"},
-    {id:"int_560_p2_apres",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_apres"},
-    {id:"int_560_p3_apres",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",seuilMin:null,required:false,groupe:"int560_apres"},
-    {id:"vib_av_mms_apres",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_av_apres"},
-    {id:"vib_av_ge_apres",label:"Vibration avant — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_av_apres"},
-    {id:"vib_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_ar_apres"},
-    {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_ar_apres"},
+    {id:"int_p1_apres",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_apres"},
+    {id:"int_p2_apres",label:"Intensité Phase 2",type:"mesure",unite:"A",required:true,groupe:"int_apres"},
+    {id:"int_p3_apres",label:"Intensité Phase 3",type:"mesure",unite:"A",required:true,groupe:"int_apres"},
+    {id:"int_560_p1_apres",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_apres"},
+    {id:"int_560_p2_apres",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_apres"},
+    {id:"int_560_p3_apres",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_apres"},
+    {id:"vib_av_mms_apres",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_av_apres"},
+    {id:"vib_av_ge_apres",label:"Vibration avant — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_av_apres"},
+    {id:"vib_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_ar_apres"},
+    {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_ar_apres"},
     {id:"resserage_plaque",label:"Resserrage plaque à bornes",type:"text",required:false},
-    {id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
+    {id:"skf_av_rem",label:"Screen SKF avant remontage",type:"photo_skf",categorie:"Screen SKF avant au remontage",required:false},{id:"skf_ar_rem",label:"Screen SKF arrière remontage",type:"photo_skf",categorie:"Screen SKF arrière au remontage",required:false},{id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
     {id:"pression_essai_apres",label:"Essai en eau / air",type:"select",options:["Eau","Air"],required:true},
-    {id:"pression_nom_max_apres",label:"Pression nominale maximum",type:"mesure",unite:"bar",seuilMin:null,required:true},
-    {id:"pression_courbe_0_apres",label:"Pression max courbe à débit nul (0 m³/h)",type:"mesure",unite:"bar",seuilMin:null,required:true},
-    {id:"pression_ville_apres",label:"Pression de ville",type:"mesure",unite:"bar",seuilMin:null,required:true,groupe:"delta_p_apres"},
-    {id:"pression_pompe_apres",label:"Pression de pompe",type:"mesure",unite:"bar",seuilMin:null,required:true,groupe:"delta_p_apres"},
+    {id:"pression_nom_max_apres",label:"Pression nominale maximum",type:"mesure",unite:"bar",required:true},
+    {id:"pression_courbe_0_apres",label:"Pression max courbe à débit nul (0 m³/h)",type:"mesure",unite:"bar",required:true},
+    {id:"pression_ville_apres",label:"Pression de ville",type:"mesure",unite:"bar",required:true,groupe:"delta_p_apres"},
+    {id:"pression_pompe_apres",label:"Pression de pompe",type:"mesure",unite:"bar",required:true,groupe:"delta_p_apres"},
     {id:"delta_p_result_apres",label:"Delta P (calculé auto)",type:"calcul",required:false,calcul:"pression_pompe_apres-pression_ville_apres",unite:"bar"},
     {id:"delta_p_etat_apres",label:"Delta P — état",type:"select",options:["OK","HS"],required:true},
-    {id:"diametre_nez_roue_apres",label:"Diamètre nez de roue",type:"mesure",unite:"mm",seuilMin:null,required:true,groupe:"dim_roue_apres"},
-    {id:"diametre_volute_apres",label:"Diamètre volute intérieur",type:"mesure",unite:"mm",seuilMin:null,required:true,groupe:"dim_roue_apres"},
-    {id:"vib_p_av_mms_apres",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_p_avant_apres"},
-    {id:"vib_p_av_ge_apres",label:"Vibration avant — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_p_avant_apres"},
-    {id:"vib_p_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",seuilMin:null,required:true,groupe:"vib_p_arriere_apres"},
-    {id:"vib_p_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",seuilMin:null,required:true,groupe:"vib_p_arriere_apres"},
+    {id:"diametre_nez_roue_apres",label:"Diamètre nez de roue",type:"mesure",unite:"mm",required:true,groupe:"dim_roue_apres"},
+    {id:"diametre_volute_apres",label:"Diamètre volute intérieur",type:"mesure",unite:"mm",required:true,groupe:"dim_roue_apres"},
+    {id:"vib_p_av_mms_apres",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_p_avant_apres"},
+    {id:"vib_p_av_ge_apres",label:"Vibration avant — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_p_avant_apres"},
+    {id:"vib_p_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_p_arriere_apres"},
+    {id:"vib_p_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_p_arriere_apres"},
   ],
 };;
 
@@ -437,14 +412,113 @@ function ChampClient({valeur,onChange,clients,onAddClient}){
 }
 
 function ChampTechnicien({valeur,onChange,techs}){
-  const knownTechs=techs.filter(t=>t!=="Autre");const isAutre=valeur&&!knownTechs.includes(valeur);const [autreVal,setAutreVal]=useState(isAutre?valeur:"");
-  return(<div><select value={isAutre?"Autre":(valeur||"")} onChange={e=>{if(e.target.value==="Autre")onChange("");else onChange(e.target.value);}} style={S.sel}><option value="">— Sélectionner</option>{techs.map(t=><option key={t}>{t}</option>)}</select>{isAutre&&<input type="text" value={autreVal} onChange={e=>{setAutreVal(e.target.value);onChange(e.target.value);}} placeholder="Initiales..." style={{...S.inp,width:120,marginTop:6}}/>}</div>);
+  var isA=valeur&&!techs.filter(function(t){return t!=="Autre";}).includes(valeur);
+  return(<div style={{display:"flex",flexDirection:"column",gap:6}}>
+    <select value={isA?"Autre":(valeur||"")} onChange={function(e){if(e.target.value==="Autre")onChange("Autre:");else onChange(e.target.value);}} style={S.sel}>
+      <option value="">{"Selectionner"}</option>
+      {techs.map(function(t){return <option key={t} value={t}>{t}</option>;})}
+    </select>
+    {(isA||valeur?.startsWith("Autre:"))&&<input type="text" placeholder="Prenom Nom..." value={valeur?.replace("Autre:","")||""} onChange={function(e){onChange("Autre:"+e.target.value);}} style={S.inp}/>}
+  </div>);
 }
 
 function ChampRoulement({valeur,onChange}){
   const isAutre=valeur&&!ROULEMENTS.slice(0,-1).includes(valeur);
   return(<div style={{display:"flex",flexDirection:"column",gap:6}}><select value={isAutre?"Autre":(valeur||"")} onChange={e=>{if(e.target.value==="Autre")onChange("Autre:");else onChange(e.target.value);}} style={S.sel}><option value="">— Sélectionner</option>{ROULEMENTS.map(r=><option key={r}>{r}</option>)}</select>{(isAutre||valeur?.startsWith("Autre:"))&&<input type="text" placeholder="Référence précise..." value={valeur?.replace("Autre:","")||""} onChange={e=>onChange("Autre:"+e.target.value)} style={S.inp}/>}</div>);
 }
+
+
+function ChampOhm({champId,valeur,onChange}){
+  var parts=(valeur||"").split("_");
+  var val=parts[0]||"";
+  var unite=parts[1]||"GΩ";
+  function upd(v,u){onChange(champId,(v||"")+"_"+(u||"GΩ"));}
+  return(<div style={{display:"flex",gap:6,alignItems:"center"}}>
+    <input type="number" value={val} onChange={function(e){upd(e.target.value,unite);}} style={{...S.inp,flex:1}} placeholder="Valeur"/>
+    <select value={unite} onChange={function(e){upd(val,e.target.value);}} style={{...S.sel,width:72}}>
+      <option value="kΩ">kΩ</option>
+      <option value="MΩ">MΩ</option>
+      <option value="GΩ">GΩ</option>
+      <option value="TΩ">TΩ</option>
+    </select>
+  </div>);
+}
+
+function ChampJoints({champId,valeur,onChange}){
+  function parse(v){try{return JSON.parse(v||"[]");}catch(e){return[];}}
+  function save(arr){onChange(champId,JSON.stringify(arr));}
+  var joints=parse(valeur);
+  function addJ(){save(joints.concat([{type:"",int:"",ext:"",ep:""}]));}
+  function delJ(n){save(joints.filter(function(_,j){return j!==n;}));}
+  function updJ(n,f,v){save(joints.map(function(x,j){return j===n?Object.assign({},x,JSON.parse("{\""+f+"\":\""+v+"\"}")):x;}));}
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {joints.map(function(j,n){return(
+        <div key={n} style={{border:"1px solid #E2E6EA",borderRadius:8,padding:"8px 10px",background:"#F8F9FA"}}>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:j.type?6:0}}>
+            <select value={j.type||""} onChange={function(e){updJ(n,"type",e.target.value);}} style={{...S.sel,flex:1}}>
+              <option value="">{"Type joint"}</option>
+              <option value="VA">VA</option>
+              <option value="VS">VS</option>
+              <option value="Simple">{"Simple levre"}</option>
+              <option value="Double">{"Double levre"}</option>
+            </select>
+            <button onClick={function(){delJ(n);}} style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,color:"#D73A49",padding:"4px 8px",cursor:"pointer",fontSize:12}}>{"X"}</button>
+          </div>
+          {(j.type==="VA"||j.type==="VS")&&(
+            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+              <input type="number" placeholder="diam int" value={j.int||""} onChange={function(e){updJ(n,"int",e.target.value);}} style={{...S.inp,width:80}}/>
+              <span style={{fontSize:12,color:"#1B4F8A",fontWeight:600}}>{j.type}{j.int||"?"}</span>
+            </div>
+          )}
+          {(j.type==="Simple"||j.type==="Double")&&(
+            <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              <input type="number" placeholder="int" value={j.int||""} onChange={function(e){updJ(n,"int",e.target.value);}} style={{...S.inp,width:65}}/>
+              <span>{"x"}</span>
+              <input type="number" placeholder="ext" value={j.ext||""} onChange={function(e){updJ(n,"ext",e.target.value);}} style={{...S.inp,width:65}}/>
+              <span>{"x"}</span>
+              <input type="number" placeholder="ep" value={j.ep||""} onChange={function(e){updJ(n,"ep",e.target.value);}} style={{...S.inp,width:55}}/>
+              <span style={{fontSize:11,color:"#9CA3AF"}}>{j.type==="Double"?"DL":"SL"}</span>
+            </div>
+          )}
+        </div>
+      );})}
+      <button onClick={addJ} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>{"+ Ajouter joint"}</button>
+    </div>
+  );
+}
+
+function BoutonPhotoSkf({categorie,ficheId,cheminBase,photos,onPhotoAdded}){
+  var fr=React.useRef();
+  var uplState=React.useState(false);
+  var upl=uplState[0]; var setUpl=uplState[1];
+  var photo=photos.find(function(p){return p.categorie_nom===categorie;});
+  function upload(e){
+    var file=e.target.files[0]; if(!file)return;
+    setUpl(true);
+    var ext=file.name.split(".").pop();
+    var slug=categorie.toLowerCase().replace(/[^a-z0-9]/g,"_");
+    var path=(cheminBase||"photos")+"/"+slug+"."+ext;
+    db.uploadPhoto(path,file).then(function(){
+      return db.post("fiche_photos",{fiche_id:ficheId,storage_path:path,nom_fichier:file.name,categorie_nom:categorie,etape:""});
+    }).then(function(rec){
+      if(rec&&rec[0])onPhotoAdded(Object.assign({},rec[0],{url:db.photoUrl(path)}));
+      setUpl(false);
+    }).catch(function(err){alert("Erreur: "+err.message);setUpl(false);});
+  }
+  return(<div style={{display:"flex",gap:8,alignItems:"center",marginTop:4}}>
+    <input ref={fr} type="file" accept="image/*" capture="environment" onChange={upload} style={{display:"none"}}/>
+    {photo
+      ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <img src={photo.url} alt={categorie} style={{width:60,height:45,objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA",cursor:"pointer"}} onClick={function(){window.open(photo.url,"_blank");}}/>
+          <span style={{fontSize:11,color:"#22863A"}}>{"OK"}</span>
+          <button onClick={function(){fr.current.click();}} style={{...S.p2,fontSize:11,padding:"3px 8px"}}>{upl?"...":"Remplacer"}</button>
+        </div>
+      :<button onClick={function(){fr.current.click();}} disabled={!ficheId||upl} style={{...S.p2,fontSize:12,padding:"6px 12px",opacity:ficheId?1:0.5}}>{upl?"...":"Photo: "+categorie}</button>
+    }
+  </div>);
+}
+
 
 function ChampGarnitureMobile({valeur,onChange}){
   const isAutre=valeur&&!GM_MOBILE_OPTIONS.slice(0,-1).includes(valeur);
@@ -485,7 +559,7 @@ function SectionPhotos({etape,ficheId,cheminBase,categories,photos,onPhotoAdded}
   </div>);
 }
 
-function UnChamp({c,v,onChange,techs,clients,onAddClient}){
+function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,photos,onPhotoAdded}){
   if(!champVisible(c,v))return null;
   const val=v[c.id]||"";const manque=c.required&&!val;const err=enErreur(c,val);
   const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>{c.label}{c.required&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}{c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:10}}> — {c.note}</span>}</label>;
@@ -493,6 +567,9 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient}){
   if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={nv=>onChange(c.id,nv)} clients={clients} onAddClient={onAddClient}/>;
   else if(c.type==="technicien")ctrl=<ChampTechnicien valeur={val} onChange={nv=>onChange(c.id,nv)} techs={techs}/>;
   else if(c.type==="roulement")ctrl=<ChampRoulement valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
+  else if(c.type==="ohm")ctrl=<ChampOhm champId={c.id} valeur={val} onChange={onChange}/>;
+  else if(c.type==="joints")ctrl=<ChampJoints champId={c.id} valeur={val} onChange={onChange}/>;
+  else if(c.type==="photo_skf")ctrl=<BoutonPhotoSkf categorie={c.categorie} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded}/>;
   else if(c.type==="garniture_mobile")ctrl=<ChampGarnitureMobile valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
   else if(c.type==="garniture_fixe")ctrl=<ChampGarnitureFixe valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
   else if(c.type==="calcul"){
