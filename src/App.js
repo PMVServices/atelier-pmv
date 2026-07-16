@@ -81,7 +81,7 @@ const CHAMPS={
     {id:"vib_av_mms_avant",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_avant"},
     {id:"vib_av_ge_avant",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant"},
     {id:"vib_ar_mms_avant",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere"},
-    {id:"vib_ar_ge_avant",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere"},
+    {id:"vib_ar_ge_avant",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere"},{id:"note_skf",label:"Pensez a ajouter les screens SKF",type:"info",required:false},
     {id:"int_560_p1_avant",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
     {id:"int_560_p2_avant",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
     {id:"int_560_p3_avant",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
@@ -132,7 +132,7 @@ const CHAMPS={
     {id:"vib_av_mms_apres",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_av_apres"},
     {id:"vib_av_ge_apres",label:"Vibration avant — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_av_apres"},
     {id:"vib_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_ar_apres"},
-    {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_ar_apres"},
+    {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_ar_apres"},{id:"note_skf",label:"Pensez a ajouter les screens SKF",type:"info",required:false},
     {id:"resserage_plaque",label:"Resserrage plaque à bornes",type:"text",required:false},
     {id:"skf_av_rem",label:"Screen SKF avant remontage",type:"photo_skf",categorie:"Screen SKF avant au remontage",required:false},{id:"skf_ar_rem",label:"Screen SKF arrière remontage",type:"photo_skf",categorie:"Screen SKF arrière au remontage",required:false},{id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
   ],
@@ -542,7 +542,7 @@ function ChampGarnitureFixe({valeur,onChange}){
   </div>);
 }
 
-function SectionPhotos({etape,ficheId,cheminBase,categories,photos,onPhotoAdded}){
+function SectionPhotos({etape,ficheId,cheminBase,categories,photos,onPhotoAdded,tablePhotos="fiche_photos",fk="fiche_id"}){
   const [uploading,setUploading]=useState(false);const [cat,setCat]=useState("");const [apercu,setApercu]=useState(null);const [errMsg,setErrMsg]=useState("");const inputRef=useRef(null);
   const photosEtape=photos.filter(p=>p.etape===etape);
   async function handleFile(e){
@@ -568,6 +568,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   else if(c.type==="technicien")ctrl=<ChampTechnicien valeur={val} onChange={nv=>onChange(c.id,nv)} techs={techs}/>;
   else if(c.type==="roulement")ctrl=<ChampRoulement valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
   else if(c.type==="ohm")ctrl=<ChampOhm champId={c.id} valeur={val} onChange={onChange}/>;
+  else if(c.type==="info")ctrl=<div style={{fontSize:11,color:"#E8720C",fontStyle:"italic",padding:"4px 0"}}>{c.label}</div>;
   else if(c.type==="joints")ctrl=<ChampJoints champId={c.id} valeur={val} onChange={onChange}/>;
   else if(c.type==="photo_skf")ctrl=<BoutonPhotoSkf categorie={c.categorie} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded}/>;
   else if(c.type==="garniture_mobile")ctrl=<ChampGarnitureMobile valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
@@ -1326,7 +1327,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories}){
     // Télécharger même sans photos — on passe les valeurs pour le PDF
     const vals=await db.get("fiche_valeurs","?fiche_id=eq."+f.id+"&order=created_at");
     const v=Array.isArray(vals)?Object.fromEntries(vals.map(r=>[r.champ_id,r.valeur])):{};
-    v.de=f.de;v.client=f.client;v.materiel_lieu=f.materiel;
+    v.de=f.de;v.client=f.client;v.materiel_lieu=f.materiel;v._type=f.type_materiel||"Moteur";
     await telechargerZip(phots,v,ch.chemin.replace(/\//g,"_")||f.de);
   }
 
@@ -1613,13 +1614,230 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <button style={S.p1} onClick={()=>setApercu(true)}>👁 Aperçu fiche</button>
           <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande)}>📄 Imprimer / PDF</button>
-          <button style={S.p2}>📧 Rapport client (bientôt)</button>
+          
           <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
         </div>
       </div>
     </div>
   </div>);
 }
+
+
+// ═══════════════════════════════════════════════════
+// PAGE FICHE CHANTIER
+// ═══════════════════════════════════════════════════
+
+const ETAPES_CHANTIER = ["Informations","Travaux réalisés","Matériel utilisé","Observations"];
+
+const CHAMPS_CHANTIER = {
+  "Informations": [
+    {id:"ch_date",label:"Date d'intervention",type:"date",required:true},
+    {id:"ch_client",label:"Client",type:"client",required:true},
+    {id:"ch_de",label:"N° DE",type:"text",required:true},
+    {id:"ch_adresse",label:"Adresse / Site",type:"text",required:false},
+    {id:"ch_contact",label:"Contact sur place",type:"text",required:false},
+    {id:"ch_tel",label:"Téléphone contact",type:"text",required:false},
+    {id:"ch_tech",label:"Technicien(s)",type:"technicien",required:true},
+  ],
+  "Travaux réalisés": [
+    {id:"ch_type_travaux",label:"Type de travaux",type:"select",options:["Maintenance préventive","Maintenance corrective","Mise en service","Dépannage","Contrôle / Diagnostic","Remplacement","Installation","Autre"],required:true},
+    {id:"ch_equipement",label:"Equipement concerné",type:"text",required:true},
+    {id:"ch_description",label:"Description des travaux",type:"textarea",required:true},
+    {id:"ch_duree",label:"Durée intervention (h)",type:"number",required:false},
+    {id:"ch_comm_travaux",label:"Commentaire travaux",type:"textarea",required:false},
+  ],
+  "Matériel utilisé": [
+    {id:"ch_pieces",label:"Pièces remplacées / utilisées",type:"textarea",required:false},
+    {id:"ch_ref_pieces",label:"Références pièces",type:"textarea",required:false},
+    {id:"ch_comm_materiel",label:"Commentaire matériel",type:"textarea",required:false},
+  ],
+  "Observations": [
+    {id:"ch_etat_general",label:"Etat général",type:"select",options:["Bon","Moyen","Mauvais","A surveiller"],required:false},
+    {id:"ch_anomalies",label:"Anomalies constatées",type:"textarea",required:false},
+    {id:"ch_preconisations",label:"Préconisations",type:"textarea",required:false},
+    {id:"ch_suite",label:"Suite à donner",type:"select",options:["Aucune","A planifier","Urgent","Devis nécessaire"],required:false},
+    {id:"ch_comm_obs",label:"Commentaire observations",type:"textarea",required:false},
+    {id:"ch_tech_fin",label:"Technicien clôture",type:"technicien",required:false},
+  ],
+};
+
+function PageChantier({fiches,techs,clients,onAddClient,categories,sessionTech}){
+  const [view,setView]=React.useState("liste"); // liste | fiche
+  const [ficheOuverte,setFicheOuverte]=React.useState(null);
+  const [fiches2,setFiches2]=React.useState([]);
+  const [loading,setLoading]=React.useState(true);
+
+  React.useEffect(function(){
+    db.get("fiches_chantier","?order=created_at.desc").then(function(d){
+      setFiches2(Array.isArray(d)?d:[]);
+      setLoading(false);
+    }).catch(function(){setLoading(false);});
+  },[]);
+
+  if(view==="fiche"){
+    return <FicheChantier
+      fiche={ficheOuverte}
+      techs={techs}
+      clients={clients}
+      onAddClient={onAddClient}
+      categories={categories}
+      sessionTech={sessionTech}
+      onRetour={function(){setView("liste");}}
+      onSaved={function(f){
+        setFiches2(function(prev){
+          var exists=prev.find(function(x){return x.id===f.id;});
+          return exists?prev.map(function(x){return x.id===f.id?f:x;}):[f,...prev];
+        });
+        setFicheOuverte(f);
+      }}
+    />;
+  }
+
+  // Vue liste
+  return(<div style={{padding:"0 0 80px"}}>
+    <div style={{padding:"16px 16px 8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <h2 style={{fontSize:18,fontWeight:700,color:"#1B4F8A",margin:0}}>{"🏗 Fiches Chantier"}</h2>
+      <button onClick={function(){setFicheOuverte(null);setView("fiche");}} style={{...S.p1,fontSize:13,padding:"8px 16px"}}>{"+ Nouvelle fiche"}</button>
+    </div>
+    {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>{"Chargement..."}</div>}
+    {!loading&&fiches2.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>{"Aucune fiche chantier"}</div>}
+    {!loading&&fiches2.map(function(f){
+      return(<div key={f.id} style={{...S.card,margin:"0 16px 10px",cursor:"pointer"}} onClick={function(){setFicheOuverte(f);setView("fiche");}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{f.de||"Sans N° DE"}</p>
+            <p style={{margin:"2px 0 0",fontSize:12,color:"#6B7280"}}>{f.client||"Sans client"}</p>
+            <p style={{margin:"2px 0 0",fontSize:11,color:"#9CA3AF"}}>{f.materiel||""}</p>
+          </div>
+          <span style={{fontSize:11,background:"#EEF4FF",color:"#1B4F8A",padding:"3px 8px",borderRadius:10,fontWeight:600}}>{f.statut||"En cours"}</span>
+        </div>
+      </div>);
+    })}
+  </div>);
+}
+
+function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,onRetour,onSaved}){
+  var etapes=ETAPES_CHANTIER;
+  var [ficheId,setFicheId]=React.useState(fiche?fiche.id:null);
+  var [v,setV]=React.useState({ch_date:today(),...(fiche||{})});
+  var [actif,setActif]=React.useState(0);
+  var [validees,setValidees]=React.useState([]);
+  var [saving,setSaving]=React.useState(false);
+  var [photos,setPhotos]=React.useState([]);
+  var [statutChantier,setStatutChantier]=React.useState(fiche?fiche.statut||"En cours":"En cours");
+  var [flash,setFlash]=React.useState(null);
+  var [erreur,setErreur]=React.useState(null);
+
+  var ch=React.useMemo(function(){
+    return {client:v.ch_client||"Client",de:v.ch_de||"DE",mat:v.ch_equipement||"Chantier"};
+  },[v]);
+
+  React.useEffect(function(){
+    if(!fiche||!fiche.id)return;
+    db.get("fiches_chantier_valeurs","?fiche_id=eq."+fiche.id).then(function(rows){
+      if(!Array.isArray(rows))return;
+      var obj={};
+      rows.forEach(function(r){obj[r.champ_id]=r.valeur;});
+      setV(function(prev){return Object.assign({},prev,obj);});
+    });
+    db.get("fiches_chantier_photos","?fiche_id=eq."+fiche.id+"&order=created_at").then(function(p){
+      if(Array.isArray(p))setPhotos(p.map(function(ph){return Object.assign({},ph,{url:db.photoUrl(ph.storage_path)});}));
+    });
+  },[fiche]);
+
+  var onChange=React.useCallback(function(id,val){setV(function(p){return Object.assign({},p,JSON.parse("{\""+id+"\":\""+val+"\"}")); });},[]);
+
+  async function sauvegarder(idx2){
+    if(saving)return;
+    setSaving(true);setErreur(null);
+    try{
+      var fid=ficheId;
+      if(!fid){
+        var res=await db.post("fiches_chantier",{de:v.ch_de||"",client:v.ch_client||"",materiel:v.ch_equipement||"Chantier",statut:statutChantier||"En cours"});
+        fid=Array.isArray(res)?res[0]?.id:res?.id;
+        if(!fid)throw new Error("Impossible de creer la fiche");
+        setFicheId(fid);
+        onSaved(Object.assign({id:fid},v,{statut:statutChantier}));
+      }else{
+        await db.patch("fiches_chantier","?id=eq."+fid,{de:v.ch_de||"",client:v.ch_client||"",materiel:v.ch_equipement||"Chantier",statut:statutChantier||"En cours"});
+      }
+      var champs=Object.keys(v).filter(function(k){return v[k]!==undefined&&v[k]!=="";});
+      if(champs.length>0){
+        for(var i=0;i<champs.length;i+=50){
+          var rows=champs.slice(i,i+50).map(function(k){return {fiche_id:fid,champ_id:k,valeur:String(v[k])};});
+          await db.upsert("fiches_chantier_valeurs",rows,"fiche_id,champ_id");
+        }
+      }
+      if(idx2!==undefined){var nv=[...validees];if(!nv.includes(idx2))nv.push(idx2);setValidees(nv);setActif(Math.min(idx2+1,etapes.length-1));}
+      setFlash("ok");setTimeout(function(){setFlash(null);},2000);
+    }catch(e){setErreur(e.message||"Erreur");}
+    setSaving(false);
+  }
+
+  var prog=Math.round((validees.length/etapes.length)*100);
+
+  return(<div style={{paddingBottom:80}}>
+    {/* Header */}
+    <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+        <div>
+          <p style={{margin:0,fontSize:12,fontWeight:700}}>{ch.client+" / "+ch.de+" / "+ch.mat}</p>
+          <p style={{margin:0,fontSize:10,opacity:0.7}}>{"Fiche Chantier"}</p>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#4ADE80",borderRadius:20,height:6,width:prog+"%",transition:"width 0.3s"}}/></div>
+          <span style={{fontSize:11,opacity:0.85}}>{prog+"%"}</span>
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>{"Liste"}</button>
+        </div>
+      </div>
+    </div>
+    <div style={{padding:"16px 16px 0"}}>
+      {flash==="ok"&&<div style={{...S.ok,marginBottom:12}}>{"Enregistre!"}</div>}
+      {erreur&&<div style={{...S.alert,marginBottom:12}}>{erreur}</div>}
+      {etapes.map(function(nom,i){
+        var estAct=i===actif;
+        var estVal=validees.includes(i);
+        var estLock=i>actif&&!estVal;
+        var champs=CHAMPS_CHANTIER[nom]||[];
+        if(estLock)return(<div key={nom} style={{...S.cLock,marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px"}}>
+            <span>{"🔒"}</span><span style={{fontSize:14,color:"#9CA3AF"}}>{(i+1)+". "+nom}</span>
+          </div>
+        </div>);
+        return(<div key={nom} style={{...S.card,padding:0,border:"1.5px solid "+(estVal?"#22863A":estAct?"#1B4F8A":"#E2E6EA"),marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",cursor:"pointer",background:estVal?"#F0FFF4":estAct?"#fff":"#F8F9FA",borderRadius:"10px 10px 0 0"}} onClick={function(){setActif(i);}}>
+            <span style={{fontSize:18}}>{estVal?"✅":estAct?"✏️":"○"}</span>
+            <span style={{fontSize:14,fontWeight:700}}>{(i+1)+". "+nom}</span>
+            <span style={{fontSize:13,color:"#9CA3AF",marginLeft:"auto"}}>{"▼"}</span>
+          </div>
+          {(estAct||estVal)&&<div style={{padding:"14px 16px"}}>
+            {champs.map(function(c){
+              var val=v[c.id]||"";
+              var ctrl=null;
+              if(c.type==="date")ctrl=<input type="date" value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={S.inp}/>;
+              else if(c.type==="select")ctrl=<select value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={S.sel}><option value="">{"Selectionner"}</option>{c.options.map(function(o){return <option key={o} value={o}>{o}</option>;})}</select>;
+              else if(c.type==="textarea")ctrl=<textarea value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={{...S.inp,height:80,resize:"vertical"}}/>;
+              else if(c.type==="technicien")ctrl=<ChampTechnicien valeur={val} onChange={function(nv){onChange(c.id,nv);}} techs={techs}/>;
+              else if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={function(nv){onChange(c.id,nv);}} clients={clients} onAddClient={onAddClient}/>;
+              else ctrl=<input type="text" value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={S.inp}/>;
+              return(<div key={c.id} style={{marginBottom:12}}>
+                <label style={{fontSize:11,fontWeight:600,color:"#6B7280",display:"block",marginBottom:4}}>{c.label}{c.required?"*":""}</label>
+                {ctrl}
+              </div>);
+            })}
+            {/* Photos */}
+            <SectionPhotos ficheId={ficheId} cheminBase={(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(v.ch_de||"de")+"/"+(v.ch_equipement||"chantier").replace(/[^a-z0-9]/gi,"_")} etape={nom} categories={categories} photos={photos} onPhotoAdded={function(p){setPhotos(function(prev){return [...prev,p];});}} tablePhotos="fiches_chantier_photos" fk="fiche_id"/>
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              <button onClick={function(){sauvegarder(undefined);}} disabled={saving} style={{...S.p2,fontSize:13,padding:"9px 16px",flexShrink:0}}>{saving?"...":"Enregistrer"}</button>
+              <button onClick={function(){sauvegarder(i);}} disabled={saving} style={{...S.p1,fontSize:13,padding:"9px 16px",flex:1,justifyContent:"center"}}>{saving?"...":"Valider et continuer"}</button>
+            </div>
+          </div>}
+        </div>);
+      })}
+    </div>
+  </div>);
+}
+
 
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
@@ -1646,7 +1864,7 @@ export default function App(){
   if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
 
   const navItems=[
-    {id:"accueil",label:"📁 Fiches"},
+    {id:"accueil",label:"📁 Fiche Atelier"},{id:"chantier",label:"🏗 Fiche Chantier"},
     {id:"planning",label:"📋 Planning"},
     {id:"suivi",label:"🔧 Matériel"},
     {id:"stats",label:"📊 Stats"},
@@ -1702,6 +1920,7 @@ export default function App(){
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="suivi"&&<PageSuivi/>}
+    {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
     {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
   </div>);
