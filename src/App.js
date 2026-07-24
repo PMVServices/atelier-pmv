@@ -690,17 +690,17 @@ function SectionMaterielCommander({v,ficheId,de,client,piecesInit,onSave,typeMat
 }
 
 // ─── APERÇU FICHE ───────────────────────────────────────────────────────
-function ApercuFiche({v,photos,statutChantier,commentaires,pieces,nrMap,onClose}){
-  const html=genHtml(v,photos||[],statutChantier,commentaires||"",pieces||[],nrMap||{});
-  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:300,display:"flex",flexDirection:"column"}}>
+function ApercuFiche({v,photos,statutChantier,commentaires,pieces,nrMap,champsData,etapesData,onClose}){
+  const html=genHtml(v,photos||[],statutChantier,commentaires||"",pieces||[],nrMap||{},champsData,etapesData);
+  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:300,display:"flex",flexDirection:"column",overflow:"hidden"}}>
     <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,flexWrap:"wrap",gap:8}}>
       <span style={{fontWeight:700}}>Aperçu fiche — {v.de}</span>
       <div style={{display:"flex",gap:10}}>
-        <button style={{background:"#E8720C",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer",fontSize:13}} onClick={()=>imprimerFiche(v,photos||[],statutChantier,commentaires||"",pieces||[],nrMap||{})}>📄 Imprimer / PDF</button>
+        <button style={{background:"#E8720C",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer",fontSize:13}} onClick={()=>imprimerFiche(v,photos||[],statutChantier,commentaires||"",pieces||[],nrMap||{},champsData,etapesData)}>📄 Imprimer / PDF</button>
         <button style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer",fontSize:13}} onClick={onClose}>✕ Fermer</button>
       </div>
     </div>
-    <iframe srcDoc={html} style={{flex:1,border:"none",background:"#fff",width:"100%"}} title="Aperçu fiche"/>
+    <iframe srcDoc={html} style={{flex:1,border:"none",background:"#fff",width:"100%",height:"100%"}} title="Aperçu fiche"/>
   </div>);
 }
 
@@ -1574,7 +1574,7 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
   const prog=Math.round((validees.length/etapesActives.length)*100);const chem=cheminFiche(v);const st=statutInfo(statutChantier);
 
   return(<div style={{maxWidth:800,margin:"0 auto",paddingBottom:40}}>
-    {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} onClose={()=>setApercu(false)}/>}
+    {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";}}/>}
     <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div><p style={{margin:0,fontSize:12,fontWeight:700}}>{v.de} · {v.client||"Client"} · {v.materiel_lieu||typeMateriel||"Moteur"}</p><p style={{margin:0,fontSize:10,opacity:0.7}}>📁 {chem.client}/{chem.de}/{chem.mat} · {typeMateriel||"Moteur"}</p></div>
@@ -1582,7 +1582,7 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
           <select value={statutChantier} onChange={e=>changerStatut(e.target.value)} style={{padding:"3px 8px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:11,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:prog+"%",transition:"width .4s"}}/></div>
           <span style={{fontSize:11,opacity:0.85}}>{prog}%</span>
-          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>setApercu(true)}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
         </div>
       </div>
     </div>
@@ -1609,14 +1609,22 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
         <p style={{fontSize:12,color:"#6B7280",margin:"0 0 10px"}}>📁 {chem.client} / {chem.de} / {chem.mat} · {photos.length} photo{photos.length>1?"s":""}</p>
         <div style={{marginBottom:12}}><SelecteurStatut statutId={statutChantier} onChange={changerStatut}/></div>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-          <button style={S.p1} onClick={()=>setApercu(true)}>👁 Aperçu fiche</button>
-          <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande)}>📄 Imprimer / PDF</button>
+          <button style={S.p1} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁 Aperçu fiche</button>
+          <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄 Imprimer / PDF</button>
           <button style={S.p2}>📧 Rapport client (bientôt)</button>
           <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
         </div>
       </div>
     </div>
   </div>);
+}
+
+// Exposer les définitions pour pdfUtils
+if(typeof window!=="undefined"){
+  window.__CHAMPS=CHAMPS;
+  window.__CHAMPS_POMPE=CHAMPS_POMPE;
+  window.__ETAPES=ETAPES;
+  window.__ETAPES_POMPE=ETAPES_POMPE;
 }
 
 export default function App(){
