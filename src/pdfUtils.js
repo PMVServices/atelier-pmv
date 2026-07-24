@@ -43,10 +43,8 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
 
     // Trouver les champs avec valeur (hors technicien, hors info, hors photo_skf)
     var champsAvecVal=csEtape.filter(function(c){
-      return c.type!=="technicien"&&c.type!=="info"&&c.type!=="photo_skf"&&v[c.id]&&v[c.id]!=="";
+      return c.type!=="technicien"&&c.type!=="info"&&c.type!=="photo_skf";
     });
-
-    if(champsAvecVal.length===0&&!isNR)return; // Étape vide → ne pas afficher
 
     html+="<table>";
     html+="<tr class='sec'><td colspan='4'><span class='sn'>"+(etapeIdx+1)+".</span> "+nomEtape.toUpperCase()+(tech?"<span class='st'>Technicien : "+tech+"</span>":"")+"</td></tr>";
