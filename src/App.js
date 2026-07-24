@@ -1619,6 +1619,228 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
   </div>);
 }
 
+
+// ═══════════════════════════════════════════════════
+// PAGE FICHE CHANTIER
+// ═══════════════════════════════════════════════════
+
+const ETAPES_CHANTIER = ["Informations","Travaux réalisés","Matériel utilisé","Observations"];
+
+const CHAMPS_CHANTIER = {
+  "Informations": [
+    {id:"ch_date",label:"Date intervention",type:"date",required:true},
+    {id:"ch_client",label:"Client",type:"client",required:true},
+    {id:"ch_de",label:"N° DE",type:"text",required:true},
+    {id:"ch_adresse",label:"Adresse / Site",type:"text",required:false},
+    {id:"ch_contact",label:"Contact sur place",type:"text",required:false},
+    {id:"ch_tel",label:"Téléphone contact",type:"text",required:false},
+    {id:"ch_tech",label:"Technicien(s)",type:"technicien",required:true},
+  ],
+  "Travaux réalisés": [
+    {id:"ch_type_travaux",label:"Type de travaux",type:"select",options:["Maintenance préventive","Maintenance corrective","Mise en service","Dépannage","Contrôle / Diagnostic","Remplacement","Installation","Autre"],required:true},
+    {id:"ch_equipement",label:"Equipement concerné",type:"text",required:true},
+    {id:"ch_description",label:"Description des travaux",type:"textarea",required:true},
+    {id:"ch_duree",label:"Durée intervention (h)",type:"number",required:false},
+    {id:"ch_comm_travaux",label:"Commentaire",type:"textarea",required:false},
+  ],
+  "Matériel utilisé": [
+    {id:"ch_pieces",label:"Pièces remplacées / utilisées",type:"textarea",required:false},
+    {id:"ch_ref_pieces",label:"Références pièces",type:"textarea",required:false},
+    {id:"ch_comm_materiel",label:"Commentaire",type:"textarea",required:false},
+  ],
+  "Observations": [
+    {id:"ch_etat_general",label:"Etat général",type:"select",options:["Bon","Moyen","Mauvais","A surveiller"],required:false},
+    {id:"ch_anomalies",label:"Anomalies constatées",type:"textarea",required:false},
+    {id:"ch_preconisations",label:"Préconisations",type:"textarea",required:false},
+    {id:"ch_suite",label:"Suite à donner",type:"select",options:["Aucune","A planifier","Urgent","Devis nécessaire"],required:false},
+    {id:"ch_comm_obs",label:"Commentaire",type:"textarea",required:false},
+    {id:"ch_tech_fin",label:"Technicien clôture",type:"technicien",required:false},
+  ],
+};
+
+function PageChantier({techs,clients,onAddClient,categories,sessionTech}){
+  const [view,setView]=React.useState("liste");
+  const [ficheOuverte,setFicheOuverte]=React.useState(null);
+  const [fiches2,setFiches2]=React.useState([]);
+  const [loading,setLoading]=React.useState(true);
+
+  React.useEffect(function(){
+    db.get("fiches_chantier","?order=created_at.desc").then(function(d){
+      setFiches2(Array.isArray(d)?d:[]);
+      setLoading(false);
+    }).catch(function(){setLoading(false);});
+  },[]);
+
+  if(view==="fiche"){
+    return(<FicheChantier
+      fiche={ficheOuverte}
+      techs={techs}
+      clients={clients}
+      onAddClient={onAddClient}
+      categories={categories}
+      sessionTech={sessionTech}
+      onRetour={function(){setView("liste");}}
+      onSaved={function(f){
+        setFiches2(function(prev){
+          var exists=prev.find(function(x){return x.id===f.id;});
+          return exists?prev.map(function(x){return x.id===f.id?f:x;}):[f,...prev];
+        });
+        setFicheOuverte(f);
+      }}
+    />);
+  }
+
+  return(<div style={{padding:"0 0 80px"}}>
+    <div style={{padding:"16px 16px 8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+      <h2 style={{fontSize:18,fontWeight:700,color:"#1B4F8A",margin:0}}>{"Fiches Chantier"}</h2>
+      <button onClick={function(){setFicheOuverte(null);setView("fiche");}} style={{...S.p1,fontSize:13,padding:"8px 16px"}}>{"+ Nouvelle fiche"}</button>
+    </div>
+    {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>{"Chargement..."}</div>}
+    {!loading&&fiches2.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>{"Aucune fiche chantier"}</div>}
+    {!loading&&fiches2.map(function(f){
+      return(<div key={f.id} style={{...S.card,margin:"0 16px 10px",cursor:"pointer"}} onClick={function(){setFicheOuverte(f);setView("fiche");}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{f.de||"Sans N° DE"}</p>
+            <p style={{margin:"2px 0 0",fontSize:12,color:"#6B7280"}}>{f.client||"Sans client"}</p>
+            <p style={{margin:"2px 0 0",fontSize:11,color:"#9CA3AF"}}>{f.materiel||""}</p>
+          </div>
+          <span style={{fontSize:11,background:"#EEF4FF",color:"#1B4F8A",padding:"3px 8px",borderRadius:10,fontWeight:600}}>{f.statut||"En cours"}</span>
+        </div>
+      </div>);
+    })}
+  </div>);
+}
+
+function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,onRetour,onSaved}){
+  var etapes=ETAPES_CHANTIER;
+  var [ficheId,setFicheId]=React.useState(fiche?fiche.id:null);
+  var vInit={ch_date:today()};
+  var [v,setV]=React.useState(vInit);
+  var [actif,setActif]=React.useState(0);
+  var [validees,setValidees]=React.useState([]);
+  var [saving,setSaving]=React.useState(false);
+  var [photos,setPhotos]=React.useState([]);
+  var [statutChantier,setStatutChantier]=React.useState("En cours");
+  var [flash,setFlash]=React.useState(null);
+  var [erreur,setErreur]=React.useState(null);
+
+  React.useEffect(function(){
+    if(!fiche||!fiche.id)return;
+    db.get("fiches_chantier_valeurs","?fiche_id=eq."+fiche.id).then(function(rows){
+      if(!Array.isArray(rows))return;
+      var obj={};rows.forEach(function(r){obj[r.champ_id]=r.valeur;});
+      setV(function(prev){return Object.assign({},prev,obj);});
+    });
+    db.get("fiches_chantier_photos","?fiche_id=eq."+fiche.id+"&order=created_at").then(function(p){
+      if(Array.isArray(p))setPhotos(p.map(function(ph){return Object.assign({},ph,{url:db.photoUrl(ph.storage_path)});}));
+    });
+    if(fiche.statut)setStatutChantier(fiche.statut);
+  },[fiche]);
+
+  var onChange=React.useCallback(function(id,val){
+    setV(function(p){var n=Object.assign({},p);n[id]=val;return n;});
+  },[]);
+
+  async function sauvegarder(idx2){
+    if(saving)return;
+    setSaving(true);setErreur(null);
+    try{
+      var fid=ficheId;
+      if(!fid){
+        var res=await db.post("fiches_chantier",{de:v.ch_de||"",client:v.ch_client||"",materiel:v.ch_equipement||"Chantier",statut:statutChantier});
+        fid=Array.isArray(res)?res[0]&&res[0].id:res&&res.id;
+        if(!fid)throw new Error("Impossible de creer la fiche");
+        setFicheId(fid);
+        onSaved(Object.assign({id:fid},v,{statut:statutChantier}));
+      }else{
+        await db.patch("fiches_chantier","?id=eq."+fid,{de:v.ch_de||"",client:v.ch_client||"",materiel:v.ch_equipement||"Chantier",statut:statutChantier});
+      }
+      var champs=Object.keys(v).filter(function(k){return v[k]!==undefined&&v[k]!=="";});
+      if(champs.length>0){
+        var rows=champs.map(function(k){return {fiche_id:fid,champ_id:k,valeur:String(v[k])};});
+        await db.upsert("fiches_chantier_valeurs",rows,"fiche_id,champ_id");
+      }
+      if(idx2!==undefined){
+        var nv=validees.slice();
+        if(!nv.includes(idx2))nv.push(idx2);
+        setValidees(nv);
+        setActif(Math.min(idx2+1,etapes.length-1));
+      }
+      setFlash("ok");setTimeout(function(){setFlash(null);},2000);
+    }catch(e){setErreur(e.message||"Erreur");}
+    setSaving(false);
+  }
+
+  var prog=Math.round((validees.length/etapes.length)*100);
+  var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(v.ch_de||"de")+"/"+(v.ch_equipement||"chantier").replace(/[^a-z0-9]/gi,"_");
+
+  return(<div style={{paddingBottom:80}}>
+    <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
+        <div>
+          <p style={{margin:0,fontSize:12,fontWeight:700}}>{(v.ch_client||"Client")+" / "+(v.ch_de||"DE")+" / "+(v.ch_equipement||"Chantier")}</p>
+          <p style={{margin:0,fontSize:10,opacity:0.7}}>{"Fiche Chantier"}</p>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}>
+            <div style={{background:"#4ADE80",borderRadius:20,height:6,width:prog+"%",transition:"width 0.3s"}}/>
+          </div>
+          <span style={{fontSize:11,opacity:0.85}}>{prog+"%"}</span>
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>{"Liste"}</button>
+        </div>
+      </div>
+    </div>
+    <div style={{padding:"16px 16px 0"}}>
+      {flash==="ok"&&<div style={{...S.ok,marginBottom:12}}>{"Enregistré !"}</div>}
+      {erreur&&<div style={{...S.alert,marginBottom:12}}>{erreur}</div>}
+      {etapes.map(function(nom,i){
+        var estAct=i===actif;
+        var estVal=validees.includes(i);
+        var estLock=i>actif&&!estVal;
+        var champs=CHAMPS_CHANTIER[nom]||[];
+        if(estLock)return(<div key={nom} style={{...S.cLock,marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px"}}>
+            <span>{"🔒"}</span><span style={{fontSize:14,color:"#9CA3AF"}}>{(i+1)+". "+nom}</span>
+          </div>
+        </div>);
+        return(<div key={nom} style={{...S.card,padding:0,border:"1.5px solid "+(estVal?"#22863A":estAct?"#1B4F8A":"#E2E6EA"),marginBottom:12}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",cursor:"pointer",background:estVal?"#F0FFF4":estAct?"#fff":"#F8F9FA",borderRadius:"10px 10px 0 0"}} onClick={function(){setActif(i);}}>
+            <span style={{fontSize:18}}>{estVal?"✅":estAct?"✏️":"○"}</span>
+            <span style={{fontSize:14,fontWeight:700}}>{(i+1)+". "+nom}</span>
+            <span style={{fontSize:13,color:"#9CA3AF",marginLeft:"auto"}}>{"▼"}</span>
+          </div>
+          {(estAct||estVal)&&<div style={{padding:"14px 16px"}}>
+            {champs.map(function(c){
+              var val=v[c.id]||"";
+              var ctrl=null;
+              if(c.type==="date")ctrl=<input type="date" value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={S.inp}/>;
+              else if(c.type==="select")ctrl=(<select value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={S.sel}>
+                <option value="">{"Sélectionner"}</option>
+                {c.options.map(function(o){return <option key={o} value={o}>{o}</option>;})}
+              </select>);
+              else if(c.type==="textarea")ctrl=<textarea value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={{...S.inp,height:80,resize:"vertical"}}/>;
+              else if(c.type==="technicien")ctrl=<ChampTechnicien valeur={val} onChange={function(nv){onChange(c.id,nv);}} techs={techs}/>;
+              else if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={function(nv){onChange(c.id,nv);}} clients={clients} onAddClient={onAddClient}/>;
+              else ctrl=<input type="text" value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={S.inp}/>;
+              return(<div key={c.id} style={{marginBottom:12}}>
+                <label style={{fontSize:11,fontWeight:600,color:"#6B7280",display:"block",marginBottom:4}}>{c.label}{c.required?" *":""}</label>
+                {ctrl}
+              </div>);
+            })}
+            <SectionPhotos ficheId={ficheId} cheminBase={cheminBase} etape={nom} categories={categories} photos={photos} onPhotoAdded={function(p){setPhotos(function(prev){return prev.concat([p]);});}} tablePhotos="fiches_chantier_photos"/>
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              <button onClick={function(){sauvegarder(undefined);}} disabled={saving} style={{...S.p2,fontSize:13,padding:"9px 16px",flexShrink:0}}>{saving?"...":"Enregistrer"}</button>
+              <button onClick={function(){sauvegarder(i);}} disabled={saving} style={{...S.p1,fontSize:13,padding:"9px 16px",flex:1,justifyContent:"center"}}>{saving?"...":"Valider et continuer"}</button>
+            </div>
+          </div>}
+        </div>);
+      })}
+    </div>
+  </div>);
+}
+
+
 // Exposer les définitions pour pdfUtils
 if(typeof window!=="undefined"){
   window.__CHAMPS=CHAMPS;
@@ -1652,7 +1874,7 @@ export default function App(){
   if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
 
   const navItems=[
-    {id:"accueil",label:"📁 Fiches"},
+    {id:"accueil",label:"📁 Fiche Atelier"},{id:"chantier",label:"🏗 Fiche Chantier"},
     {id:"planning",label:"📋 Planning"},
     {id:"suivi",label:"🔧 Matériel"},
     {id:"stats",label:"📊 Stats"},
@@ -1708,6 +1930,8 @@ export default function App(){
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="suivi"&&<PageSuivi/>}
+    {page==="chantier"&&<PageChantier fiches={[]} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
+    {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
     {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
   </div>);
