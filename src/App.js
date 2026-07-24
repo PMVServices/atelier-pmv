@@ -1582,7 +1582,7 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
           <select value={statutChantier} onChange={e=>changerStatut(e.target.value)} style={{padding:"3px 8px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:11,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:prog+"%",transition:"width .4s"}}/></div>
           <span style={{fontSize:11,opacity:0.85}}>{prog}%</span>
-          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>setApercu(true)}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,nrMap||{})}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>setApercu(true)}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
         </div>
       </div>
     </div>
@@ -1610,7 +1610,7 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
         <div style={{marginBottom:12}}><SelecteurStatut statutId={statutChantier} onChange={changerStatut}/></div>
         <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
           <button style={S.p1} onClick={()=>setApercu(true)}>👁 Aperçu fiche</button>
-          <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,nrMap||{})}>📄 Imprimer / PDF</button>
+          <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande)}>📄 Imprimer / PDF</button>
           <button style={S.p2}>📧 Rapport client (bientôt)</button>
           <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
         </div>
