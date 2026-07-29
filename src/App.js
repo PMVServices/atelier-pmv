@@ -692,7 +692,10 @@ function SectionMaterielCommander({v,ficheId,de,client,piecesInit,onSave,typeMat
 // ─── APERÇU FICHE ───────────────────────────────────────────────────────
 function ApercuFiche({v,photos,statutChantier,commentaires,pieces,nrMap,champsData,etapesData,onClose}){
   const html=genHtml(v,photos||[],statutChantier,commentaires||"",pieces||[],nrMap||{},champsData,etapesData);
-  return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:300,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+  var w=window.open("","_blank","width=1000,height=800,scrollbars=yes");
+w.document.write(html);
+w.document.close();
+return null;
     <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,flexWrap:"wrap",gap:8}}>
       <span style={{fontWeight:700}}>Aperçu fiche — {v.de}</span>
       <div style={{display:"flex",gap:10}}>
