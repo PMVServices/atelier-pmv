@@ -693,18 +693,9 @@ function SectionMaterielCommander({v,ficheId,de,client,piecesInit,onSave,typeMat
 function ApercuFiche({v,photos,statutChantier,commentaires,pieces,nrMap,champsData,etapesData,onClose}){
   const html=genHtml(v,photos||[],statutChantier,commentaires||"",pieces||[],nrMap||{},champsData,etapesData);
   var w=window.open("","_blank","width=1000,height=800,scrollbars=yes");
-w.document.write(html);
-w.document.close();
-return null;
-    <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,flexWrap:"wrap",gap:8}}>
-      <span style={{fontWeight:700}}>Aperçu fiche — {v.de}</span>
-      <div style={{display:"flex",gap:10}}>
-        <button style={{background:"#E8720C",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer",fontSize:13}} onClick={()=>imprimerFiche(v,photos||[],statutChantier,commentaires||"",pieces||[],nrMap||{},champsData,etapesData)}>📄 Imprimer / PDF</button>
-        <button style={{background:"rgba(255,255,255,0.2)",color:"#fff",border:"none",padding:"7px 14px",borderRadius:6,fontWeight:600,cursor:"pointer",fontSize:13}} onClick={onClose}>✕ Fermer</button>
-      </div>
-    </div>
-    <iframe srcDoc={html} style={{flex:1,border:"none",background:"#fff",width:"100%",height:"100%"}} title="Aperçu fiche"/>
-  </div>);
+  if(w){w.document.write(html);w.document.close();}
+  onClose();
+  return null;
 }
 
 
