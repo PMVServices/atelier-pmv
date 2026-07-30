@@ -54,12 +54,13 @@ function fitBox(img, maxW, maxH) {
   return { width: Math.round(img.w * ratio), height: Math.round(img.h * ratio) };
 }
 
-function imgParagraph(img, maxW, maxH) {
+function imgParagraph(img, maxW, maxH, keepNext) {
   if (!img) return null;
   const size = fitBox(img, maxW, maxH);
   return new Paragraph({
     alignment: AlignmentType.CENTER,
     spacing: { after: 120 },
+    keepNext: !!keepNext,
     children: [new ImageRun({ type: img.type, data: img.data, transformation: size })],
   });
 }
@@ -91,12 +92,13 @@ function heading(text) {
   return new Paragraph({
     heading: HeadingLevel.HEADING_1,
     spacing: { before: 200, after: 200 },
+    keepNext: true,
     border: { left: { style: BorderStyle.SINGLE, size: 24, color: "1B4F8A", space: 8 } },
     children: [new TextRun({ text, bold: true, color: "1B4F8A", size: 32 })],
   });
 }
 function subhead(text) {
-  return new Paragraph({ spacing: { before: 120, after: 80 }, children: [new TextRun({ text: text.toUpperCase(), bold: true, color: "9CA3AF", size: 18 })] });
+  return new Paragraph({ spacing: { before: 120, after: 80 }, keepNext: true, children: [new TextRun({ text: text.toUpperCase(), bold: true, color: "9CA3AF", size: 18 })] });
 }
 function p(text, opts) { return new Paragraph({ spacing: { after: 100 }, children: [new TextRun({ text: text || "", size: 24, ...opts })] }); }
 function pLines(lines) {
@@ -185,7 +187,6 @@ export async function genRapportDocx(v, data, photos) {
   const infoChildren = [];
   if (infoPairs.length) { infoChildren.push(heading("Informations chantier")); infoChildren.push(fieldsGrid(infoPairs)); }
   if (has(data.descriptif_travaux)) { infoChildren.push(heading("Travaux réalisés")); infoChildren.push(p(data.descriptif_travaux)); }
-  if (infoChildren.length) infoChildren.push(new Paragraph({ children: [new PageBreak()] }));
 
   // ─── Blocs conditionnels (mêmes règles que le HTML : on ne garde que ce qui a du contenu) ───
   const blocks = []; // { labels: [...], children: [...] }
@@ -195,9 +196,8 @@ export async function genRapportDocx(v, data, photos) {
     const caption = [txt("type_moteur") ? "Modèle : " + txt("type_moteur") : "", txt("numero_serie") ? "N° : " + txt("numero_serie") : ""].filter(Boolean).join(" — ");
     if (arriveeImgs.length || caption) {
       const ch = [heading("Photo du moteur à l'arrivée")];
-      arriveeImgs.forEach((img) => ch.push(imgParagraph(img, CONTENT_W, 420)));
+      arriveeImgs.forEach((img, idx) => ch.push(imgParagraph(img, CONTENT_W, 420, idx < arriveeImgs.length - 1 || !!caption)));
       if (caption) ch.push(new Paragraph({ children: [new TextRun({ text: caption, bold: true, size: 24 })] }));
-      ch.push(new Paragraph({ children: [new PageBreak()] }));
       blocks.push({ labels: ["Photo du moteur à l'arrivée"], children: ch });
     }
 
@@ -211,16 +211,15 @@ export async function genRapportDocx(v, data, photos) {
     const vMasse = verdictRun(data, "verdict_masse");
     if (vMasse) elecLines.push(new Paragraph({ children: [new TextRun({ text: "L'isolement à la masse est ", size: 24 }), vMasse] }));
     if (elecLines.length) {
-      const ch = [heading("Rapport électrique du bobinage"), ...elecLines, new Paragraph({ children: [new PageBreak()] })];
+      const ch = [heading("Rapport électrique du bobinage"), ...elecLines];
       blocks.push({ labels: ["Rapport électrique du bobinage"], children: ch });
     }
 
     captures.forEach((c, i) => {
       const img = captureImgs[i];
       if (!img) return;
-      const ch = [subhead("Capture d'appareil"), imgParagraph(img, CONTENT_W, 620)];
+      const ch = [subhead("Capture d'appareil"), imgParagraph(img, CONTENT_W, 620, !!c.caption)];
       if (c.caption) ch.push(p(c.caption));
-      ch.push(new Paragraph({ children: [new PageBreak()] }));
       blocks.push({ labels: [], children: ch });
     });
   }
@@ -244,7 +243,6 @@ export async function genRapportDocx(v, data, photos) {
         if (photosAvant) ch.push(photosAvant);
         labels.push("Mesure de vibration avant entretien");
       }
-      ch.push(new Paragraph({ children: [new PageBreak()] }));
       blocks.push({ labels, children: ch });
     }
   }
@@ -271,7 +269,6 @@ export async function genRapportDocx(v, data, photos) {
       roulementsLines.forEach((l) => ch.push(p(l)));
       if (photosDemontage) ch.push(photosDemontage);
       if (photosDemontage && data.commentaire_demontage) ch.push(p(data.commentaire_demontage));
-      ch.push(new Paragraph({ children: [new PageBreak()] }));
       blocks.push({ labels: ["Partie mécanique après extraction des roulements"], children: ch });
     }
   }
@@ -302,7 +299,6 @@ export async function genRapportDocx(v, data, photos) {
         consoLines.forEach((l) => ch.push(p(l)));
         labels.push("Relevé consommation électrique et mesure de vibration après entretien");
       }
-      ch.push(new Paragraph({ children: [new PageBreak()] }));
       blocks.push({ labels, children: ch });
     }
   }
@@ -332,7 +328,6 @@ export async function genRapportDocx(v, data, photos) {
     ...sommaireLines.map((s, i) => p((i + 1) + ". " + s)),
   ];
   if (isoChart) sommaireChildren.push(imgParagraph(isoChart, CONTENT_W, 500));
-  sommaireChildren.push(new Paragraph({ children: [new PageBreak()] }));
 
   const body = [
     ...coverChildren,
