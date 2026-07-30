@@ -1476,26 +1476,20 @@ function PageChoix({onChoisir,onRetour}){
 
 // ─── RAPPORT CLIENT (moteur) ────────────────────────────────────────────
 const VERDICT_OPTIONS=["Conforme","Non conforme","Autre"];
-const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","commande_achat","depart_ateliers","descriptif_travaux","ensemble_libre","date"];
+const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","contact","bordereau","descriptif_travaux","commentaire_vibration_avant","commentaire_roulements","ensemble_libre","commentaire_apres","certifie_par","realise_par","date","adx_captures"];
 const RAPPORT_VERDICT_KEYS=["verdict_arbre_av","verdict_flasque_av","verdict_arbre_ar","verdict_flasque_ar","verdict_bobinage","verdict_masse","verdict_meca","verdict_elec"];
 const RAPPORT_PHOTO_SLOTS=[
-  {key:"plaque_moteur",categorie:"Plaque moteur",label:"Plaque moteur"},
-  {key:"vue_ensemble",categorie:"Vue d'ensemble",label:"Vue d'ensemble"},
-  {key:"skf_av_dem",categorie:"Screen SKF avant au démontage",label:"Mesure avant vibration démontage"},
-  {key:"skf_ar_dem",categorie:"Screen SKF arrière au démontage",label:"Mesure arrière vibration démontage"},
-  {key:"stator_av",categorie:"Stator avant",label:"Stator avant"},
-  {key:"stator_ar",categorie:"Stator arrière",label:"Stator arrière"},
-  {key:"skf_av_rem",categorie:"Screen SKF avant au remontage",label:"Mesure avant vibration remontage"},
-  {key:"skf_ar_rem",categorie:"Screen SKF arrière au remontage",label:"Mesure arrière vibration remontage"},
-  {key:"adx",categorie:null,label:"Rapport ADX"},
+  {key:"plaque_moteur",categorie:"Plaque moteur",label:"Plaque moteur (à l'arrivée)"},
+  {key:"vue_ensemble",categorie:"Vue d'ensemble",label:"Moteur (vue d'ensemble à l'arrivée)"},
+  {key:"skf_av_dem",categorie:"Screen SKF avant au démontage",label:"Vibration avant démontage — côté commande"},
+  {key:"skf_ar_dem",categorie:"Screen SKF arrière au démontage",label:"Vibration avant démontage — côté opposé"},
+  {key:"stator_av",categorie:"Stator avant",label:"Chignon (démontage)"},
+  {key:"stator_ar",categorie:"Stator arrière",label:"Arrière (démontage)"},
+  {key:"skf_av_rem",categorie:"Screen SKF avant au remontage",label:"Vibration après remontage — côté commande"},
+  {key:"skf_ar_rem",categorie:"Screen SKF arrière au remontage",label:"Vibration après remontage — côté opposé"},
+  {key:"apres",categorie:null,label:"Photo après entretien"},
 ];
 
-function techniciensDeFiche(v){
-  const ids=["tech_entree","tech_elec","tech_mesure_avant","tech_demontage","tech_remontage","tech_essai"];
-  const set=new Set();
-  ids.forEach(id=>{const t=(v[id]||"").replace("Autre:","").trim();if(t)set.add(t);});
-  return Array.from(set);
-}
 
 function ChampVerdict({valeur,onChange}){
   const isAutre=(valeur||"").indexOf("Autre:")===0;
@@ -1528,7 +1522,7 @@ function BlocPhotoRapport({slot,url,ficheId,uploading,onUpload}){
   </div>);
 }
 
-function PageRapport({ficheId,onRetour}){
+function PageRapport({ficheId,techs,onRetour}){
   const [loading,setLoading]=useState(true);
   const [v,setV]=useState({});
   const [photos,setPhotos]=useState([]);
@@ -1536,6 +1530,7 @@ function PageRapport({ficheId,onRetour}){
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
   const [uploading,setUploading]=useState(null);
+  const captureFileRef=useRef();
 
   useEffect(()=>{
     if(!ficheId){setLoading(false);return;}
@@ -1561,6 +1556,9 @@ function PageRapport({ficheId,onRetour}){
 
   function upd(k,val){setData(p=>({...p,[k]:val}));}
 
+  function captures(){try{const a=JSON.parse(data.adx_captures||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}}
+  function setCaptures(arr){upd("adx_captures",JSON.stringify(arr));}
+
   const photosResolved={};
   RAPPORT_PHOTO_SLOTS.forEach(s=>{
     const auto=s.categorie?photos.find(p=>p.categorie_nom===s.categorie):null;
@@ -1579,6 +1577,21 @@ function PageRapport({ficheId,onRetour}){
     setUploading(null);
   }
 
+  async function ajouterCapture(file){
+    if(!file||!ficheId)return;
+    setUploading("capture");
+    try{
+      const arr=captures();
+      const ext=file.name.split(".").pop()||"jpg";
+      const path=(cheminBase||"photos")+"/rapport_adx_"+(arr.length+1)+"."+ext;
+      await db.uploadPhoto(path,file);
+      setCaptures([...arr,{url:db.photoUrl(path),caption:""}]);
+    }catch(e){alert("Erreur upload : "+e.message);}
+    setUploading(null);
+  }
+  function majCaption(i,texte){const arr=captures();arr[i]={...arr[i],caption:texte};setCaptures(arr);}
+  function supprimerCapture(i){setCaptures(captures().filter((_,j)=>j!==i));}
+
   async function enregistrer(){
     if(!ficheId)return;
     setSaving(true);
@@ -1591,15 +1604,16 @@ function PageRapport({ficheId,onRetour}){
   }
 
   function apercu(){
-    apercuRapport(v,data,photosResolved,techniciensDeFiche(v));
+    apercuRapport(v,data,photosResolved);
   }
 
   function exporter(){
-    imprimerRapport(v,data,photosResolved,techniciensDeFiche(v));
+    imprimerRapport(v,data,photosResolved);
   }
 
   const photosAuto=RAPPORT_PHOTO_SLOTS.filter(s=>s.categorie);
-  const photoAdx=RAPPORT_PHOTO_SLOTS.find(s=>s.key==="adx");
+  const photoApres=RAPPORT_PHOTO_SLOTS.find(s=>s.key==="apres");
+  const techsList=techs||[];
 
   if(loading)return <div style={{textAlign:"center",padding:60,color:"#9CA3AF"}}>Chargement…</div>;
 
@@ -1616,9 +1630,9 @@ function PageRapport({ficheId,onRetour}){
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 10px"}}>Informations chantier (à remplir)</p>
       <div style={{marginBottom:10}}><label style={S.lbl}>Mois/année (page de garde)</label><input type="text" value={data.mois_annee||""} onChange={e=>upd("mois_annee",e.target.value)} placeholder="MM/AAAA" style={S.inp}/></div>
       <div style={{marginBottom:10}}><label style={S.lbl}>Adresse du chantier</label><input type="text" value={data.adresse_chantier||""} onChange={e=>upd("adresse_chantier",e.target.value)} style={S.inp}/></div>
-      <div style={{marginBottom:10}}><label style={S.lbl}>N°/Date commande achat</label><input type="text" value={data.commande_achat||""} onChange={e=>upd("commande_achat",e.target.value)} style={S.inp}/></div>
-      <div style={{marginBottom:10}}><label style={S.lbl}>Départ de nos ateliers</label><input type="text" value={data.depart_ateliers||""} onChange={e=>upd("depart_ateliers",e.target.value)} style={S.inp}/></div>
-      <div style={{marginBottom:0}}><label style={S.lbl}>Descriptif des travaux réalisés</label><textarea value={data.descriptif_travaux||""} onChange={e=>upd("descriptif_travaux",e.target.value)} style={{...S.inp,minHeight:70,resize:"vertical",fontFamily:"inherit"}}/></div>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Contact sur place</label><input type="text" value={data.contact||""} onChange={e=>upd("contact",e.target.value)} style={S.inp}/></div>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Bordereau d'expédition</label><input type="text" value={data.bordereau||""} onChange={e=>upd("bordereau",e.target.value)} style={S.inp}/></div>
+      <div style={{marginBottom:0}}><label style={S.lbl}>Descriptif des travaux réalisés</label><textarea value={data.descriptif_travaux||""} onChange={e=>upd("descriptif_travaux",e.target.value)} style={{...S.inp,minHeight:60,resize:"vertical",fontFamily:"inherit"}}/></div>
     </div>
 
     <div style={S.card}>
@@ -1630,16 +1644,27 @@ function PageRapport({ficheId,onRetour}){
     </div>
 
     <div style={S.card}>
-      <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Rapport ADX (capture de l'appareil)</p>
-      <BlocPhotoRapport slot={photoAdx} url={photosResolved.adx} ficheId={ficheId} uploading={uploading} onUpload={uploadManuel}/>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Rapport électrique — captures d'appareil (ADX, RLC, Hipot, Surge…)</p>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 12px"}}>Ajoutez autant de captures que nécessaire, avec un court commentaire pour chacune.</p>
+      {captures().map((c,i)=>(
+        <div key={i} style={{display:"flex",gap:10,alignItems:"center",marginBottom:8,padding:"6px 8px",background:"#F8F9FA",borderRadius:8}}>
+          <img src={c.url} alt="capture" style={{width:70,height:52,objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA",cursor:"pointer"}} onClick={()=>window.open(c.url,"_blank")}/>
+          <input type="text" value={c.caption||""} onChange={e=>majCaption(i,e.target.value)} placeholder="Commentaire (optionnel)..." style={{...S.inp,flex:1}}/>
+          <button onClick={()=>supprimerCapture(i)} style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,color:"#D73A49",padding:"6px 10px",cursor:"pointer"}}>✕</button>
+        </div>
+      ))}
+      <input ref={captureFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0])ajouterCapture(e.target.files[0]);e.target.value="";}}/>
+      <button onClick={()=>captureFileRef.current.click()} disabled={!ficheId||uploading==="capture"} style={{...S.p2,fontSize:12,padding:"6px 12px",opacity:ficheId?1:0.5}}>{uploading==="capture"?"...":"+ Ajouter une capture"}</button>
     </div>
 
     <div style={S.card}>
-      <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Conformité — cotes et roulements</p>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Vibration et mesures mécaniques</p>
+      <div style={{marginBottom:12}}><label style={S.lbl}>Commentaire — vibration avant démontage</label><textarea value={data.commentaire_vibration_avant||""} onChange={e=>upd("commentaire_vibration_avant",e.target.value)} placeholder="Ex : Le moteur vibre au-dessus de la norme..." style={{...S.inp,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/></div>
       <LigneVerdict label={"Portée interne avant (arbre) : "+(v.mesure_arbre_av||"—")+" mm"} rk="verdict_arbre_av" data={data} upd={upd}/>
       <LigneVerdict label={"Portée extérieure avant (flasque) : "+(v.mesure_flasque_av||"—")+" mm"} rk="verdict_flasque_av" data={data} upd={upd}/>
       <LigneVerdict label={"Portée interne arrière (arbre) : "+(v.mesure_arbre_ar||"—")+" mm"} rk="verdict_arbre_ar" data={data} upd={upd}/>
       <LigneVerdict label={"Portée extérieure arrière (flasque) : "+(v.mesure_flasque_ar||"—")+" mm"} rk="verdict_flasque_ar" data={data} upd={upd}/>
+      <div style={{marginTop:6}}><label style={S.lbl}>Commentaire — roulements</label><textarea value={data.commentaire_roulements||""} onChange={e=>upd("commentaire_roulements",e.target.value)} placeholder="Ex : La quantité de graisse est correcte, les roulements sont usés..." style={{...S.inp,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/></div>
     </div>
 
     <div style={S.card}>
@@ -1653,6 +1678,16 @@ function PageRapport({ficheId,onRetour}){
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Conclusion</p>
       <LigneVerdict label="Le moteur est … mécaniquement" rk="verdict_meca" data={data} upd={upd}/>
       <LigneVerdict label="Le moteur est … électriquement" rk="verdict_elec" data={data} upd={upd}/>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Commentaire final</label><input type="text" value={data.commentaire_apres||""} onChange={e=>upd("commentaire_apres",e.target.value)} placeholder="Ex : L'arbre est protégé et la boîte à bornes fermée." style={S.inp}/></div>
+      <div style={{marginBottom:0}}><BlocPhotoRapport slot={photoApres} url={photosResolved.apres} ficheId={ficheId} uploading={uploading} onUpload={uploadManuel}/></div>
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Signatures</p>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10}}>
+        <div><label style={S.lbl}>Certifié conforme par</label><select value={data.certifie_par||""} onChange={e=>upd("certifie_par",e.target.value)} style={S.sel}><option value="">— Sélectionner</option>{techsList.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+        <div><label style={S.lbl}>Rapport réalisé par</label><select value={data.realise_par||""} onChange={e=>upd("realise_par",e.target.value)} style={S.sel}><option value="">— Sélectionner</option>{techsList.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
+      </div>
       <div style={{marginBottom:0}}><label style={S.lbl}>Date du rapport</label><input type="date" value={data.date||""} onChange={e=>upd("date",e.target.value)} style={{...S.inp,maxWidth:200}}/></div>
     </div>
 
@@ -2137,7 +2172,7 @@ export default function App(){
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
-    {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} onRetour={()=>setRapportFicheId(null)}/>}
+    {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
     {page==="suivi"&&<PageSuivi/>}
     {page==="chantier"&&<PageChantier fiches={[]} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
