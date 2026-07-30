@@ -194,7 +194,7 @@ export function genRapportHtml(v,data,photos){
   "*{box-sizing:border-box;margin:0;padding:0;}"+
   "@page{size:A4;margin:0;}"+
   "body{font-family:'Segoe UI',Arial,sans-serif;font-size:12pt;color:#1A1A2E;line-height:1.55;}"+
-  ".page{width:210mm;min-height:297mm;margin:0 auto;padding:16mm 18mm;page-break-after:always;box-sizing:border-box;}"+
+  ".page{width:210mm;margin:0 auto;padding:16mm 18mm;page-break-after:always;box-sizing:border-box;}"+
   ".page:last-child{page-break-after:auto;}"+
   ".topbar{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:2px solid #EEF4FF;margin-bottom:24px;page-break-inside:avoid;}"+
   ".topbar img{height:34px;}"+
@@ -261,6 +261,7 @@ export function genRapportHtml(v,data,photos){
     var photosArrivee=photosRow([photos.vue_ensemble,photos.plaque_moteur],true);
     var caption=[txt("type_moteur")?"Modèle : "+txt("type_moteur"):"",txt("numero_serie")?"N° : "+txt("numero_serie"):""].filter(Boolean).join(" — ");
     var pageArrivee=section("Photo du moteur à l'arrivée",photosArrivee+(caption?"<p style='margin-top:8px;font-weight:600;'>"+caption+"</p>":""));
+    if(pageArrivee)pagesQueue.push({labels:["Photo du moteur à l'arrivée"],html:"<div class='page'>"+topbar()+pageArrivee+"</div>"});
 
     var sentencesElec=[];
     if(isolPart("isol_masse"))sentencesElec.push("Isolement enroulement / masse = "+isolPart("isol_masse")+(num("isol_masse_dar")?(" avec un Dar de "+num("isol_masse_dar")):""));
@@ -272,14 +273,15 @@ export function genRapportHtml(v,data,photos){
     var verdictMasse=inline("verdict_masse");
     if(verdictMasse)sentencesElec.push("L'isolement à la masse est "+verdictMasse);
     var elecInner=sentencesElec.length?"<p>"+sentencesElec.join("<br/>")+"</p>":"";
-    var captures=parseCaptures();
-    var capturesHtml=captures.map(function(c){return "<div style='margin-top:16px;'>"+photoCard(c.url,null)+(c.caption?"<p style='margin-top:6px;'>"+c.caption+"</p>":"")+"</div>";}).join("");
-    var pageElec=section("Rapport électrique du bobinage",elecInner+capturesHtml);
+    var pageElec=section("Rapport électrique du bobinage",elecInner);
+    if(pageElec)pagesQueue.push({labels:["Rapport électrique du bobinage"],html:"<div class='page'>"+topbar()+pageElec+"</div>"});
 
-    var labels=[];
-    if(pageArrivee)labels.push("Photo du moteur à l'arrivée");
-    if(pageElec)labels.push("Rapport électrique du bobinage");
-    if(pageArrivee||pageElec)pagesQueue.push({labels:labels,html:"<div class='page'>"+topbar()+pageArrivee+pageElec+"</div>"});
+    // Chaque capture d'appareil (ADX, RLC, Hipot, Surge…) sur sa propre page,
+    // pour garder l'en-tête et éviter qu'une grande image ne soit coupée.
+    parseCaptures().forEach(function(c){
+      var inner="<div style='border-radius:8px;overflow:hidden;border:1px solid #E2E6EA;'><img src='"+c.url+"' crossorigin='anonymous' style='width:100%;height:auto;display:block;'/></div>"+(c.caption?"<p style='margin-top:8px;'>"+c.caption+"</p>":"");
+      pagesQueue.push({labels:[],html:"<div class='page'>"+topbar()+inner+"</div>"});
+    });
   }
 
   if(sec.avant){
