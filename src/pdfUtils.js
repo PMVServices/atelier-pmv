@@ -161,18 +161,30 @@ export function genRapportHtml(v,data,photos){
     return "<div class='photo'><img src='"+url+"' crossorigin='anonymous'/>"+(label?"<div class='cap'>"+label+"</div>":"")+"</div>";
   }
   function photosRow(urls,stack){
-    var cards=urls.map(function(u){return photoCard(u,null);}).filter(Boolean);
-    if(cards.length===0)return "";
-    return "<div class='photos"+(stack||cards.length===1?" stack":"")+"'>"+cards.join("")+"</div>";
+    var list=urls.filter(Boolean);
+    if(list.length===0)return "";
+    var h=list.length===1?280:(list.length===2?210:150);
+    var cards=list.map(function(u){return "<div class='photo' style='height:"+h+"px;'><img src='"+u+"' crossorigin='anonymous'/></div>";});
+    return "<div class='photos"+(stack||list.length===1?" stack":"")+"'>"+cards.join("")+"</div>";
   }
-  function section(titre,inner){
+  function section(titre,inner,sub){
     if(!inner)return "";
-    return "<div class='block'><h2 class='sec'>"+titre+"</h2>"+inner+"</div>";
+    return "<div class='block'>"+(titre?"<h2 class='sec'>"+titre+"</h2>":"")+(sub?"<div class='subhead'>"+sub+"</div>":"")+inner+"</div>";
   }
   function topbar(){
     return "<div class='topbar'><img src='"+LOGO_B64+"'/><div class='ref'>Rapport <b>"+txt("de")+"</b> — "+txt("client")+"</div></div>";
   }
   function parseCaptures(){try{var a=JSON.parse(data.adx_captures||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}}
+  function sections(){
+    try{var s=JSON.parse(data.sections||"{}");return {
+      electrique: s.electrique!==false,
+      avant: s.avant!==false,
+      mecanique: s.mecanique!==false,
+      apres: s.apres!==false,
+      conclusion: s.conclusion!==false
+    };}catch(e){return {electrique:true,avant:true,mecanique:true,apres:true,conclusion:true};}
+  }
+  var sec=sections();
 
   var now=new Date().toLocaleDateString("fr-FR");
   var dateRapport=data.date?new Date(data.date).toLocaleDateString("fr-FR"):now;
@@ -180,152 +192,178 @@ export function genRapportHtml(v,data,photos){
 
   var css=""+
   "*{box-sizing:border-box;margin:0;padding:0;}"+
-  "body{font-family:'Segoe UI',Arial,sans-serif;font-size:10.5pt;color:#1A1A2E;line-height:1.6;}"+
-  ".page{max-width:210mm;margin:0 auto;padding:16mm 18mm;page-break-after:always;}"+
+  "@page{size:A4;margin:0;}"+
+  "body{font-family:'Segoe UI',Arial,sans-serif;font-size:12pt;color:#1A1A2E;line-height:1.55;}"+
+  ".page{width:210mm;min-height:297mm;margin:0 auto;padding:16mm 18mm;page-break-after:always;box-sizing:border-box;}"+
   ".page:last-child{page-break-after:auto;}"+
-  ".topbar{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:2px solid #EEF4FF;margin-bottom:22px;}"+
-  ".topbar img{height:32px;}"+
-  ".topbar .ref{font-size:9pt;color:#6B7280;}"+
+  ".topbar{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:2px solid #EEF4FF;margin-bottom:24px;page-break-inside:avoid;}"+
+  ".topbar img{height:34px;}"+
+  ".topbar .ref{font-size:10pt;color:#6B7280;}"+
   ".topbar .ref b{color:#1B4F8A;}"+
-  ".cover{text-align:center;padding-top:70px;}"+
-  ".cover img{height:76px;margin-bottom:44px;}"+
-  ".cover .kicker{font-size:10.5pt;color:#9CA3AF;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}"+
-  ".cover h1{font-size:23pt;color:#1A1A2E;margin-bottom:8px;}"+
-  ".cover .moteur{font-size:13pt;color:#E8720C;font-weight:700;margin-bottom:46px;}"+
+  ".cover{text-align:center;padding-top:50px;}"+
+  ".cover img{height:80px;margin-bottom:36px;}"+
+  ".cover .kicker{font-size:11pt;color:#9CA3AF;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}"+
+  ".cover h1{font-size:26pt;color:#1A1A2E;margin-bottom:10px;}"+
+  ".cover .moteur{font-size:14pt;color:#E8720C;font-weight:700;margin-bottom:36px;}"+
+  ".cover .blurb{max-width:130mm;margin:0 auto 36px;font-size:11pt;color:#6B7280;}"+
   ".cover .infobar{display:inline-flex;border:1px solid #E2E6EA;border-radius:10px;overflow:hidden;}"+
   ".cover .infobar div{padding:14px 26px;border-right:1px solid #E2E6EA;}"+
   ".cover .infobar div:last-child{border-right:none;}"+
-  ".cover .infobar .k{font-size:8pt;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}"+
-  ".cover .infobar .v{font-size:12.5pt;font-weight:700;color:#1B4F8A;}"+
-  "h2.sec{font-size:13pt;color:#1B4F8A;margin:0 0 12px;padding-left:12px;border-left:4px solid #1B4F8A;}"+
-  ".block{margin-bottom:26px;page-break-inside:avoid;}"+
-  ".grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 20px;}"+
-  ".field .k{font-size:8pt;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;}"+
-  ".field .v{font-size:10.5pt;color:#1A1A2E;font-weight:600;}"+
-  "p{margin-bottom:6px;}"+
-  ".sommaire{padding-left:22px;}"+
-  ".sommaire li{margin-bottom:6px;}"+
-  ".photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:10px 0;}"+
-  ".photos.stack{grid-template-columns:1fr;max-width:380px;}"+
+  ".cover .infobar .k{font-size:8.5pt;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}"+
+  ".cover .infobar .v{font-size:13pt;font-weight:700;color:#1B4F8A;}"+
+  "h2.sec{font-size:16pt;color:#1B4F8A;margin:0 0 14px;padding-left:12px;border-left:4px solid #1B4F8A;}"+
+  ".subhead{font-size:10.5pt;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;}"+
+  ".subhead:first-of-type{margin-top:0;}"+
+  ".block{margin-bottom:28px;page-break-inside:avoid;}"+
+  ".grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 22px;}"+
+  ".field{page-break-inside:avoid;}"+
+  ".field .k{font-size:8.5pt;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;}"+
+  ".field .v{font-size:12pt;color:#1A1A2E;font-weight:600;}"+
+  "p{margin-bottom:7px;}"+
+  ".sommaire{padding-left:24px;}"+
+  ".sommaire li{margin-bottom:8px;}"+
+  ".photos{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:10px 0;page-break-inside:avoid;}"+
+  ".photos.stack{grid-template-columns:1fr;max-width:400px;}"+
   ".photo{border-radius:8px;overflow:hidden;border:1px solid #E2E6EA;}"+
-  ".photo img{width:100%;height:200px;object-fit:cover;display:block;}"+
-  ".photos.stack .photo img{height:auto;max-height:320px;object-fit:contain;background:#F8F9FA;}"+
-  ".photo .cap{padding:6px 10px;font-size:8.5pt;color:#6B7280;background:#F8F9FA;text-align:center;}"+
+  ".photo img{width:100%;height:100%;object-fit:cover;display:block;}"+
+  ".photos.stack .photo{height:auto !important;}"+
+  ".photos.stack .photo img{height:auto;max-height:340px;object-fit:contain;background:#F8F9FA;}"+
   "@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}";
 
   var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Rapport d'entretien "+txt("de")+"</title><style>"+css+"</style></head><body>";
 
-  // Couverture
+  // Couverture — présentation PMV Services
   html+="<div class='page'><div class='cover'>";
   html+="<img src='"+LOGO_B64+"'/>";
   html+="<div class='kicker'>Rapport d'entretien</div>";
   html+="<h1>Moteur électrique</h1>";
   var coverSub=[txt("marque_moteur"),num("puissance","kW"),txt("materiel_lieu")].filter(Boolean).join(" · ");
   if(coverSub)html+="<div class='moteur'>"+coverSub+"</div>";
+  html+="<div class='blurb'>PMV Services, votre spécialiste de l'entretien du moteur électrique et annexe. Ceci est un rapport d'entretien réalisé sur le chantier "+(txt("de")||"—")+(txt("client")?(" pour "+txt("client")):"")+".</div>";
   html+="<div class='infobar'>";
   if(txt("client"))html+="<div><div class='k'>Client</div><div class='v'>"+txt("client")+"</div></div>";
   if(txt("de"))html+="<div><div class='k'>Référence</div><div class='v'>"+txt("de")+"</div></div>";
   html+="<div><div class='k'>Date</div><div class='v'>"+(data.mois_annee||now)+"</div></div>";
   html+="</div></div></div>";
 
-  // Informations chantier
+  // Informations chantier (page complète)
   var infosChantier=field("Client",txt("client"))+field("Référence chantier",txt("de"))+field("Adresse du chantier",data.adresse_chantier)+field("Contact",data.contact)+field("Référence / localisation",txt("materiel_lieu"))+field("Bordereau d'expédition",data.bordereau)+field("Date de réception",dateReception);
   var pageInfos="";
   pageInfos+=section("Informations chantier",infosChantier?"<div class='grid'>"+infosChantier+"</div>":"");
   pageInfos+=section("Travaux réalisés",data.descriptif_travaux?"<p>"+data.descriptif_travaux+"</p>":"");
   if(pageInfos)html+="<div class='page'>"+topbar()+pageInfos+"</div>";
 
-  // Sommaire + Norme ISO
-  var sommaire="<ol class='sommaire'>"+
-    "<li>Norme ISO</li><li>Photo du moteur à l'arrivée</li><li>Rapport électrique du bobinage</li>"+
-    "<li>Mesure de vibration avant entretien</li><li>Relevé consommation électrique</li>"+
-    "<li>Partie mécanique après extraction des roulements</li>"+
-    "<li>Essai mécanique après entretien et remplacement des roulements</li>"+
-    "<li>Relevé consommation électrique et mesure de vibration après entretien</li><li>Conclusion</li></ol>";
-  html+="<div class='page'>"+topbar()+section("Sommaire",sommaire)+"<div style='margin-top:20px;'><img src='"+ISO_CHART_B64+"' style='width:100%;'/></div></div>";
+  // Chaque bloc calcule d'abord son contenu ; il n'est ajouté à la file (et donc
+  // au sommaire) que s'il produit réellement quelque chose.
+  var pagesQueue=[];
 
-  // Photo du moteur à l'arrivée
-  var photosArrivee=photosRow([photos.vue_ensemble,photos.plaque_moteur],true);
-  var caption=[txt("type_moteur")?"Modèle : "+txt("type_moteur"):"",txt("numero_serie")?"N° : "+txt("numero_serie"):""].filter(Boolean).join(" — ");
-  var pageArrivee=section("Photo du moteur à l'arrivée",photosArrivee+(caption?"<p style='margin-top:8px;font-weight:600;'>"+caption+"</p>":""));
-  if(pageArrivee)html+="<div class='page'>"+topbar()+pageArrivee+"</div>";
+  if(sec.electrique){
+    var photosArrivee=photosRow([photos.vue_ensemble,photos.plaque_moteur],true);
+    var caption=[txt("type_moteur")?"Modèle : "+txt("type_moteur"):"",txt("numero_serie")?"N° : "+txt("numero_serie"):""].filter(Boolean).join(" — ");
+    var pageArrivee=section("Photo du moteur à l'arrivée",photosArrivee+(caption?"<p style='margin-top:8px;font-weight:600;'>"+caption+"</p>":""));
 
-  // Rapport électrique du bobinage + captures ADX
-  var sentencesElec=[];
-  if(isolPart("isol_masse"))sentencesElec.push("Isolement enroulement / masse = "+isolPart("isol_masse")+(num("isol_masse_dar")?(" avec un Dar de "+num("isol_masse_dar")):""));
-  if(isolPart("isol_uv"))sentencesElec.push("U / V = "+isolPart("isol_uv")+" / 1000V"+(num("isol_uv_dar")?(" avec un Dar de "+num("isol_uv_dar")):""));
-  if(isolPart("isol_vw"))sentencesElec.push("V / W = "+isolPart("isol_vw")+" / 1000V"+(num("isol_vw_dar")?(" avec un Dar de "+num("isol_vw_dar")):""));
-  if(isolPart("isol_wu"))sentencesElec.push("W / U = "+isolPart("isol_wu")+" / 1000V"+(num("isol_wu_dar")?(" avec un Dar de "+num("isol_wu_dar")):""));
-  var verdictBobinage=inline("verdict_bobinage");
-  if(verdictBobinage)sentencesElec.push("Les valeurs d'isolement entre enroulements sont "+verdictBobinage);
-  var verdictMasse=inline("verdict_masse");
-  if(verdictMasse)sentencesElec.push("L'isolement à la masse est "+verdictMasse);
-  var elecInner=sentencesElec.length?"<p>"+sentencesElec.join("<br/>")+"</p>":"";
-  var captures=parseCaptures();
-  var capturesHtml=captures.map(function(c){return "<div style='margin-top:16px;'>"+photoCard(c.url,null)+(c.caption?"<p style='margin-top:6px;'>"+c.caption+"</p>":"")+"</div>";}).join("");
-  var pageElec=section("Rapport électrique du bobinage",elecInner+capturesHtml);
-  if(pageElec)html+="<div class='page'>"+topbar()+pageElec+"</div>";
+    var sentencesElec=[];
+    if(isolPart("isol_masse"))sentencesElec.push("Isolement enroulement / masse = "+isolPart("isol_masse")+(num("isol_masse_dar")?(" avec un Dar de "+num("isol_masse_dar")):""));
+    if(isolPart("isol_uv"))sentencesElec.push("U / V = "+isolPart("isol_uv")+" / 1000V"+(num("isol_uv_dar")?(" avec un Dar de "+num("isol_uv_dar")):""));
+    if(isolPart("isol_vw"))sentencesElec.push("V / W = "+isolPart("isol_vw")+" / 1000V"+(num("isol_vw_dar")?(" avec un Dar de "+num("isol_vw_dar")):""));
+    if(isolPart("isol_wu"))sentencesElec.push("W / U = "+isolPart("isol_wu")+" / 1000V"+(num("isol_wu_dar")?(" avec un Dar de "+num("isol_wu_dar")):""));
+    var verdictBobinage=inline("verdict_bobinage");
+    if(verdictBobinage)sentencesElec.push("Les valeurs d'isolement entre enroulements sont "+verdictBobinage);
+    var verdictMasse=inline("verdict_masse");
+    if(verdictMasse)sentencesElec.push("L'isolement à la masse est "+verdictMasse);
+    var elecInner=sentencesElec.length?"<p>"+sentencesElec.join("<br/>")+"</p>":"";
+    var captures=parseCaptures();
+    var capturesHtml=captures.map(function(c){return "<div style='margin-top:16px;'>"+photoCard(c.url,null)+(c.caption?"<p style='margin-top:6px;'>"+c.caption+"</p>":"")+"</div>";}).join("");
+    var pageElec=section("Rapport électrique du bobinage",elecInner+capturesHtml);
 
-  // Conso avant + vibration avant
-  var intAvant=[num("int_p1_avant","A"),num("int_p2_avant","A"),num("int_p3_avant","A")].filter(Boolean);
-  var pageConsoAvant=section("Relevé consommation électrique",intAvant.length?"<p>Le moteur consomme à vide sous 400V "+intAvant.join(", ")+" par phase.</p>":"");
-  var vibAvantLines=[];
-  if(num("vib_av_mms_avant"))vibAvantLines.push("Vibration avant : "+num("vib_av_mms_avant","mm/s")+(num("vib_av_ge_avant")?" "+num("vib_av_ge_avant","Ge"):""));
-  if(num("vib_ar_mms_avant"))vibAvantLines.push("Vibration arrière : "+num("vib_ar_mms_avant","mm/s")+(num("vib_ar_ge_avant")?" "+num("vib_ar_ge_avant","Ge"):""));
-  var vibAvantInner=(vibAvantLines.length?"<p>"+vibAvantLines.join("<br/>")+"</p>":"")+(data.commentaire_vibration_avant?"<p>"+data.commentaire_vibration_avant+"</p>":"")+photosRow([photos.skf_av_dem,photos.skf_ar_dem]);
-  var pageVibAvant=section("Mesure de vibration avant entretien",vibAvantInner);
-  if(pageConsoAvant||pageVibAvant)html+="<div class='page'>"+topbar()+pageConsoAvant+pageVibAvant+"</div>";
-
-  // Partie mécanique après extraction
-  var portees=[];
-  function porteeLine(label,valId,verdictKey){
-    var val=num(valId,"mm");
-    if(!val)return;
-    var vv=inline(verdictKey);
-    portees.push(label+" est de "+val+(vv?(", cette valeur est "+vv):"")+".");
+    var labels=[];
+    if(pageArrivee)labels.push("Photo du moteur à l'arrivée");
+    if(pageElec)labels.push("Rapport électrique du bobinage");
+    if(pageArrivee||pageElec)pagesQueue.push({labels:labels,html:"<div class='page'>"+topbar()+pageArrivee+pageElec+"</div>"});
   }
-  porteeLine("La portée interne côté commande","mesure_arbre_av","verdict_arbre_av");
-  porteeLine("La portée extérieure côté commande","mesure_flasque_av","verdict_flasque_av");
-  porteeLine("La portée interne côté opposé commande","mesure_arbre_ar","verdict_arbre_ar");
-  porteeLine("La portée extérieure côté opposé commande","mesure_flasque_ar","verdict_flasque_ar");
-  var roulementsLines=[];
-  if(txt("type_roulement_av"))roulementsLines.push("Roulement avant (côté commande) : "+txt("type_roulement_av"));
-  if(txt("type_roulement_ar"))roulementsLines.push("Roulement arrière (côté opposé commande) : "+txt("type_roulement_ar"));
-  var mecaInner=(portees.length?"<p>"+portees.join("<br/>")+"</p>":"")+(data.commentaire_roulements?"<p>"+data.commentaire_roulements+"</p>":"")+(roulementsLines.length?"<p>"+roulementsLines.join("<br/>")+"</p>":"")+photosRow([photos.stator_av,photos.stator_ar]);
-  var pageMeca=section("Partie mécanique après extraction des roulements",mecaInner);
-  if(pageMeca)html+="<div class='page'>"+topbar()+pageMeca+"</div>";
 
-  // Essai après remontage
-  var vibApresParts=[];
-  if(num("vib_av_mms_apres"))vibApresParts.push(num("vib_av_mms_apres","mm/s")+" CC");
-  if(num("vib_ar_mms_apres"))vibApresParts.push(num("vib_ar_mms_apres","mm/s")+" COC");
-  var essaiApresInner=(vibApresParts.length?"<p>Le moteur vibre à "+vibApresParts.join(" et ")+" pour une norme à 3mm/s.</p>":"")+photosRow([photos.skf_av_rem,photos.skf_ar_rem]);
-  var pageEssaiApres=section("Essai mécanique après entretien et remplacement des roulements",essaiApresInner);
-  if(pageEssaiApres)html+="<div class='page'>"+topbar()+pageEssaiApres+"</div>";
+  if(sec.avant){
+    var intAvant=[num("int_p1_avant","A"),num("int_p2_avant","A"),num("int_p3_avant","A")].filter(Boolean);
+    var pageConsoAvant=section("Relevé consommation électrique",intAvant.length?"<p>Le moteur consomme à vide sous 400V "+intAvant.join(", ")+" par phase.</p>":"");
+    var vibAvantLines=[];
+    if(num("vib_av_mms_avant"))vibAvantLines.push("Vibration avant : "+num("vib_av_mms_avant","mm/s")+(num("vib_av_ge_avant")?" "+num("vib_av_ge_avant","Ge"):""));
+    if(num("vib_ar_mms_avant"))vibAvantLines.push("Vibration arrière : "+num("vib_ar_mms_avant","mm/s")+(num("vib_ar_ge_avant")?" "+num("vib_ar_ge_avant","Ge"):""));
+    var vibAvantHasContent=vibAvantLines.length||data.commentaire_vibration_avant||photos.skf_av_dem||photos.skf_ar_dem;
+    var vibAvantInner="<div class='subhead'>Avant intervention</div>"+(vibAvantLines.length?"<p>"+vibAvantLines.join("<br/>")+"</p>":"")+(data.commentaire_vibration_avant?"<p>"+data.commentaire_vibration_avant+"</p>":"")+photosRow([photos.skf_av_dem,photos.skf_ar_dem]);
+    var pageVibAvant=section("Mesure de vibration avant entretien",vibAvantHasContent?vibAvantInner:"");
 
-  // Conso après + conclusion + signatures
-  var int400=[num("int_p1_apres","A"),num("int_p2_apres","A"),num("int_p3_apres","A")].filter(Boolean);
-  var int560=[num("int_560_p1_apres","A"),num("int_560_p2_apres","A"),num("int_560_p3_apres","A")].filter(Boolean);
-  var consoApresLines=[];
-  if(int400.length)consoApresLines.push("Le moteur consomme à vide sous 400V "+int400.join(", ")+" par phase.");
-  if(int560.length)consoApresLines.push("Le moteur consomme sous 560V "+int560.join(", ")+" par phase.");
-  if(data.ensemble_libre)consoApresLines.push(data.ensemble_libre);
-  var pageConsoApres=section("Relevé consommation électrique et mesure de vibration après entretien",consoApresLines.length?"<p>"+consoApresLines.join("<br/>")+"</p>":"");
+    var labels=[];
+    if(pageConsoAvant)labels.push("Relevé consommation électrique");
+    if(pageVibAvant)labels.push("Mesure de vibration avant entretien");
+    if(pageConsoAvant||pageVibAvant)pagesQueue.push({labels:labels,html:"<div class='page'>"+topbar()+pageConsoAvant+pageVibAvant+"</div>"});
+  }
 
-  var conclLines=[];
-  var vMeca=inline("verdict_meca"),vElec=inline("verdict_elec");
-  if(vMeca)conclLines.push("Le moteur est "+vMeca+" mécaniquement");
-  if(vElec)conclLines.push("Le moteur est "+vElec+" électriquement");
-  var photoApres=photoCard(data.photo_apres_url,null);
-  var conclInner=(conclLines.length?"<p>"+conclLines.join("<br/>")+"</p>":"")+(data.commentaire_apres?"<p>"+data.commentaire_apres+"</p>":"")+(photoApres?"<div class='photos stack' style='margin-top:10px;'>"+photoApres+"</div>":"");
-  var pageConcl=section("Conclusion",conclInner);
+  if(sec.mecanique){
+    var portees=[];
+    function porteeLine(label,valId,verdictKey){
+      var val=num(valId,"mm");
+      if(!val)return;
+      var vv=inline(verdictKey);
+      portees.push(label+" est de "+val+(vv?(", cette valeur est "+vv):"")+".");
+    }
+    porteeLine("La portée interne côté commande","mesure_arbre_av","verdict_arbre_av");
+    porteeLine("La portée extérieure côté commande","mesure_flasque_av","verdict_flasque_av");
+    porteeLine("La portée interne côté opposé commande","mesure_arbre_ar","verdict_arbre_ar");
+    porteeLine("La portée extérieure côté opposé commande","mesure_flasque_ar","verdict_flasque_ar");
+    var roulementsLines=[];
+    if(txt("type_roulement_av"))roulementsLines.push("Roulement avant (côté commande) : "+txt("type_roulement_av"));
+    if(txt("type_roulement_ar"))roulementsLines.push("Roulement arrière (côté opposé commande) : "+txt("type_roulement_ar"));
+    var photosDemontage=photosRow([photos.stator_av,photos.stator_ar]);
+    var mecaInner=(portees.length?"<p>"+portees.join("<br/>")+"</p>":"")+(data.commentaire_roulements?"<p>"+data.commentaire_roulements+"</p>":"")+(roulementsLines.length?"<p>"+roulementsLines.join("<br/>")+"</p>":"")+photosDemontage+(photosDemontage&&data.commentaire_demontage?"<p style='margin-top:6px;'>"+data.commentaire_demontage+"</p>":"");
+    var pageMeca=section("Partie mécanique après extraction des roulements",mecaInner);
+    if(pageMeca)pagesQueue.push({labels:["Partie mécanique après extraction des roulements"],html:"<div class='page'>"+topbar()+pageMeca+"</div>"});
+  }
 
-  var signLines=[];
-  if(data.certifie_par)signLines.push("Entretien certifié conforme par "+data.certifie_par+(dateRapport?(" le "+dateRapport):""));
-  if(data.realise_par)signLines.push("Rapport réalisé par "+data.realise_par+(dateRapport?(" le "+dateRapport):""));
-  var signoff=signLines.length?"<p style='margin-top:18px;'>"+signLines.join("<br/>")+"</p>":"";
+  if(sec.apres){
+    var vibApresParts=[];
+    if(num("vib_av_mms_apres"))vibApresParts.push(num("vib_av_mms_apres","mm/s")+" CC");
+    if(num("vib_ar_mms_apres"))vibApresParts.push(num("vib_ar_mms_apres","mm/s")+" COC");
+    var essaiApresHasContent=vibApresParts.length||photos.skf_av_rem||photos.skf_ar_rem;
+    var essaiApresInner="<div class='subhead'>Après intervention</div>"+(vibApresParts.length?"<p>Le moteur vibre à "+vibApresParts.join(" et ")+" pour une norme à 3mm/s.</p>":"")+photosRow([photos.skf_av_rem,photos.skf_ar_rem]);
+    var pageEssaiApres=section("Essai mécanique après entretien et remplacement des roulements",essaiApresHasContent?essaiApresInner:"");
 
-  if(pageConsoApres||pageConcl||signoff)html+="<div class='page'>"+topbar()+pageConsoApres+pageConcl+signoff+"</div>";
+    var int400=[num("int_p1_apres","A"),num("int_p2_apres","A"),num("int_p3_apres","A")].filter(Boolean);
+    var int560=[num("int_560_p1_apres","A"),num("int_560_p2_apres","A"),num("int_560_p3_apres","A")].filter(Boolean);
+    var consoApresLines=[];
+    if(int400.length)consoApresLines.push("Le moteur consomme à vide sous 400V "+int400.join(", ")+" par phase.");
+    if(int560.length)consoApresLines.push("Le moteur consomme sous 560V "+int560.join(", ")+" par phase.");
+    if(data.ensemble_libre)consoApresLines.push(data.ensemble_libre);
+    var pageConsoApres=section("Relevé consommation électrique et mesure de vibration après entretien",consoApresLines.length?"<p>"+consoApresLines.join("<br/>")+"</p>":"");
+
+    var labels=[];
+    if(pageEssaiApres)labels.push("Essai mécanique après entretien et remplacement des roulements");
+    if(pageConsoApres)labels.push("Relevé consommation électrique et mesure de vibration après entretien");
+    if(pageEssaiApres||pageConsoApres)pagesQueue.push({labels:labels,html:"<div class='page'>"+topbar()+pageEssaiApres+pageConsoApres+"</div>"});
+  }
+
+  if(sec.conclusion){
+    var conclLines=[];
+    var vMeca=inline("verdict_meca"),vElec=inline("verdict_elec");
+    if(vMeca)conclLines.push("Le moteur est "+vMeca+" mécaniquement");
+    if(vElec)conclLines.push("Le moteur est "+vElec+" électriquement");
+    var photoApres=photoCard(data.photo_apres_url,null);
+    var conclInner=(conclLines.length?"<p>"+conclLines.join("<br/>")+"</p>":"")+(data.commentaire_apres?"<p>"+data.commentaire_apres+"</p>":"")+(photoApres?"<div class='photos stack' style='margin-top:10px;'>"+photoApres+"</div>":"");
+    var pageConcl=section("Conclusion",conclInner);
+
+    var signLines=[];
+    if(data.certifie_par)signLines.push("Entretien certifié conforme par "+data.certifie_par+(dateRapport?(" le "+dateRapport):""));
+    if(data.realise_par)signLines.push("Rapport réalisé par "+data.realise_par+(dateRapport?(" le "+dateRapport):""));
+    var signoff=signLines.length?"<p style='margin-top:18px;'>"+signLines.join("<br/>")+"</p>":"";
+
+    if(pageConcl||signoff)pagesQueue.push({labels:pageConcl?["Conclusion"]:[],html:"<div class='page'>"+topbar()+pageConcl+signoff+"</div>"});
+  }
+
+  // Sommaire — construit uniquement à partir de ce qui a effectivement du contenu
+  var sommaireItems=["Norme ISO"].concat(pagesQueue.reduce(function(acc,p){return acc.concat(p.labels);},[]));
+  var sommaire="<ol class='sommaire'>"+sommaireItems.map(function(s){return "<li>"+s+"</li>";}).join("")+"</ol>";
+  html+="<div class='page'>"+topbar()+section("Sommaire",sommaire)+"<div style='margin-top:24px;'><img src='"+ISO_CHART_B64+"' style='width:100%;'/></div></div>";
+
+  pagesQueue.forEach(function(p){html+=p.html;});
 
   html+="</body></html>";
   return html;

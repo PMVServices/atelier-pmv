@@ -1476,7 +1476,14 @@ function PageChoix({onChoisir,onRetour}){
 
 // ─── RAPPORT CLIENT (moteur) ────────────────────────────────────────────
 const VERDICT_OPTIONS=["Conforme","Non conforme","Autre"];
-const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","contact","bordereau","descriptif_travaux","commentaire_vibration_avant","commentaire_roulements","ensemble_libre","commentaire_apres","certifie_par","realise_par","date","adx_captures"];
+const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","contact","bordereau","descriptif_travaux","commentaire_vibration_avant","commentaire_roulements","commentaire_demontage","ensemble_libre","commentaire_apres","certifie_par","realise_par","date","adx_captures","sections"];
+const RAPPORT_SECTIONS=[
+  {key:"electrique",label:"Photo à l'arrivée + rapport électrique du bobinage"},
+  {key:"avant",label:"Relevé électrique + vibration avant entretien"},
+  {key:"mecanique",label:"Partie mécanique après extraction des roulements"},
+  {key:"apres",label:"Essai mécanique + relevé après entretien"},
+  {key:"conclusion",label:"Conclusion et signatures"},
+];
 const RAPPORT_VERDICT_KEYS=["verdict_arbre_av","verdict_flasque_av","verdict_arbre_ar","verdict_flasque_ar","verdict_bobinage","verdict_masse","verdict_meca","verdict_elec"];
 const RAPPORT_PHOTO_SLOTS=[
   {key:"plaque_moteur",categorie:"Plaque moteur",label:"Plaque moteur (à l'arrivée)"},
@@ -1559,6 +1566,10 @@ function PageRapport({ficheId,techs,onRetour}){
   function captures(){try{const a=JSON.parse(data.adx_captures||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}}
   function setCaptures(arr){upd("adx_captures",JSON.stringify(arr));}
 
+  function sectionsState(){try{const s=JSON.parse(data.sections||"{}");return s;}catch(e){return {};}}
+  function sectionActive(key){const s=sectionsState();return s[key]!==false;}
+  function toggleSection(key){const s=sectionsState();s[key]=!sectionActive(key);upd("sections",JSON.stringify(s));}
+
   const photosResolved={};
   RAPPORT_PHOTO_SLOTS.forEach(s=>{
     const auto=s.categorie?photos.find(p=>p.categorie_nom===s.categorie):null;
@@ -1626,6 +1637,17 @@ function PageRapport({ficheId,techs,onRetour}){
     {!ficheId&&<div style={{...S.alert,marginBottom:14}}>⚠ Enregistrez au moins une étape de la fiche avant de remplir le rapport.</div>}
     {saved&&<div style={S.ok}>✅ Rapport enregistré.</div>}
 
+    <div style={{...S.card,border:"1.5px solid #1B4F8A"}}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Sections à inclure dans ce rapport</p>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 12px"}}>Informations chantier, sommaire et norme ISO sont toujours inclus. Décochez ce qui ne s'applique pas à cette intervention.</p>
+      {RAPPORT_SECTIONS.map(s=>(
+        <label key={s.key} style={{display:"flex",alignItems:"center",gap:8,fontSize:13,marginBottom:6,cursor:"pointer"}}>
+          <input type="checkbox" checked={sectionActive(s.key)} onChange={()=>toggleSection(s.key)}/>
+          {s.label}
+        </label>
+      ))}
+    </div>
+
     <div style={S.card}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 10px"}}>Informations chantier (à remplir)</p>
       <div style={{marginBottom:10}}><label style={S.lbl}>Mois/année (page de garde)</label><input type="text" value={data.mois_annee||""} onChange={e=>upd("mois_annee",e.target.value)} placeholder="MM/AAAA" style={S.inp}/></div>
@@ -1664,7 +1686,8 @@ function PageRapport({ficheId,techs,onRetour}){
       <LigneVerdict label={"Portée extérieure avant (flasque) : "+(v.mesure_flasque_av||"—")+" mm"} rk="verdict_flasque_av" data={data} upd={upd}/>
       <LigneVerdict label={"Portée interne arrière (arbre) : "+(v.mesure_arbre_ar||"—")+" mm"} rk="verdict_arbre_ar" data={data} upd={upd}/>
       <LigneVerdict label={"Portée extérieure arrière (flasque) : "+(v.mesure_flasque_ar||"—")+" mm"} rk="verdict_flasque_ar" data={data} upd={upd}/>
-      <div style={{marginTop:6}}><label style={S.lbl}>Commentaire — roulements</label><textarea value={data.commentaire_roulements||""} onChange={e=>upd("commentaire_roulements",e.target.value)} placeholder="Ex : La quantité de graisse est correcte, les roulements sont usés..." style={{...S.inp,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/></div>
+      <div style={{marginTop:6,marginBottom:10}}><label style={S.lbl}>Commentaire — roulements</label><textarea value={data.commentaire_roulements||""} onChange={e=>upd("commentaire_roulements",e.target.value)} placeholder="Ex : La quantité de graisse est correcte, les roulements sont usés..." style={{...S.inp,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/></div>
+      <div style={{marginBottom:0}}><label style={S.lbl}>Légende — photos chignon/arrière</label><input type="text" value={data.commentaire_demontage||""} onChange={e=>upd("commentaire_demontage",e.target.value)} style={S.inp}/></div>
     </div>
 
     <div style={S.card}>
