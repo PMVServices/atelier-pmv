@@ -279,7 +279,9 @@ export function genRapportHtml(v,data,photos){
     // Chaque capture d'appareil (ADX, RLC, Hipot, Surge…) sur sa propre page,
     // pour garder l'en-tête et éviter qu'une grande image ne soit coupée.
     parseCaptures().forEach(function(c){
-      var inner="<div style='border-radius:8px;overflow:hidden;border:1px solid #E2E6EA;'><img src='"+c.url+"' crossorigin='anonymous' style='width:100%;height:auto;display:block;'/></div>"+(c.caption?"<p style='margin-top:8px;'>"+c.caption+"</p>":"");
+      // hauteur plafonnée pour garantir que la capture tienne sur une seule page A4
+      // (sinon le débordement produit une 2e page physique sans en-tête)
+      var inner="<div style='border-radius:8px;overflow:hidden;border:1px solid #E2E6EA;text-align:center;max-height:225mm;'><img src='"+c.url+"' crossorigin='anonymous' style='max-width:100%;max-height:225mm;width:auto;height:auto;display:inline-block;'/></div>"+(c.caption?"<p style='margin-top:8px;'>"+c.caption+"</p>":"");
       pagesQueue.push({labels:[],html:"<div class='page'>"+topbar()+inner+"</div>"});
     });
   }
