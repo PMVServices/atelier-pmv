@@ -141,108 +141,183 @@ export function genRapportHtml(v,data,photos,techniciens){
   v=v||{};data=data||{};photos=photos||{};techniciens=techniciens||[];
 
   function clean(val){return (val||"").replace("Autre:","").trim();}
-  function txt(id){var t=clean(v[id]);return t||"—";}
-  function isolPart(id){var p=(v[id]||"").split("_");return p[0]||"—";}
-  function num(id,unite){var t=v[id];return (t===undefined||t===null||t==="")?"—":(t+(unite?" "+unite:""));}
-  function verdict(key){
+  function has(val){return val!==undefined&&val!==null&&String(val).trim()!=="";}
+  function txt(id){return clean(v[id]);}
+  function isolPart(id){var p=(v[id]||"").split("_");return p[0]?(p[0]+(p[1]?" "+p[1]:" GΩ")):"";}
+  function num(id,unite){var t=v[id];return has(t)?(t+(unite?" "+unite:"")):"";}
+  function badge(key){
     var val=data[key]||"";
-    if(val==="Conforme")return "<span style='color:#22863A;font-weight:bold;'>conforme</span>";
-    if(val==="Non conforme")return "<span style='color:#D73A49;font-weight:bold;'>non conforme</span>";
-    if(val.indexOf("Autre:")===0)return clean(val)||"—";
-    return "—";
+    if(val==="Conforme")return "<span class='badge badge-ok'>Conforme</span>";
+    if(val==="Non conforme")return "<span class='badge badge-bad'>Non conforme</span>";
+    if(val.indexOf("Autre:")===0&&clean(val))return "<span class='badge badge-other'>"+clean(val)+"</span>";
+    return "";
   }
-  function photoBox(key,heightPx){
+  function field(label,value){
+    if(!has(value))return "";
+    return "<div class='field'><div class='k'>"+label+"</div><div class='v'>"+value+"</div></div>";
+  }
+  function stat(label,value,unite){
+    if(!has(value))return "";
+    return "<div class='stat'><div class='lbl'>"+label+"</div><div class='n'>"+value+" <span class='u'>"+(unite||"")+"</span></div></div>";
+  }
+  function photoCard(key,label){
     var url=photos[key];
-    if(url)return "<div class='pbox' style='height:"+(heightPx||140)+"px;'><img src='"+url+"' crossorigin='anonymous'/></div>";
-    return "<div class='pbox pbox-empty' style='height:"+(heightPx||140)+"px;'>Photo non disponible</div>";
+    if(!url)return "";
+    return "<div class='photo'><img src='"+url+"' crossorigin='anonymous'/><div class='cap'>"+label+"</div></div>";
+  }
+  function photosRow(items){
+    var cards=items.map(function(it){return photoCard(it[0],it[1]);}).filter(Boolean);
+    if(cards.length===0)return "";
+    return "<div class='photos"+(cards.length===1?" single":"")+"'>"+cards.join("")+"</div>";
+  }
+  function measureRow(label,value,unite,badgeHtml){
+    if(!has(value))return "";
+    return "<tr><td>"+label+"</td><td><b>"+value+"</b>"+(unite?" "+unite:"")+"</td><td>"+(badgeHtml||"")+"</td></tr>";
+  }
+  function section(titre,inner){
+    if(!inner)return "";
+    return "<div class='block'><h2 class='sec'>"+titre+"</h2>"+inner+"</div>";
+  }
+  function topbar(){
+    return "<div class='topbar'><img src='"+LOGO_B64+"'/><div class='ref'>Rapport <b>"+txt("de")+"</b> — "+txt("client")+"</div></div>";
   }
 
   var now=new Date().toLocaleDateString("fr-FR");
-  var moisAnnee=data.mois_annee||now;
-  var dateRapport=data.date||now;
-  var techList=techniciens.length>0?techniciens.join(", "):"—";
+  var dateRapport=data.date?new Date(data.date).toLocaleDateString("fr-FR"):now;
+  var dateReception=v.date_entree?new Date(v.date_entree).toLocaleDateString("fr-FR"):"";
+  var techList=techniciens.length>0?techniciens.join(", "):"";
 
-  var css="*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:9.5pt;color:#1A1A2E;}.page{max-width:210mm;margin:0 auto;padding:12mm;page-break-after:always;}.page:last-child{page-break-after:auto;}.hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;}.logo{height:54px;}.cover-title{font-size:17pt;font-weight:bold;margin:24px 0 6px;}.cover-sub{font-size:13pt;font-weight:bold;color:#E8720C;margin-bottom:30px;}.cover-date{font-size:20pt;text-align:right;}h2{font-size:12pt;color:#1B4F8A;border-bottom:2px solid #1B4F8A;padding-bottom:3px;margin:14px 0 8px;}p{margin-bottom:5px;}table{width:100%;border-collapse:collapse;margin-bottom:8px;}td{padding:4px 7px;border:.4px solid #DEE2E6;vertical-align:top;font-size:9pt;}.lbl{font-weight:bold;width:26%;}.pbox{border:1px solid #1B4F8A;border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#F8F9FA;}.pbox img{width:100%;height:100%;object-fit:cover;}.pbox-empty{color:#9CA3AF;font-size:9pt;font-style:italic;}.pgrid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:8px;}.pgrid2 p{text-align:center;font-weight:bold;font-size:9pt;margin:4px 0 0;}.ft{border-top:.5px solid #DEE2E6;margin-top:14px;padding-top:6px;font-size:7.5pt;color:#6B7280;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}";
+  var css=""+
+  "*{box-sizing:border-box;margin:0;padding:0;}"+
+  "body{font-family:'Segoe UI',Arial,sans-serif;font-size:10.5pt;color:#1A1A2E;line-height:1.5;}"+
+  ".page{max-width:210mm;margin:0 auto;padding:16mm 18mm;page-break-after:always;}"+
+  ".page:last-child{page-break-after:auto;}"+
+  ".topbar{display:flex;justify-content:space-between;align-items:center;padding-bottom:10px;border-bottom:2px solid #EEF4FF;margin-bottom:22px;}"+
+  ".topbar img{height:32px;}"+
+  ".topbar .ref{font-size:9pt;color:#6B7280;}"+
+  ".topbar .ref b{color:#1B4F8A;}"+
+  ".cover{text-align:center;padding-top:70px;}"+
+  ".cover img{height:76px;margin-bottom:44px;}"+
+  ".cover .kicker{font-size:10.5pt;color:#9CA3AF;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}"+
+  ".cover h1{font-size:23pt;color:#1A1A2E;margin-bottom:8px;}"+
+  ".cover .moteur{font-size:13pt;color:#E8720C;font-weight:700;margin-bottom:46px;}"+
+  ".cover .infobar{display:inline-flex;border:1px solid #E2E6EA;border-radius:10px;overflow:hidden;}"+
+  ".cover .infobar div{padding:14px 26px;border-right:1px solid #E2E6EA;}"+
+  ".cover .infobar div:last-child{border-right:none;}"+
+  ".cover .infobar .k{font-size:8pt;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;}"+
+  ".cover .infobar .v{font-size:12.5pt;font-weight:700;color:#1B4F8A;}"+
+  "h2.sec{font-size:13pt;color:#1B4F8A;margin:0 0 12px;padding-left:12px;border-left:4px solid #1B4F8A;}"+
+  ".block{margin-bottom:26px;page-break-inside:avoid;}"+
+  ".grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 20px;}"+
+  ".field .k{font-size:8pt;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px;}"+
+  ".field .v{font-size:10.5pt;color:#1A1A2E;font-weight:600;}"+
+  ".note{background:#F8F9FA;border-left:3px solid #1B4F8A;border-radius:0 8px 8px 0;padding:12px 16px;font-size:10pt;color:#3A3A46;margin-top:6px;}"+
+  ".badge{display:inline-block;padding:2px 11px;border-radius:20px;font-size:9pt;font-weight:700;white-space:nowrap;}"+
+  ".badge-ok{background:#F0FFF4;color:#22863A;}"+
+  ".badge-bad{background:#FFF5F5;color:#D73A49;}"+
+  ".badge-other{background:#F5F6F8;color:#6B7280;}"+
+  "table.meas{width:100%;border-collapse:collapse;font-size:9.5pt;margin-top:4px;}"+
+  "table.meas th{text-align:left;font-size:8pt;color:#9CA3AF;text-transform:uppercase;letter-spacing:.03em;padding:0 8px 6px;border-bottom:1px solid #E2E6EA;}"+
+  "table.meas td{padding:9px 8px;border-bottom:1px solid #F3F4F6;vertical-align:middle;}"+
+  ".stat{display:inline-block;background:#F8F9FA;border-radius:8px;padding:10px 18px;margin:0 10px 10px 0;text-align:center;min-width:100px;}"+
+  ".stat .lbl{font-size:7.5pt;color:#9CA3AF;text-transform:uppercase;letter-spacing:.03em;margin-bottom:3px;}"+
+  ".stat .n{font-size:14pt;font-weight:700;color:#1B4F8A;line-height:1.2;}"+
+  ".stat .n .u{font-size:8pt;font-weight:600;color:#9CA3AF;}"+
+  ".photos{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:10px;}"+
+  ".photos.single{grid-template-columns:1fr;max-width:340px;}"+
+  ".photo{border-radius:8px;overflow:hidden;border:1px solid #E2E6EA;}"+
+  ".photo img{width:100%;height:170px;object-fit:cover;display:block;}"+
+  ".photo .cap{padding:6px 10px;font-size:8.5pt;color:#6B7280;background:#F8F9FA;text-align:center;}"+
+  ".concl{display:flex;gap:16px;flex-wrap:wrap;margin-top:6px;}"+
+  ".concl .card{flex:1;min-width:200px;background:#F8F9FA;border-radius:10px;padding:16px 18px;}"+
+  ".concl .card .t{font-size:9.5pt;color:#6B7280;margin-bottom:8px;}"+
+  ".signoff{margin-top:22px;font-size:9.5pt;color:#3A3A46;}"+
+  ".signoff p{margin-bottom:4px;}"+
+  ".footer{margin-top:24px;padding-top:12px;border-top:1px solid #E2E6EA;font-size:7.5pt;color:#9CA3AF;line-height:1.6;}"+
+  "@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}";
 
   var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Rapport d'entretien "+txt("de")+"</title><style>"+css+"</style></head><body>";
 
   // Page 1 — Couverture
-  html+="<div class='page'><div class='hdr'><img class='logo' src='"+LOGO_B64+"'/></div>";
-  html+="<div class='cover-title'>Rapport d'entretien Moteur <span style='color:#E8720C;'>"+txt("marque_moteur")+"</span></div>";
-  html+="<div class='cover-sub'>"+txt("puissance")+" N°"+txt("numero_serie")+"</div>";
-  html+="<div class='cover-date'>"+moisAnnee+"</div></div>";
+  html+="<div class='page'><div class='cover'>";
+  html+="<img src='"+LOGO_B64+"'/>";
+  html+="<div class='kicker'>Rapport d'entretien</div>";
+  html+="<h1>Moteur électrique"+(txt("materiel_lieu")?" — "+txt("materiel_lieu"):"")+"</h1>";
+  if(txt("marque_moteur")||num("puissance","kW")||txt("numero_serie"))
+    html+="<div class='moteur'>"+[txt("marque_moteur"),num("puissance","kW"),txt("numero_serie")?"N° "+txt("numero_serie"):""].filter(Boolean).join(" · ")+"</div>";
+  html+="<div class='infobar'>";
+  if(txt("client"))html+="<div><div class='k'>Client</div><div class='v'>"+txt("client")+"</div></div>";
+  if(txt("de"))html+="<div><div class='k'>Référence</div><div class='v'>"+txt("de")+"</div></div>";
+  html+="<div><div class='k'>Date</div><div class='v'>"+(data.mois_annee||now)+"</div></div>";
+  html+="</div></div></div>";
 
-  // Page 2 — Client / chantier + sommaire
-  html+="<div class='page'>";
-  html+="<p><strong>PMV Services</strong><br/>7 rue des entrepreneurs<br/>37390 La Membrolle sur Choisille<br/>Tel : 09 67 37 27 24<br/>agence@pmvservices.fr</p>";
-  html+="<h2>Informations chantier</h2>";
-  html+="<table>";
-  html+="<tr><td class='lbl'>Client</td><td>"+txt("client")+"</td></tr>";
-  html+="<tr><td class='lbl'>Référence Chantier</td><td>"+txt("de")+"</td></tr>";
-  html+="<tr><td class='lbl'>Adresse du chantier</td><td>"+(data.adresse_chantier||"—")+"</td></tr>";
-  html+="<tr><td class='lbl'>Référence ou localisation</td><td>"+txt("materiel_lieu")+"</td></tr>";
-  html+="<tr><td class='lbl'>N°/Date commande achat</td><td>"+(data.commande_achat||"—")+"</td></tr>";
-  html+="<tr><td class='lbl'>Date de réception</td><td>"+(v.date_entree?new Date(v.date_entree).toLocaleDateString("fr-FR"):"—")+"</td></tr>";
-  html+="<tr><td class='lbl'>Départ de nos ateliers</td><td>"+(data.depart_ateliers||"—")+"</td></tr>";
-  html+="</table>";
-  html+="<p><strong>Descriptif des travaux réalisés par PMV Services :</strong> "+(data.descriptif_travaux||"—")+"</p>";
-  html+="<h2>Sommaire</h2><p>- Norme ISO, identification<br/>- Mesure mécanique avant entretien<br/>- Photo et observation au démontage<br/>- Mesure des parties mécanique<br/>- Rapport électrique du bobinage<br/>- Mesure mécanique après entretien<br/>- Conclusion</p>";
-  html+="</div>";
+  // Page 2 — Chantier + identification
+  var infosChantier=field("Client",txt("client"))+field("Référence chantier",txt("de"))+field("Adresse du chantier",data.adresse_chantier)+field("Référence / localisation",txt("materiel_lieu"))+field("N°/Date commande achat",data.commande_achat)+field("Date de réception",dateReception)+field("Départ de nos ateliers",data.depart_ateliers);
+  var page2="";
+  page2+=section("Informations chantier",infosChantier?"<div class='grid'>"+infosChantier+"</div>":"");
+  page2+=section("Travaux réalisés",data.descriptif_travaux?"<div class='note'>"+data.descriptif_travaux+"</div>":"");
+  var identFields=field("Marque",txt("marque_moteur"))+field("Puissance",num("puissance","kW"))+field("Vitesse",num("vitesse","tr/mn"))+field("Type",txt("type_moteur"))+field("N° de série",txt("numero_serie"));
+  var identPhotos=photosRow([["plaque_moteur","Plaque moteur"],["vue_ensemble","Vue d'ensemble"]]);
+  page2+=section("Identification du moteur",(identFields?"<div class='grid'>"+identFields+"</div>":"")+identPhotos);
+  if(page2)html+="<div class='page'>"+topbar()+page2+"</div>";
 
-  // Page 3 — Norme ISO + Photo plaque moteur
-  html+="<div class='page'>";
-  html+="<img src='"+ISO_CHART_B64+"' style='width:100%;margin-bottom:14px;'/>";
-  html+="<h2>Photo plaque moteur</h2>";
-  html+="<p>Moteur "+txt("marque_moteur")+" "+num("puissance","kW")+" "+num("vitesse","tr/mn")+" type : "+txt("type_moteur")+" N°"+txt("numero_serie")+"</p>";
-  html+=photoBox("plaque_moteur",220);
-  html+="</div>";
+  // Page 3 — Avant démontage
+  var statsAvant=stat("Vibration CC",num("vib_av_mms_avant"),"mm/s")+stat("GE CC",num("vib_av_ge_avant"),"GE")+stat("Vibration COC",num("vib_ar_mms_avant"),"mm/s")+stat("GE COC",num("vib_ar_ge_avant"),"GE");
+  var photosAvant=photosRow([["skf_av_dem","Côté commande"],["skf_ar_dem","Côté opposé commande"]]);
+  var isoNote=(statsAvant?"<div class='note' style='display:flex;align-items:center;gap:14px;margin-top:14px;'><img src='"+ISO_CHART_B64+"' style='width:150px;flex-shrink:0;border-radius:4px;'/><span>Vitesses vibratoires mesurées conformément à la norme <b>ISO 10816-3</b>, applicable aux machines tournantes de puissance supérieure à 15 kW.</span></div>":"");
+  var page3=section("Contrôles mécaniques avant démontage",statsAvant?("<div>"+statsAvant+"</div>"+photosAvant+isoNote):"");
+  var rowsDemontage=measureRow("Portée interne avant (arbre)",num("mesure_arbre_av","mm"),"",badge("verdict_arbre_av"))+
+    measureRow("Portée extérieure avant (flasque)",num("mesure_flasque_av","mm"),"",badge("verdict_flasque_av"))+
+    measureRow("Portée interne arrière (arbre)",num("mesure_arbre_ar","mm"),"",badge("verdict_arbre_ar"))+
+    measureRow("Portée extérieure arrière (flasque)",num("mesure_flasque_ar","mm"),"",badge("verdict_flasque_ar"));
+  var roulementsFields=field("Roulement avant",txt("type_roulement_av"))+field("Roulement arrière",txt("type_roulement_ar"));
+  var photosDemontage=photosRow([["stator_av","Stator avant"],["stator_ar","Stator arrière"]]);
+  var demontageInner=(rowsDemontage?"<table class='meas'><tr><th>Mesure</th><th>Valeur</th><th>Conformité</th></tr>"+rowsDemontage+"</table>":"")+(roulementsFields?"<div class='grid' style='margin-top:14px;'>"+roulementsFields+"</div>":"")+photosDemontage;
+  var page3b=section("Démontage — mesures mécaniques",demontageInner);
+  if(page3||page3b)html+="<div class='page'>"+topbar()+page3+page3b+"</div>";
 
-  // Page 4 — Photo moteur + essai méca avant démontage
-  html+="<div class='page'>";
-  html+="<h2>Photo du moteur</h2>"+photoBox("vue_ensemble",200);
-  html+="<h2>Essai mécanique avant démontage</h2>";
-  html+="<div class='pgrid2'>"+photoBox("skf_av_dem",180)+photoBox("skf_ar_dem",180)+"<p>Côté commande</p><p>Côté Opposé Commande</p></div>";
-  html+="<p>Mesure de vibration et de Ge CC : "+num("vib_av_mms_avant","mm/s")+" — "+num("vib_av_ge_avant","GE")+"</p>";
-  html+="<p>Mesure de vibration et de Ge COC : "+num("vib_ar_mms_avant","mm/s")+" — "+num("vib_ar_ge_avant","GE")+"</p>";
-  html+="</div>";
+  // Page 4 — Électrique bobinage
+  var rowsElec=measureRow("Isolement U / V",isolPart("isol_uv"),"",num("isol_uv_dar")?("DAR "+num("isol_uv_dar")):"")+
+    measureRow("Isolement V / W",isolPart("isol_vw"),"",num("isol_vw_dar")?("DAR "+num("isol_vw_dar")):"")+
+    measureRow("Isolement W / U",isolPart("isol_wu"),"",num("isol_wu_dar")?("DAR "+num("isol_wu_dar")):"")+
+    measureRow("Isolement à la masse",isolPart("isol_masse"),"",num("isol_masse_dar")?("DAR "+num("isol_masse_dar")):"");
+  var verdictsElec=[badge("verdict_bobinage")?("Enroulements : "+badge("verdict_bobinage")):"",badge("verdict_masse")?("Masse : "+badge("verdict_masse")):""].filter(Boolean).join(" &nbsp;&nbsp; ");
+  var elecInner=(rowsElec?"<table class='meas'><tr><th>Mesure</th><th>Valeur</th><th>DAR</th></tr>"+rowsElec+"</table>":"")+(verdictsElec?"<p style='margin-top:10px;'>"+verdictsElec+"</p>":"");
+  var page4=section("Contrôle électrique du bobinage (après nettoyage vapeur et étuvage)",elecInner);
+  var adxPhoto=photoCard("adx","Rapport ADX");
+  var page4b=section("Rapport ADX",adxPhoto?"<div class='photos single'>"+adxPhoto+"</div>":"");
+  if(page4||page4b)html+="<div class='page'>"+topbar()+page4+page4b+"</div>";
 
-  // Page 5 — Photo démontage + mesures + électrique bobinage
-  html+="<div class='page'>";
-  html+="<h2>Photo au démontage</h2>";
-  html+="<div class='pgrid2'>"+photoBox("stator_av",180)+photoBox("stator_ar",180)+"<p>Stator avant</p><p>Stator arrière</p></div>";
-  html+="<p>La portée interne côté commande est de "+num("mesure_arbre_av","mm")+", cette valeur est "+verdict("verdict_arbre_av")+"</p>";
-  html+="<p>La portée extérieure côté commande est de "+num("mesure_flasque_av","mm")+", cette valeur est "+verdict("verdict_flasque_av")+"</p>";
-  html+="<p>La portée interne (côté opposé commande) est de "+num("mesure_arbre_ar","mm")+", cette valeur est "+verdict("verdict_arbre_ar")+"</p>";
-  html+="<p>La portée extérieure (côté opposé commande) est de "+num("mesure_flasque_ar","mm")+", cette valeur est "+verdict("verdict_flasque_ar")+"</p>";
-  html+="<p>Roulement installé : "+txt("type_roulement_av")+" côté commande</p>";
-  html+="<p>Roulement installé : "+txt("type_roulement_ar")+" côté opposé commande</p>";
-  html+="<h2>Rapport électrique du bobinage après nettoyage vapeur et étuvage</h2>";
-  html+="<p>Les valeurs d'isolement entre enroulements sont "+verdict("verdict_bobinage")+" :</p>";
-  html+="<p>U/V = "+isolPart("isol_uv")+" GΩ / 1000V avec un Dar de "+num("isol_uv_dar")+"</p>";
-  html+="<p>V/W = "+isolPart("isol_vw")+" GΩ / 1000V avec un Dar de "+num("isol_vw_dar")+"</p>";
-  html+="<p>W/U = "+isolPart("isol_wu")+" GΩ / 1000V avec un Dar de "+num("isol_wu_dar")+"</p>";
-  html+="<p>L'isolement à la masse est "+verdict("verdict_masse")+" : "+isolPart("isol_masse")+" GΩ avec un Dar de "+num("isol_masse_dar")+"</p>";
-  html+="</div>";
+  // Page 5 — Après remontage + conclusion
+  var statsApres=stat("Vibration CC",num("vib_av_mms_apres"),"mm/s")+stat("Vibration COC",num("vib_ar_mms_apres"),"mm/s");
+  var statsInt400=stat("Phase 1",num("int_p1_apres"),"A")+stat("Phase 2",num("int_p2_apres"),"A")+stat("Phase 3",num("int_p3_apres"),"A");
+  var statsInt560=stat("Phase 1",num("int_560_p1_apres"),"A")+stat("Phase 2",num("int_560_p2_apres"),"A")+stat("Phase 3",num("int_560_p3_apres"),"A");
+  var photosApres=photosRow([["skf_av_rem","Côté commande"],["skf_ar_rem","Côté opposé commande"]]);
+  var remontageInner=(statsApres?"<div>"+statsApres+"</div>":"")+photosApres+
+    (statsInt400?"<p style='margin-top:14px;font-size:9pt;color:#6B7280;'>Intensité à vide sous 400V</p><div>"+statsInt400+"</div>":"")+
+    (statsInt560?"<p style='margin-top:6px;font-size:9pt;color:#6B7280;'>Intensité à vide sous 560V</p><div>"+statsInt560+"</div>":"")+
+    (data.ensemble_libre?"<div class='note'>"+data.ensemble_libre+"</div>":"");
+  var page5=section("Essais après remontage",remontageInner);
 
-  // Page 6 — Rapport ADX
-  html+="<div class='page'><h2>Rapport ADX</h2>"+photoBox("adx",600)+"</div>";
+  var badgeMeca=badge("verdict_meca"),badgeElec=badge("verdict_elec");
+  var conclInner="";
+  if(badgeMeca||badgeElec){
+    conclInner+="<div class='concl'>";
+    if(badgeMeca)conclInner+="<div class='card'><div class='t'>Contrôle mécanique</div>"+badgeMeca+"</div>";
+    if(badgeElec)conclInner+="<div class='card'><div class='t'>Contrôle électrique</div>"+badgeElec+"</div>";
+    conclInner+="</div>";
+  }
+  var page5b=section("Conclusion",conclInner);
 
-  // Page 7 — Essai méca après remontage + mesures électriques + conclusion
-  html+="<div class='page'>";
-  html+="<h2>Essai mécanique après entretien et remplacement des roulements</h2>";
-  html+="<div class='pgrid2'>"+photoBox("skf_av_rem",180)+photoBox("skf_ar_rem",180)+"<p>CC</p><p>COC</p></div>";
-  html+="<p>Le moteur ne vibre pas, "+num("vib_av_mms_apres","mm/s")+" CC et "+num("vib_ar_mms_apres","mm/s")+" COC pour une norme à 3mm/s</p>";
-  html+="<h2>Mesure électrique lors des essais en rotation à vide et en charge</h2>";
-  html+="<p>Le moteur consomme à vide sous 400V "+num("int_p1_apres","A")+", "+num("int_p2_apres","A")+" et "+num("int_p3_apres","A")+" par phase</p>";
-  html+="<p>Le moteur consomme à vide sous 560V "+num("int_560_p1_apres","A")+", "+num("int_560_p2_apres","A")+" et "+num("int_560_p3_apres","A")+" par phase</p>";
-  html+="<p>L'ensemble est "+(data.ensemble_libre||"—")+"</p>";
-  html+="<h2>Conclusion</h2>";
-  html+="<p>Le moteur est "+verdict("verdict_meca")+" mécaniquement</p>";
-  html+="<p>Le moteur est "+verdict("verdict_elec")+" électriquement</p>";
-  html+="<p><strong>Départ de nos ateliers :</strong> "+(data.depart_ateliers||"—")+"</p>";
-  html+="<p style='margin-top:10px;'>Entretien certifié conforme par "+techList+" le "+dateRapport+"</p>";
-  html+="<p>Rapport réalisé par "+techList+" le "+dateRapport+"</p>";
-  html+="<div class='ft'><strong>Liste du matériel utilisé et date de validité pour effectuer ce rapport :</strong><br/>Les mesures électriques d'isolement à 5 et 10KV ont été réalisées avec le MIT 1025 (date de validité : 06/2027)<br/>Les mesures de résistance électriques ont été réalisées avec le MTR 105 (date de validité : 12/2026)<br/>Les clefs dynamométriques E100105/24W530172 (date de validité : 04/2027)<br/>Megger Baker ADX (date de validité : 09/2026)</div>";
+  var signoff="";
+  if(techList||dateRapport){
+    signoff+="<div class='signoff'>";
+    if(techList)signoff+="<p>Entretien certifié conforme par <b>"+techList+"</b>, le "+dateRapport+".</p>";
+    signoff+="</div>";
+  }
+
+  html+="<div class='page'>"+topbar()+page5+page5b+signoff;
+  html+="<div class='footer'><b>Matériel utilisé et dates de validité :</b><br/>Mesures d'isolement à 5 et 10 kV : MIT 1025 (validité 06/2027) — Mesures de résistance électrique : MTR 105 (validité 12/2026) — Clés dynamométriques E100105/24W530172 (validité 04/2027) — Megger Baker ADX (validité 09/2026)</div>";
   html+="</div>";
 
   html+="</body></html>";
