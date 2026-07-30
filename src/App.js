@@ -44,15 +44,15 @@ const CHAMPS={
   "Entrée":[
     {id:"date_entree",label:"Date d'entrée",type:"date",required:true,groupe:"entree_de"},
     {id:"client",label:"Client",type:"client",required:true},
-    {id:"de",label:"N° DE",type:"text",required:true,note:"Généré automatiquement",groupe:"entree_de"},
+    {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
     {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:false,autreTexte:true},
     {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",groupe:"puiss_vit"},
     {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:false,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
-    {id:"type_moteur",label:"Type",type:"text",required:false},
-    {id:"numero_serie",label:"Numéro de série",type:"text",required:false},
+    {id:"type_moteur",label:"Type",type:"text",required:false,groupe:"type_serie_moteur"},
+    {id:"numero_serie",label:"Numéro de série",type:"text",required:false,groupe:"type_serie_moteur"},
     {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:false,autreTexte:true},
     {id:"tension",label:"Tension",type:"select",options:["230/400","400/690","Autre"],required:true,unite:"V",autreTexte:true},
     {id:"depose_nos_soins",label:"Déposé par nos soins",type:"oui_non",required:true},
@@ -61,7 +61,7 @@ const CHAMPS={
   ],
   "Infos électriques":[
     {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
-    {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",required:false,groupe:"isol_wu_pair"},
+    {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",unite:"DAR",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",unite:"DAR",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",unite:"DAR",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",unite:"DAR",required:false,groupe:"isol_wu_pair"},
     {id:"adx_resultat",label:"ADX mesure isol. — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true},
     {id:"adx_valeur",label:"ADX mesure isol. — valeur",type:"ohm",required:true},
     {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
@@ -82,6 +82,7 @@ const CHAMPS={
     {id:"vib_av_ge_avant",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant"},
     {id:"vib_ar_mms_avant",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere"},
     {id:"vib_ar_ge_avant",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere"},
+    {id:"skf_av_rot",label:"Screen SKF avant rotation",type:"photo_skf",categorie:"Screen SKF avant au démontage",required:false},{id:"skf_ar_rot",label:"Screen SKF arrière rotation",type:"photo_skf",categorie:"Screen SKF arrière au démontage",required:false},
     {id:"int_560_p1_avant",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
     {id:"int_560_p2_avant",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
     {id:"int_560_p3_avant",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
@@ -89,28 +90,28 @@ const CHAMPS={
     {id:"etuvage_stator",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true,groupe:"hp_etuvage"},
     {id:"isol_masse_hp",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator",valeur:"Oui"}},
     {id:"isol_enroul_min",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true},
-    {id:"skf_av_rot",label:"Screen SKF avant rotation",type:"photo_skf",categorie:"Screen SKF avant au démontage",required:false},{id:"skf_ar_rot",label:"Screen SKF arrière rotation",type:"photo_skf",categorie:"Screen SKF arrière au démontage",required:false},{id:"tech_mesure_avant",label:"Qui a mesuré",type:"technicien",required:true},
+    {id:"tech_mesure_avant",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Information matériel au démontage":[
     {id:"ventilateur_present",label:"Présence d'un ventilateur",type:"oui_non",required:true},
     {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips"},
     {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips"},
     {id:"rondelle_presence",label:"Rondelle souplesse — présence",type:"select",options:["Oui","Non"],required:false},
-    {id:"rondelle_avant",label:"Rondelle souplesse avant",type:"select",options:["Oui","Non"],required:false,condition:{champ:"rondelle_presence",valeur:"Oui"}},
-    {id:"rondelle_arriere",label:"Rondelle souplesse arrière",type:"select",options:["Oui","Non"],required:false,condition:{champ:"rondelle_presence",valeur:"Oui"}},
-    {id:"etat_ventilateur",label:"État ventilateur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:{champ:"ventilateur_present",valeur:"Oui"}},
-    {id:"taille_ventilateur",label:"Taille ventilateur",type:"text",required:false,condition:{champ:"ventilateur_present",valeur:"Oui"}},
+    {id:"rondelle_avant",label:"Rondelle souplesse avant",type:"select",options:["Oui","Non"],required:false,condition:{champ:"rondelle_presence",valeur:"Oui"},groupe:"rondelle_pair"},
+    {id:"rondelle_arriere",label:"Rondelle souplesse arrière",type:"select",options:["Oui","Non"],required:false,condition:{champ:"rondelle_presence",valeur:"Oui"},groupe:"rondelle_pair"},
+    {id:"etat_ventilateur",label:"État ventilateur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:{champ:"ventilateur_present",valeur:"Oui"},groupe:"ventilateur_pair"},
+    {id:"taille_ventilateur",label:"Taille ventilateur",type:"text",required:false,condition:{champ:"ventilateur_present",valeur:"Oui"},groupe:"ventilateur_pair"},
     {id:"type_roulement_av",label:"Type roulement avant",type:"roulement",required:true},
-    {id:"etat_roulement_av",label:"État roulement avant",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},{id:"roulement_av_change",label:"Roulement avant changé",type:"oui_non",required:false},
-    {id:"etat_flasque_av",label:"État visuel flasque avant",type:"select",options:["OK","Marqué"],required:true},
-    {id:"etat_arbre_av",label:"État visuel arbre avant",type:"select",options:["OK","Marqué"],required:true},
+    {id:"etat_roulement_av",label:"État roulement avant",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_av_pair"},{id:"roulement_av_change",label:"Roulement avant changé",type:"oui_non",required:false,groupe:"roulement_av_pair"},
+    {id:"etat_flasque_av",label:"État visuel flasque avant",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_av_pair"},
+    {id:"etat_arbre_av",label:"État visuel arbre avant",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_av_pair"},
     {id:"mesure_flasque_av",label:"Mesure flasque avant",type:"number",unite:"mm",required:true,groupe:"flasque_av"},
     {id:"mesure_arbre_av",label:"Mesure arbre avant",type:"number",unite:"mm",required:true,groupe:"flasque_av"},
     {id:"joint_av",label:"Joints avant",type:"joints",required:false,groupe:"joint_av"},
     {id:"type_roulement_ar",label:"Type roulement arrière",type:"roulement",required:true},
-    {id:"etat_roulement_ar",label:"État roulement arrière",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},{id:"roulement_ar_change",label:"Roulement arrière changé",type:"oui_non",required:false},
-    {id:"etat_flasque_ar",label:"État visuel flasque arrière",type:"select",options:["OK","Marqué"],required:true},
-    {id:"etat_arbre_ar",label:"État visuel arbre arrière",type:"select",options:["OK","Marqué"],required:true},
+    {id:"etat_roulement_ar",label:"État roulement arrière",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_ar_pair"},{id:"roulement_ar_change",label:"Roulement arrière changé",type:"oui_non",required:false,groupe:"roulement_ar_pair"},
+    {id:"etat_flasque_ar",label:"État visuel flasque arrière",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_ar_pair"},
+    {id:"etat_arbre_ar",label:"État visuel arbre arrière",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_ar_pair"},
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar"},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar"},
     {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar"},
@@ -146,21 +147,21 @@ const CHAMPS_POMPE={
   "Entrée":[
     {id:"date_entree",label:"Date d'entrée",type:"date",required:true,groupe:"entree_de"},
     {id:"client",label:"Client",type:"client",required:true},
-    {id:"de",label:"N° DE",type:"text",required:true,note:"Généré automatiquement",groupe:"entree_de"},
+    {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
     {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:false,autreTexte:true},
     {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",groupe:"puiss_vit"},
     {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:false,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
-    {id:"type_moteur",label:"Type moteur",type:"text",required:false},
-    {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:false},
+    {id:"type_moteur",label:"Type moteur",type:"text",required:false,groupe:"type_serie_moteur"},
+    {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:false,groupe:"type_serie_moteur"},
     {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:false,autreTexte:true},
     {id:"marque_pompe",label:"Marque pompe",type:"select",options:["Grundfos","KSB","LOWARA","WILO","XYLEM","FYGT","SALMSON","SIHI","SEEPEX","Autre"],required:false,autreTexte:true},
-    {id:"modele_pompe",label:"Modèle / Référence pompe",type:"text",required:false},
-    {id:"numero_serie_pompe",label:"Numéro de série pompe",type:"text",required:false},
-    {id:"debit_nominal",label:"Débit nominal",type:"text",required:false},
-    {id:"pression_nominale",label:"Pression nominale",type:"text",required:false},
+    {id:"modele_pompe",label:"Modèle / Référence pompe",type:"text",required:false,groupe:"pompe_modele_serie"},
+    {id:"numero_serie_pompe",label:"Numéro de série pompe",type:"text",required:false,groupe:"pompe_modele_serie"},
+    {id:"debit_nominal",label:"Débit nominal",type:"text",required:false,groupe:"debit_pression"},
+    {id:"pression_nominale",label:"Pression nominale",type:"text",required:false,groupe:"debit_pression"},
     {id:"type_fluide",label:"Type de fluide pompé",type:"text",required:false,groupe:"fluide_temp"},
     {id:"temperature_fluide",label:"Température fluide",type:"number",required:false,unite:"°C",groupe:"fluide_temp"},
     {id:"tension",label:"Tension",type:"select",options:["230/400","400/690","Autre"],required:true,unite:"V",autreTexte:true},
@@ -171,7 +172,7 @@ const CHAMPS_POMPE={
   "Infos électriques":[
     {id:"sur_variateur",label:"Sur variateur",type:"oui_non",required:true},
     {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
-    {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",required:false,groupe:"isol_wu_pair"},
+    {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",unite:"DAR",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",unite:"DAR",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",unite:"DAR",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",unite:"DAR",required:false,groupe:"isol_wu_pair"},
     {id:"adx_resultat_var",label:"ADX mesure isol. avec variateur 2800V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
     {id:"adx_valeur_var",label:"ADX mesure isol. avec variateur 2800V — valeur",type:"ohm",required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
     {id:"adx_resultat_novar",label:"ADX mesure isol. sans variateur 2000V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Non"}},
@@ -194,6 +195,7 @@ const CHAMPS_POMPE={
     {id:"vib_av_ge_avant_m",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant_m"},
     {id:"vib_ar_mms_avant_m",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere_m"},
     {id:"vib_ar_ge_avant_m",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere_m"},
+    {id:"skf_av_rot_m",label:"Screen SKF avant rotation",type:"photo_skf",categorie:"Screen SKF avant au démontage",required:false},{id:"skf_ar_rot_m",label:"Screen SKF arrière rotation",type:"photo_skf",categorie:"Screen SKF arrière au démontage",required:false},
     {id:"int_560_p1_avant_m",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
     {id:"int_560_p2_avant_m",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
     {id:"int_560_p3_avant_m",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
@@ -209,10 +211,6 @@ const CHAMPS_POMPE={
     {id:"int_p1_avant_p",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_avant_p"},
     {id:"int_p2_avant_p",label:"Intensité Phase 2",type:"mesure",unite:"A",required:false,groupe:"int_avant_p"},
     {id:"int_p3_avant_p",label:"Intensité Phase 3",type:"mesure",unite:"A",required:false,groupe:"int_avant_p"},
-    {id:"vib_av_mms_avant_p",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_avant_p"},
-    {id:"vib_av_ge_avant_p",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant_p"},
-    {id:"vib_ar_mms_avant_p",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere_p"},
-    {id:"vib_ar_ge_avant_p",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere_p"},
     {id:"int_560_p1_avant_p",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_p"},
     {id:"int_560_p2_avant_p",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_p"},
     {id:"int_560_p3_avant_p",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_p"},
@@ -221,14 +219,10 @@ const CHAMPS_POMPE={
     {id:"pression_courbe_0",label:"Pression max débit nul",type:"mesure",unite:"bar",required:true,groupe:"pression_pompe_pair"},
     {id:"pression_ville",label:"Pression de ville",type:"mesure",unite:"bar",required:true,groupe:"delta_p"},
     {id:"pression_pompe",label:"Pression de pompe",type:"mesure",unite:"bar",required:true,groupe:"delta_p"},
-    {id:"delta_p_result",label:"Delta P (calculé auto)",type:"calcul",required:false,calcul:"pression_pompe-pression_ville",unite:"bar"},
-    {id:"delta_p_etat",label:"Delta P — état",type:"select",options:["OK","HS"],required:true},
+    {id:"delta_p_result",label:"Delta P (calculé auto)",type:"calcul",required:false,calcul:"pression_pompe-pression_ville",unite:"bar",groupe:"delta_p_pair"},
+    {id:"delta_p_etat",label:"Delta P — état",type:"select",options:["OK","HS"],required:true,groupe:"delta_p_pair"},
     {id:"diametre_nez_roue",label:"Diamètre nez de roue",type:"mesure",unite:"mm",required:true,groupe:"dim_roue"},
     {id:"diametre_volute",label:"Diamètre volute intérieur",type:"mesure",unite:"mm",required:true,groupe:"dim_roue"},
-    {id:"vib_p_av_mms",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_p_avant"},
-    {id:"vib_p_av_ge",label:"Vibration avant — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_p_avant"},
-    {id:"vib_p_ar_mms",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_p_arriere"},
-    {id:"vib_p_ar_ge",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_p_arriere"},
     {id:"tech_mesure_avant_p",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Matériel au démontage moteur":[
@@ -236,21 +230,21 @@ const CHAMPS_POMPE={
     {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips"},
     {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips"},
     {id:"rondelle_presence",label:"Rondelle souplesse — présence",type:"select",options:["Oui","Non"],required:false},
-    {id:"rondelle_avant",label:"Rondelle souplesse avant",type:"select",options:["Oui","Non"],required:false,condition:{champ:"rondelle_presence",valeur:"Oui"}},
-    {id:"rondelle_arriere",label:"Rondelle souplesse arrière",type:"select",options:["Oui","Non"],required:false,condition:{champ:"rondelle_presence",valeur:"Oui"}},
-    {id:"etat_ventilateur",label:"État ventilateur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:{champ:"ventilateur_present",valeur:"Oui"}},
-    {id:"taille_ventilateur",label:"Taille ventilateur",type:"text",required:false,condition:{champ:"ventilateur_present",valeur:"Oui"}},
+    {id:"rondelle_avant",label:"Rondelle souplesse avant",type:"select",options:["Oui","Non"],required:false,condition:{champ:"rondelle_presence",valeur:"Oui"},groupe:"rondelle_pair"},
+    {id:"rondelle_arriere",label:"Rondelle souplesse arrière",type:"select",options:["Oui","Non"],required:false,condition:{champ:"rondelle_presence",valeur:"Oui"},groupe:"rondelle_pair"},
+    {id:"etat_ventilateur",label:"État ventilateur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:{champ:"ventilateur_present",valeur:"Oui"},groupe:"ventilateur_pair"},
+    {id:"taille_ventilateur",label:"Taille ventilateur",type:"text",required:false,condition:{champ:"ventilateur_present",valeur:"Oui"},groupe:"ventilateur_pair"},
     {id:"type_roulement_av",label:"Type roulement avant",type:"roulement",required:true},
-    {id:"etat_roulement_av",label:"État roulement avant",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},{id:"roulement_av_change",label:"Roulement avant changé",type:"oui_non",required:false},
-    {id:"etat_flasque_av",label:"État visuel flasque avant",type:"select",options:["OK","Marqué"],required:true},
-    {id:"etat_arbre_av",label:"État visuel arbre avant",type:"select",options:["OK","Marqué"],required:true},
+    {id:"etat_roulement_av",label:"État roulement avant",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_av_pair"},{id:"roulement_av_change",label:"Roulement avant changé",type:"oui_non",required:false,groupe:"roulement_av_pair"},
+    {id:"etat_flasque_av",label:"État visuel flasque avant",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_av_pair"},
+    {id:"etat_arbre_av",label:"État visuel arbre avant",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_av_pair"},
     {id:"mesure_flasque_av",label:"Mesure flasque avant",type:"number",unite:"mm",required:true,groupe:"flasque_av"},
     {id:"mesure_arbre_av",label:"Mesure arbre avant",type:"number",unite:"mm",required:true,groupe:"flasque_av"},
     {id:"joint_av",label:"Joints avant",type:"joints",required:false,groupe:"joint_av"},
     {id:"type_roulement_ar",label:"Type roulement arrière",type:"roulement",required:true},
-    {id:"etat_roulement_ar",label:"État roulement arrière",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},{id:"roulement_ar_change",label:"Roulement arrière changé",type:"oui_non",required:false},
-    {id:"etat_flasque_ar",label:"État visuel flasque arrière",type:"select",options:["OK","Marqué"],required:true},
-    {id:"etat_arbre_ar",label:"État visuel arbre arrière",type:"select",options:["OK","Marqué"],required:true},
+    {id:"etat_roulement_ar",label:"État roulement arrière",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_ar_pair"},{id:"roulement_ar_change",label:"Roulement arrière changé",type:"oui_non",required:false,groupe:"roulement_ar_pair"},
+    {id:"etat_flasque_ar",label:"État visuel flasque arrière",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_ar_pair"},
+    {id:"etat_arbre_ar",label:"État visuel arbre arrière",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_ar_pair"},
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar"},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar"},
     {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar"},
@@ -265,17 +259,16 @@ const CHAMPS_POMPE={
     {id:"remplacement_jc",label:"Remplacement du joint de corps",type:"oui_non",required:true},
     {id:"type_gm_fixe",label:"Type GM fixe",type:"garniture_fixe",required:true,groupe:"gm_fixe_type_diam"},
     {id:"diametre_gm_fixe",label:"Diamètre arbre GM fixe",type:"number",unite:"mm",required:true,groupe:"gm_fixe_type_diam"},
-    {id:"etat_gm_fixe",label:"État GM fixe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
-    {id:"diametre_portee_fixe",label:"Diamètre de la portée GM fixe",type:"mesure",unite:"mm",required:true},
+    {id:"etat_gm_fixe",label:"État GM fixe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"gm_fixe_etat_diam"},
+    {id:"diametre_portee_fixe",label:"Diamètre de la portée GM fixe",type:"mesure",unite:"mm",required:true,groupe:"gm_fixe_etat_diam"},
     {id:"type_gm_mobile",label:"Type GM mobile",type:"garniture_mobile",required:true,groupe:"gm_mobile_type_diam"},
     {id:"diametre_gm_mobile",label:"Diamètre arbre GM mobile",type:"number",unite:"mm",required:true,groupe:"gm_mobile_type_diam"},
     {id:"etat_gm_mobile",label:"État GM mobile",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
-    {id:"diametre_portee_mobile",label:"Diamètre de la portée GM mobile",type:"mesure",unite:"mm",required:true},
     {id:"type_roulement_av_p",label:"Type roulement avant pompe",type:"roulement",required:true},
-    {id:"etat_roulement_av_p",label:"État roulement avant pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
+    {id:"etat_roulement_av_p",label:"État roulement avant pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_av_p_pair"},{id:"roulement_av_p_change",label:"Roulement avant pompe changé",type:"oui_non",required:false,groupe:"roulement_av_p_pair"},
     {id:"joint_av_p",label:"Joints avant pompe",type:"joints",required:false,groupe:"joint_av_p"},
     {id:"type_roulement_ar_p",label:"Type roulement arrière pompe",type:"roulement",required:true},
-    {id:"etat_roulement_ar_p",label:"État roulement arrière pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true},
+    {id:"etat_roulement_ar_p",label:"État roulement arrière pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_ar_p_pair"},{id:"roulement_ar_p_change",label:"Roulement arrière pompe changé",type:"oui_non",required:false,groupe:"roulement_ar_p_pair"},
     {id:"joint_ar_p",label:"Joints arrière pompe",type:"joints",required:false,groupe:"joint_ar_p"},
     {id:"tech_demontage_p",label:"Qui a démonté la pompe",type:"technicien",required:true},
   ],
@@ -295,12 +288,12 @@ const CHAMPS_POMPE={
     {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_ar_apres"},
     {id:"skf_av_rem",label:"Screen SKF avant remontage",type:"photo_skf",categorie:"Screen SKF avant au remontage",required:false},{id:"skf_ar_rem",label:"Screen SKF arrière remontage",type:"photo_skf",categorie:"Screen SKF arrière au remontage",required:false},{id:"resserage_plaque",label:"Resserrage plaque à bornes",type:"text",required:false},{id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
     {id:"pression_essai_apres",label:"Essai en eau / air",type:"select",options:["Eau","Air"],required:true},
-    {id:"pression_nom_max_apres",label:"Pression nominale maximum",type:"mesure",unite:"bar",required:true},
-    {id:"pression_courbe_0_apres",label:"Pression max courbe à débit nul (0 m³/h)",type:"mesure",unite:"bar",required:true},
+    {id:"pression_nom_max_apres",label:"Pression nominale maximum",type:"mesure",unite:"bar",required:true,groupe:"pression_pompe_apres_pair"},
+    {id:"pression_courbe_0_apres",label:"Pression max courbe à débit nul (0 m³/h)",type:"mesure",unite:"bar",required:true,groupe:"pression_pompe_apres_pair"},
     {id:"pression_ville_apres",label:"Pression de ville",type:"mesure",unite:"bar",required:true,groupe:"delta_p_apres"},
     {id:"pression_pompe_apres",label:"Pression de pompe",type:"mesure",unite:"bar",required:true,groupe:"delta_p_apres"},
-    {id:"delta_p_result_apres",label:"Delta P (calculé auto)",type:"calcul",required:false,calcul:"pression_pompe_apres-pression_ville_apres",unite:"bar"},
-    {id:"delta_p_etat_apres",label:"Delta P — état",type:"select",options:["OK","HS"],required:true},
+    {id:"delta_p_result_apres",label:"Delta P (calculé auto)",type:"calcul",required:false,calcul:"pression_pompe_apres-pression_ville_apres",unite:"bar",groupe:"delta_p_apres_pair"},
+    {id:"delta_p_etat_apres",label:"Delta P — état",type:"select",options:["OK","HS"],required:true,groupe:"delta_p_apres_pair"},
     {id:"diametre_nez_roue_apres",label:"Diamètre nez de roue",type:"mesure",unite:"mm",required:true,groupe:"dim_roue_apres"},
     {id:"diametre_volute_apres",label:"Diamètre volute intérieur",type:"mesure",unite:"mm",required:true,groupe:"dim_roue_apres"},
     {id:"vib_p_av_mms_apres",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_p_avant_apres"},
@@ -313,7 +306,6 @@ const CHAMPS_POMPE={
 function champVisible(c,v){return !c.condition||v[c.condition.champ]===c.condition.valeur;}
 function etapeOk(nom,v,nr,cs){if(nr)return true;for(const c of((cs||CHAMPS)[nom]||[])){if(!c.required||!champVisible(c,v))continue;if(!v[c.id])return false;}return true;}
 function enErreur(c,val){if(c.type!=="mesure"||c.seuilMin==null)return false;const vv=parseFloat(val);return !isNaN(vv)&&vv<c.seuilMin;}
-function genDE(){return "DE"+String(Math.floor(1000+Math.random()*9000));}
 function today(){return new Date().toISOString().split("T")[0];}
 function fmt(iso){if(!iso)return "—";return new Date(iso).toLocaleDateString("fr-FR");}
 function slugCat(s){return s.toLowerCase().replace(/['\s]/g,"_").replace(/é|è|ê/g,"e").replace(/à|â/g,"a").replace(/[^a-z0-9_]/g,"");}
@@ -327,8 +319,8 @@ function grilleCols(n,width){if(width<600)return 1;if(width>=900)return n;return
 function detecterPieces(v,typeMat){
   const pieces=[];const mauvais=["Usé","HS","Cassé","Bleui","Cuit"];
   // Commun moteur
-  if(v.etat_roulement_av&&mauvais.includes(v.etat_roulement_av))pieces.push({designation:"Roulement avant moteur",reference:(v.type_roulement_av||"").replace("Autre:","").trim()});
-  if(v.etat_roulement_ar&&mauvais.includes(v.etat_roulement_ar))pieces.push({designation:"Roulement arrière moteur",reference:(v.type_roulement_ar||"").replace("Autre:","").trim()});
+  if((v.etat_roulement_av&&mauvais.includes(v.etat_roulement_av))||v.roulement_av_change==="Oui")pieces.push({designation:"Roulement avant moteur",reference:(v.type_roulement_av||"").replace("Autre:","").trim()});
+  if((v.etat_roulement_ar&&mauvais.includes(v.etat_roulement_ar))||v.roulement_ar_change==="Oui")pieces.push({designation:"Roulement arrière moteur",reference:(v.type_roulement_ar||"").replace("Autre:","").trim()});
   if(v.joint_av_int)pieces.push({designation:"Joint à lèvres avant moteur",reference:(v.joint_av_int||"?")+"x"+(v.joint_av_ext||"?")+"x"+(v.joint_av_ep||"?")+" "+(v.joint_av_levres==="Double"?"DL":"SL")});
   if(v.joint_ar_int)pieces.push({designation:"Joint à lèvres arrière moteur",reference:(v.joint_ar_int||"?")+"x"+(v.joint_ar_ext||"?")+"x"+(v.joint_ar_ep||"?")+" "+(v.joint_ar_levres==="Double"?"DL":"SL")});
   if(v.etat_ventilateur&&mauvais.includes(v.etat_ventilateur))pieces.push({designation:"Ventilateur",reference:v.taille_ventilateur||""});
@@ -344,8 +336,8 @@ function detecterPieces(v,typeMat){
       const ref=(v.type_gm_mobile||"").replace("Autre:","").trim()+" "+(v.diametre_gm_mobile||"");
       pieces.push({designation:"GM mobile",reference:ref.trim()});
     }
-    if(v.etat_roulement_av_p&&mauvais.includes(v.etat_roulement_av_p))pieces.push({designation:"Roulement avant pompe",reference:(v.type_roulement_av_p||"").replace("Autre:","").trim()});
-    if(v.etat_roulement_ar_p&&mauvais.includes(v.etat_roulement_ar_p))pieces.push({designation:"Roulement arrière pompe",reference:(v.type_roulement_ar_p||"").replace("Autre:","").trim()});
+    if((v.etat_roulement_av_p&&mauvais.includes(v.etat_roulement_av_p))||v.roulement_av_p_change==="Oui")pieces.push({designation:"Roulement avant pompe",reference:(v.type_roulement_av_p||"").replace("Autre:","").trim()});
+    if((v.etat_roulement_ar_p&&mauvais.includes(v.etat_roulement_ar_p))||v.roulement_ar_p_change==="Oui")pieces.push({designation:"Roulement arrière pompe",reference:(v.type_roulement_ar_p||"").replace("Autre:","").trim()});
     if(v.joint_av_int_p)pieces.push({designation:"Joint à lèvres avant pompe",reference:(v.joint_av_int_p||"?")+"x"+(v.joint_av_ext_p||"?")+"x"+(v.joint_av_ep_p||"?")+" "+(v.joint_av_levres_p==="Double"?"DL":"SL")});
     if(v.joint_ar_int_p)pieces.push({designation:"Joint à lèvres arrière pompe",reference:(v.joint_ar_int_p||"?")+"x"+(v.joint_ar_ext_p||"?")+"x"+(v.joint_ar_ep_p||"?")+" "+(v.joint_ar_levres_p==="Double"?"DL":"SL")});
     if(v.remplacement_jc==="Oui")pieces.push({designation:"Joint de corps",reference:v.matiere_taille_jc||""});
@@ -1486,7 +1478,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const isPompe=typeMateriel==="Pompe";
   const etapesActives=isPompe?ETAPES_POMPE:ETAPES;
   const champsActifs=isPompe?CHAMPS_POMPE:CHAMPS;
-  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState({de:ficheInit?.de||genDE(),date_entree:today()});const [actif,setActif]=useState(ficheInit?.etape_active||0);const [validees,setValidees]=useState(ficheInit?.etapes_validees||[]);const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(ficheInit?.statut_chantier||"A_demonter");const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
+  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState({de:ficheInit?.de||"",date_entree:today()});const [actif,setActif]=useState(ficheInit?.etape_active||0);const [validees,setValidees]=useState(ficheInit?.etapes_validees||[]);const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(ficheInit?.statut_chantier||"A_demonter");const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
 
   useEffect(()=>{
     if(ouvrirApercu&&ficheInit?.id){
