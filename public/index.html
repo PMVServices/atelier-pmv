@@ -19,6 +19,14 @@
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: system-ui, -apple-system, sans-serif; background: #F5F6F8; }
       input, select, button { font-family: inherit; }
+
+      /* Cibles tactiles agrandies : uniquement sur écran tactile (tablette/mobile), jamais sur PC/souris */
+      @media (pointer: coarse) {
+        button, input, select, textarea { min-height: 44px; font-size: 16px !important; }
+        button { padding: 12px 20px !important; }
+        input, select, textarea { padding: 11px 12px !important; }
+        input[type="checkbox"], input[type="radio"] { min-height: 0; width: 22px; height: 22px; }
+      }
     </style>
   </head>
   <body>
