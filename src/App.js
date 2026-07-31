@@ -24,6 +24,10 @@ return null;
 };
 
 const PIN_CODE="3739",PIN_KEY="pmv_pin_ok";
+const DRAFT_KEY="pmv_draft_fiche";
+function saveDraft(d){try{sessionStorage.setItem(DRAFT_KEY,JSON.stringify({...d,ts:Date.now()}));}catch(e){}}
+function loadDraft(){try{const s=sessionStorage.getItem(DRAFT_KEY);return s?JSON.parse(s):null;}catch(e){return null;}}
+function clearDraft(){try{sessionStorage.removeItem(DRAFT_KEY);}catch(e){}}
 const TECHNICIENS_FB=["AD","CB","JM","KD","CD","RC","MC","DN","EL","Autre"];
 const CATS_FB=["Vue d'ensemble","Plaque moteur","Plaque pompe","Plaque ventilation","Plaque réducteur","Autre plaque","Stator avant","Stator arrière","Rotor","Flasque avant","Flasque arrière","Arbre avant","Arbre arrière","Divers"];
 const ROULEMENTS=["608 ZZ C3","608 RSH","6000 ZZ C3","6001 ZZ C3","6002 ZZ C3","6003 ZZ C3","6004 ZZ C3","6005 ZZ C3","6006 ZZ C3","6007 ZZ C3","6008 ZZ C3","6009 ZZ C3","6010 ZZ C3","6011 ZZ C3","6200 ZZ C3","6201 ZZ C3","6202 ZZ C3","6203 ZZ C3","6204 ZZ C3","6205 ZZ C3","6206 ZZ C3","6207 ZZ C3","6208 ZZ C3","6209 ZZ C3","6210 ZZ C3","6211 ZZ C3","6212 ZZ C3","6213 ZZ C3","6214 ZZ C3","6215 ZZ C3","6216 ZZ C3","6217 ZZ C3","6217 C3","6218 ZZ C3","6218 C3","6219 ZZ C3","6219 C3","6300 ZZ C3","6301 ZZ C3","6302 ZZ C3","6303 ZZ C3","6304 ZZ C3","6305 ZZ C3","6306 ZZ C3","6307 ZZ C3","6308 ZZ C3","6309 ZZ C3","6310 ZZ C3","6311 ZZ C3","6312 ZZ C3","6313 ZZ C3","6314 ZZ C3","6315 ZZ C3","6316 ZZ C3","6317 ZZ C3","6317 C3","6318 ZZ C3","6318 C3","6319 ZZ C3","6319 C3","NU 206 C3","NU 208 C3","NU 209 C3","NU 210 C3","NU 212 C3","NU 213 C3","NU 214 C3","NU 215 C3","NU 308 C3","NU 309 C3","NU 310 C3","NU 311 C3","NU 312 C3","NU 313 C3","NU 314 C3","NU 315 C3","NU 316 C3","NU 319 C3","NU 322 C3","Autre"];
@@ -1762,7 +1766,8 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const isPompe=typeMateriel==="Pompe";
   const etapesActives=isPompe?ETAPES_POMPE:ETAPES;
   const champsActifs=isPompe?CHAMPS_POMPE:CHAMPS;
-  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState({de:ficheInit?.de||"",date_entree:today()});const [actif,setActif]=useState(ficheInit?.etape_active||0);const [validees,setValidees]=useState(ficheInit?.etapes_validees||[]);const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(ficheInit?.statut_chantier||"A_demonter");const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
+  function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
+  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();return d?d.v:{de:ficheInit?.de||"",date_entree:today()};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
 
   useEffect(()=>{
     if(ouvrirApercu&&ficheInit?.id){
@@ -1773,11 +1778,13 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   },[ouvrirApercu]);
   useEffect(()=>{
     if(!ficheInit?.id)return;
-    db.get("fiche_valeurs","?fiche_id=eq."+ficheInit.id).then(rows=>{if(!Array.isArray(rows))return;const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});setV(p=>({...p,...m}));setCommentaires(m["__commentaires"]||"");});
+    db.get("fiche_valeurs","?fiche_id=eq."+ficheInit.id).then(rows=>{if(!Array.isArray(rows))return;const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});setV(p=>{const merge={...p,...m};const d=draftSiCorrespond();return d?{...merge,...d.v}:merge;});setCommentaires(m["__commentaires"]||"");});
     db.get("fiche_photos","?fiche_id=eq."+ficheInit.id+"&order=created_at").then(rows=>{if(!Array.isArray(rows))return;setPhotos(rows.map(p=>({...p,url:db.photoUrl(p.storage_path)})));});
     db.get("suivi_pieces","?fiche_id=eq."+ficheInit.id).then(rows=>{if(Array.isArray(rows))setPiecesCommande(rows);});
-    setStatutChantier(ficheInit.statut_chantier||"A_demonter");
   },[ficheInit?.id]);
+  useEffect(()=>{
+    saveDraft({ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier});
+  },[ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier]);
 
 const autoSaveTimer=useRef(null);
 const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
@@ -1820,6 +1827,7 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
       }
       setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);
       if(fid)onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur"});
+      clearDraft();
     }catch(e){setErreur(e.message||"Erreur de sauvegarde");}
     setSaving(false);
   }
@@ -1838,6 +1846,7 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
       await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Étape validée",etape:ETAPES[idx]});
       if(onFicheUpdated)onFicheUpdated(fid,{statut:toutFini?"Terminée":"En cours",statut_chantier:newSC});
       setValidees(newVal);if(idx+1<etapesActives.length)setActif(idx+1);setFlash(idx);setTimeout(()=>setFlash(null),3000);onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut_chantier:newSC});
+      clearDraft();
     }catch(e){setErreur("Erreur : "+e.message);}finally{setSaving(false);}
   }
 
@@ -1852,7 +1861,7 @@ const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
           <select value={statutChantier} onChange={e=>changerStatut(e.target.value)} style={{padding:"3px 8px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:11,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:prog+"%",transition:"width .4s"}}/></div>
           <span style={{fontSize:11,opacity:0.85}}>{prog}%</span>
-          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>← Liste</button>
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>{clearDraft();onRetour();}}>← Liste</button>
         </div>
       </div>
     </div>
@@ -2121,7 +2130,7 @@ if(typeof window!=="undefined"){
 
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
-  const [page,setPage]=useState("accueil");const [sessionTech,setSessionTech]=useState(null);const [ficheOuverte,setFicheOuverte]=useState(null);const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState("Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);const [rapportFicheId,setRapportFicheId]=useState(null);
+  const [page,setPage]=useState(()=>loadDraft()?"fiche":"accueil");const [sessionTech,setSessionTech]=useState(()=>loadDraft()?.sessionTech||null);const [ficheOuverte,setFicheOuverte]=useState(()=>{const d=loadDraft();return d?{id:d.ficheId,de:d.v?.de,client:d.v?.client,materiel_lieu:d.v?.materiel_lieu,type_materiel:d.typeMateriel,statut_chantier:d.statutChantier,etape_active:d.actif,etapes_validees:d.validees}:null;});const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState(()=>loadDraft()?.typeMateriel||"Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);const [rapportFicheId,setRapportFicheId]=useState(null);
 
   useEffect(()=>{
     db.get("techniciens","?actif=eq.true&order=initiales").then(d=>{if(Array.isArray(d)&&d.length>0)setTechs(d.map(t=>t.initiales));}).catch(()=>{});
