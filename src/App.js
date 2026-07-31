@@ -2203,7 +2203,6 @@ export default function App(){
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
     {page==="suivi"&&<PageSuivi/>}
-    {page==="chantier"&&<PageChantier fiches={[]} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
     {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
