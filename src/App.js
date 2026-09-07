@@ -57,6 +57,8 @@ const CHAMPS={
     {id:"date_entree",label:"Date d'entrée",type:"date",required:true,groupe:"entree_de"},
     {id:"client",label:"Client",type:"client",required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
+    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair"},
+    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois"],required:true,groupe:"delai_pair"},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
@@ -170,6 +172,8 @@ const CHAMPS_POMPE={
     {id:"date_entree",label:"Date d'entrée",type:"date",required:true,groupe:"entree_de"},
     {id:"client",label:"Client",type:"client",required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
+    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair"},
+    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois"],required:true,groupe:"delai_pair"},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
@@ -344,6 +348,37 @@ function champVisible(c,v){if(!c.condition)return true;if(typeof c.condition==="
 function etapeOk(nom,v,nr,cs){if(nr)return true;for(const c of((cs||CHAMPS)[nom]||[])){if(!c.required||!champVisible(c,v))continue;if(!v[c.id])return false;}return true;}
 function enErreur(c,val){if(c.type!=="mesure"||c.seuilMin==null)return false;const vv=parseFloat(val);return !isNaN(vv)&&vv<c.seuilMin;}
 function today(){return new Date().toISOString().split("T")[0];}
+
+// ─── Délai client / échéance (jours ouvrés = lundi-vendredi) ────────────
+function estJourOuvre(date){const d=date.getDay();return d!==0&&d!==6;}
+function ajouterJoursOuvres(date,n){const d=new Date(date);let c=0;while(c<n){d.setDate(d.getDate()+1);if(estJourOuvre(d))c++;}return d;}
+function calculerEcheance(dateEntreeStr,valeur,unite){
+  if(!dateEntreeStr||!valeur)return null;
+  const n=parseFloat(valeur);
+  if(isNaN(n)||n<=0)return null;
+  const base=new Date(dateEntreeStr+"T00:00:00");
+  if(isNaN(base.getTime()))return null;
+  if(unite==="Semaine(s)"){base.setDate(base.getDate()+Math.round(n*7));return base;}
+  if(unite==="Mois"){base.setMonth(base.getMonth()+Math.round(n));return base;}
+  return ajouterJoursOuvres(base,Math.round(n));
+}
+function joursOuvresRestants(dateEcheance){
+  const t=new Date();t.setHours(0,0,0,0);
+  const cible=new Date(dateEcheance);cible.setHours(0,0,0,0);
+  if(cible.getTime()<=t.getTime())return 0;
+  const d=new Date(t);let c=0;
+  while(d.getTime()<cible.getTime()){d.setDate(d.getDate()+1);if(estJourOuvre(d))c++;}
+  return c;
+}
+function urgenceInfo(v){
+  const ech=calculerEcheance(v.date_entree,v.delai_valeur,v.delai_unite);
+  if(!ech)return null;
+  const j=joursOuvresRestants(ech);
+  const echStr=ech.toLocaleDateString("fr-FR");
+  if(j<5)return{id:"urgent",label:"Urgent",color:"#D73A49",bg:"#FFF5F5",echeance:echStr,jours:j};
+  if(j<10)return{id:"rapide",label:"À faire rapidement",color:"#CA8A04",bg:"#FFFBEB",echeance:echStr,jours:j};
+  return{id:"ok",label:"À faire",color:"#22863A",bg:"#F0FFF4",echeance:echStr,jours:j};
+}
 function fmt(iso){if(!iso)return "—";return new Date(iso).toLocaleDateString("fr-FR");}
 function slugCat(s){return s.toLowerCase().replace(/['\s]/g,"_").replace(/é|è|ê/g,"e").replace(/à|â/g,"a").replace(/[^a-z0-9_]/g,"");}
 function slug(s){return (s||"").replace(/\s+/g,"_").replace(/[^a-zA-Z0-9_\-]/g,"").substring(0,30);}
@@ -1181,6 +1216,17 @@ function PageSuivi(){
 function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
   const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);
   const [dragId,setDragId]=useState(null);const [dragOver,setDragOver]=useState(null);
+  const [delaisMap,setDelaisMap]=useState({});
+  useEffect(()=>{
+    if(!fiches.length){setDelaisMap({});return;}
+    const ids=fiches.map(f=>f.id).join(",");
+    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite)").then(rows=>{
+      if(!Array.isArray(rows))return;
+      const m={};
+      rows.forEach(r=>{if(!m[r.fiche_id])m[r.fiche_id]={};m[r.fiche_id][r.champ_id]=r.valeur;});
+      setDelaisMap(m);
+    }).catch(()=>{});
+  },[fiches.map(f=>f.id).join(",")]);
   const statuts=(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");return s;})();
   const fichesFilt=fiches.filter(f=>filtTech==="tous"||(f.tech_entree||"")==filtTech);
   const parStatut={};STATUTS_CHANTIER.forEach(s=>{parStatut[s.id]=[];});
@@ -1245,13 +1291,13 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
             <span style={{fontSize:11,background:"#F5F6F8",border:"1px solid #E2E6EA",borderRadius:20,padding:"1px 8px",color:"#6B7280"}}>{(parStatut[s.id]||[]).length}</span>
           </div>
           {(parStatut[s.id]||[]).length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
-          {(parStatut[s.id]||[]).map(f=><CarteKanban key={f.id} f={f} s={s} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id}/>)}
+          {(parStatut[s.id]||[]).map(f=><CarteKanban key={f.id} f={f} s={s} urgence={delaisMap[f.id]?urgenceInfo(delaisMap[f.id]):null} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id}/>)}
         </div>
       ))}
     </div>
   </div>);
 }
-function CarteKanban({f,s,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging}){
+function CarteKanban({f,s,urgence,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging}){
   const [ouvert,setOuvert]=useState(false);
   return(<div
     draggable={true}
@@ -1259,17 +1305,20 @@ function CarteKanban({f,s,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,
     onTouchStart={()=>onTouchStart(null,f.id)}
     onTouchEnd={e=>onTouchEnd(e,f.id)}
     style={{background:isDragging?"#EEF4FF":"#F8F9FA",border:"1px solid "+(isDragging?"#1B4F8A":"#E2E6EA"),borderRadius:8,marginBottom:8,cursor:"grab",opacity:isDragging?0.6:1,transition:"opacity .15s,border-color .15s",userSelect:"none"}}>
+    {urgence&&<div style={{height:4,borderRadius:"8px 8px 0 0",background:urgence.color}}/>}
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer"}} onClick={()=>setOuvert(!ouvert)}>
       <span style={{fontSize:13,color:"#9CA3AF",cursor:"grab"}}>⠿</span>
       <div style={{flex:1,minWidth:0}}>
         <span style={{fontSize:12,fontWeight:700,color:"#1B4F8A"}}>{f.de}</span>
         <span style={{fontSize:12,color:"#1A1A2E",marginLeft:6,fontWeight:500}}>{f.client||"—"}</span>
+        {urgence&&<span style={{display:"block",fontSize:10,fontWeight:700,color:urgence.color,marginTop:2}}>● {urgence.label}</span>}
       </div>
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{padding:"8px 10px",borderTop:"1px solid #E2E6EA",background:"#fff"}}>
       <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{f.materiel||"Moteur"}</div>
       <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>Entrée le {fmt(f.created_at)}</div>
+      {urgence&&<div style={{fontSize:11,fontWeight:600,color:urgence.color,background:urgence.bg,borderRadius:6,padding:"5px 8px",marginBottom:8}}>{urgence.label} — échéance le {urgence.echeance}</div>}
       <select value={f.statut_chantier||"A_demonter"} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
         {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
       </select>
