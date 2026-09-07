@@ -7,6 +7,7 @@ function stPdf(id){return STATUTS_PDF.find(s=>s.id===id)||STATUTS_PDF[0];}
 function slugP(s){return (s||"").replace(/\s+/g,"_").replace(/[^a-zA-Z0-9_-]/g,"").substring(0,30);}
 function deslug(de){return (de||"").replace(/-/g,"");}
 function chPdf(v){var c=slugP(v.client||"Client");var d=deslug(v.de||"DE");var m=slugP(v.materiel_lieu||v.type_moteur||"Materiel");return {client:c,de:d,mat:m};}
+function champVisiblePdf(c,v){if(!c.condition)return true;if(typeof c.condition==="function")return c.condition(v);return v[c.condition.champ]===c.condition.valeur;}
 
 export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
   var isPompe=(v._type||v.type_materiel)==="Pompe";
@@ -42,9 +43,9 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
     var techField=csEtape.find(function(c){return c.type==="technicien";});
     var tech=techField&&v[techField.id]?v[techField.id].replace("Autre:",""):"";
 
-    // Trouver les champs avec valeur (hors technicien, hors info, hors photo_skf)
+    // Trouver les champs avec valeur (hors technicien, hors info, hors photo_skf, hors champs masqués par une condition)
     var champsAvecVal=csEtape.filter(function(c){
-      return c.type!=="technicien"&&c.type!=="info"&&c.type!=="photo_skf";
+      return c.type!=="technicien"&&c.type!=="info"&&c.type!=="photo_skf"&&champVisiblePdf(c,v);
     });
 
     html+="<table>";
