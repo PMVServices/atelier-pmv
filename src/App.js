@@ -551,13 +551,27 @@ function statutInfo(id){return STATUTS_CHANTIER.find(s=>s.id===id)||STATUTS_CHAN
 function useWidth(){const [w,setW]=useState(window.innerWidth);useEffect(()=>{const h=()=>setW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return w;}
 function grilleCols(n,width){if(width<600)return 1;if(width>=900)return n;return Math.min(n,2);}
 
+function fmtJoints(val){
+  try{
+    const arr=JSON.parse(val||"[]");
+    if(!Array.isArray(arr)||arr.length===0)return "";
+    return arr.map(function(x){
+      if(x.type==="VA"||x.type==="VS")return x.type+(x.int||"?");
+      return (x.int||"?")+"x"+(x.ext||"?")+"x"+(x.ep||"?")+" "+(x.type==="Double"?"DL":"SL");
+    }).join(", ");
+  }catch(e){return "";}
+}
 function detecterPieces(v,typeMat){
   const pieces=[];const mauvais=["Usé","HS","Cassé","Bleui","Cuit"];
+  function ajouterJoints(champId,label){
+    const txt=fmtJoints(v[champId]);
+    if(txt)pieces.push({designation:label,reference:txt});
+  }
   // Commun moteur
   if((v.etat_roulement_av&&mauvais.includes(v.etat_roulement_av))||v.roulement_av_change==="Oui")pieces.push({designation:"Roulement avant moteur",reference:(v.type_roulement_av||"").replace("Autre:","").trim()});
   if((v.etat_roulement_ar&&mauvais.includes(v.etat_roulement_ar))||v.roulement_ar_change==="Oui")pieces.push({designation:"Roulement arrière moteur",reference:(v.type_roulement_ar||"").replace("Autre:","").trim()});
-  if(v.joint_av_int)pieces.push({designation:"Joint à lèvres avant moteur",reference:(v.joint_av_int||"?")+"x"+(v.joint_av_ext||"?")+"x"+(v.joint_av_ep||"?")+" "+(v.joint_av_levres==="Double"?"DL":"SL")});
-  if(v.joint_ar_int)pieces.push({designation:"Joint à lèvres arrière moteur",reference:(v.joint_ar_int||"?")+"x"+(v.joint_ar_ext||"?")+"x"+(v.joint_ar_ep||"?")+" "+(v.joint_ar_levres==="Double"?"DL":"SL")});
+  ajouterJoints("joint_av","Joint à lèvres avant moteur");
+  ajouterJoints("joint_ar","Joint à lèvres arrière moteur");
   if(v.etat_ventilateur&&mauvais.includes(v.etat_ventilateur))pieces.push({designation:"Ventilateur",reference:v.taille_ventilateur||""});
   if(v.etat_bobinage&&mauvais.includes(v.etat_bobinage))pieces.push({designation:"Bobinage stator",reference:""});
   if(v.etat_rotor&&mauvais.includes(v.etat_rotor))pieces.push({designation:"Rotor",reference:""});
@@ -573,9 +587,22 @@ function detecterPieces(v,typeMat){
     }
     if((v.etat_roulement_av_p&&mauvais.includes(v.etat_roulement_av_p))||v.roulement_av_p_change==="Oui")pieces.push({designation:"Roulement avant pompe",reference:(v.type_roulement_av_p||"").replace("Autre:","").trim()});
     if((v.etat_roulement_ar_p&&mauvais.includes(v.etat_roulement_ar_p))||v.roulement_ar_p_change==="Oui")pieces.push({designation:"Roulement arrière pompe",reference:(v.type_roulement_ar_p||"").replace("Autre:","").trim()});
-    if(v.joint_av_int_p)pieces.push({designation:"Joint à lèvres avant pompe",reference:(v.joint_av_int_p||"?")+"x"+(v.joint_av_ext_p||"?")+"x"+(v.joint_av_ep_p||"?")+" "+(v.joint_av_levres_p==="Double"?"DL":"SL")});
-    if(v.joint_ar_int_p)pieces.push({designation:"Joint à lèvres arrière pompe",reference:(v.joint_ar_int_p||"?")+"x"+(v.joint_ar_ext_p||"?")+"x"+(v.joint_ar_ep_p||"?")+" "+(v.joint_ar_levres_p==="Double"?"DL":"SL")});
+    ajouterJoints("joint_av_p","Joint à lèvres avant pompe");
+    ajouterJoints("joint_ar_p","Joint à lèvres arrière pompe");
     if(v.remplacement_jc==="Oui")pieces.push({designation:"Joint de corps",reference:v.matiere_taille_jc||""});
+  }
+  // Spécifique réducteur
+  if(typeMat==="Moto-réducteur"){
+    if((v.etat_roulement_av_r&&mauvais.includes(v.etat_roulement_av_r))||v.roulement_av_r_change==="Oui")pieces.push({designation:"Roulement avant réducteur",reference:(v.type_roulement_av_r||"").replace("Autre:","").trim()});
+    if((v.etat_roulement_ar_r&&mauvais.includes(v.etat_roulement_ar_r))||v.roulement_ar_r_change==="Oui")pieces.push({designation:"Roulement arrière réducteur",reference:(v.type_roulement_ar_r||"").replace("Autre:","").trim()});
+    ajouterJoints("joint_av_r","Joint à lèvres avant réducteur");
+    ajouterJoints("joint_ar_r","Joint à lèvres arrière réducteur");
+    try{
+      const autres=JSON.parse(v.roulements_autres||"[]");
+      if(Array.isArray(autres))autres.forEach(function(r){
+        if((r.etat&&mauvais.includes(r.etat))||r.change==="Oui")pieces.push({designation:"Roulement (autre) réducteur",reference:(r.type||"").replace("Autre:","").trim()});
+      });
+    }catch(e){}
   }
   return pieces;
 }
