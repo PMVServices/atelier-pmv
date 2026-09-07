@@ -51,6 +51,9 @@ const siNeuf=v=>v.moteur_neuf==="Oui";
 const siAncien=v=>v.moteur_neuf!=="Oui";
 const siPompeNeuve=v=>v.pompe_neuve==="Oui";
 const siPompeAncienne=v=>v.pompe_neuve!=="Oui";
+const MARQUES_REDUCTEUR=["SEW-Eurodrive","Bonfiglioli","Nord Drivesystems","Flender","Bauer","Autre"];
+const siReducteurNeuf=v=>v.reducteur_neuf==="Oui";
+const siReducteurAncien=v=>v.reducteur_neuf!=="Oui";
 
 const CHAMPS={
   "Entrée":[
@@ -344,8 +347,168 @@ const CHAMPS_POMPE={
   ],
 };;
 
+const ETAPES_REDUCTEUR=["Entrée","Infos électriques","Rotation avant démontage moteur","Rotation avant démontage réducteur","Matériel au démontage moteur","Mécanique réducteur au démontage","Essais après remontage"];
+
+const CHAMPS_REDUCTEUR={
+  "Entrée":[
+    {id:"date_entree",label:"Date d'entrée",type:"date",required:true,groupe:"entree_de"},
+    {id:"client",label:"Client",type:"client",required:true},
+    {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
+    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair"},
+    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois"],required:true,groupe:"delai_pair"},
+    {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
+    {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
+    {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
+    {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:false,autreTexte:true},
+    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",groupe:"puiss_vit"},
+    {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:false,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
+    {id:"type_moteur",label:"Type moteur",type:"text",required:false,groupe:"type_serie_moteur"},
+    {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:false,groupe:"type_serie_moteur"},
+    {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:false,autreTexte:true},
+    {id:"marque_reducteur",label:"Marque réducteur",type:"select",options:MARQUES_REDUCTEUR,required:false,autreTexte:true},
+    {id:"numero_serie_reducteur",label:"N° de série réducteur",type:"text",required:false,groupe:"reducteur_serie_modele"},
+    {id:"modele_reducteur",label:"Modèle / Référence réducteur",type:"text",required:false,groupe:"reducteur_serie_modele"},
+    {id:"type_reducteur",label:"Type de réducteur",type:"select",options:["À arbres parallèles","Coaxial","Roue et vis","À couple conique","Autre"],required:false,autreTexte:true,groupe:"reducteur_type_vitesse"},
+    {id:"vitesse_sortie",label:"Vitesse de sortie",type:"text",unite:"tr/mn",required:false,orRequiredWith:"rapport_reduction",orRequiredLabel:"Rapport de réduction",groupe:"reducteur_type_vitesse"},
+    {id:"rapport_reduction",label:"Rapport de réduction",type:"text",required:false,orRequiredWith:"vitesse_sortie",orRequiredLabel:"Vitesse de sortie"},
+    {id:"tension",label:"Tension",type:"select",options:["230/400","400/690","Autre"],required:true,unite:"V",autreTexte:true},
+    {id:"depose_nos_soins",label:"Déposé par nos soins",type:"oui_non",required:true},
+    {id:"enleve_nos_soins",label:"Enlevé par nos soins",type:"oui_non",required:true},
+    {id:"tech_entree",label:"Technicien",type:"technicien",required:true},
+    {id:"demande_client",label:"Demande client",type:"text",required:true},
+  ],
+  "Infos électriques":[
+    {id:"sur_variateur",label:"Sur variateur",type:"oui_non",required:true},
+    {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
+    {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",unite:"DAR",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",unite:"DAR",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",unite:"DAR",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",unite:"DAR",required:false,groupe:"isol_wu_pair"},
+    {id:"adx_resultat_var",label:"ADX mesure isol. avec variateur 2800V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
+    {id:"adx_valeur_var",label:"ADX mesure isol. avec variateur 2800V — valeur",type:"ohm",required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
+    {id:"adx_resultat_novar",label:"ADX mesure isol. sans variateur 2000V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Non"}},
+    {id:"adx_valeur_novar",label:"ADX mesure isol. sans variateur 2000V — valeur",type:"ohm",required:true,condition:{champ:"sur_variateur",valeur:"Non"}},
+    {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
+    {id:"plaque_bornes_taille",label:"Plaque à bornes — taille",type:"text",required:true,condition:{champ:"plaque_bornes_etat",valeur:"HS"}},
+    {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
+    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
+    {id:"tech_elec",label:"Technicien",type:"technicien",required:true},
+    {id:"conclusion",label:"Conclusion",type:"text",required:true},
+  ],
+  "Rotation avant démontage moteur":[
+    {id:"essai_vide_avant_m",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
+    {id:"essai_vide_avant_m_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,condition:{champ:"essai_vide_avant_m",valeur:"Non"}},
+    {id:"rotor_cc_realise_m",label:"Vérif rotor court-circuit — réalisée",type:"select",options:["Oui","Non"],required:true},
+    {id:"rotor_cc_resultat_m",label:"Vérif rotor court-circuit — résultat",type:"select",options:["OK","HS"],required:true,condition:{champ:"rotor_cc_realise_m",valeur:"Oui"}},
+    {id:"int_p1_avant_m",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_avant_m"},
+    {id:"int_p2_avant_m",label:"Intensité Phase 2",type:"mesure",unite:"A",required:true,groupe:"int_avant_m"},
+    {id:"int_p3_avant_m",label:"Intensité Phase 3",type:"mesure",unite:"A",required:true,groupe:"int_avant_m"},
+    {id:"vib_av_mms_avant_m",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_avant_m"},
+    {id:"vib_av_ge_avant_m",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant_m"},
+    {id:"vib_ar_mms_avant_m",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere_m"},
+    {id:"vib_ar_ge_avant_m",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere_m"},
+    {id:"skf_av_rot_m",label:"Screen SKF avant rotation",type:"photo_skf",categorie:"Screen SKF avant au démontage",required:false},{id:"skf_ar_rot_m",label:"Screen SKF arrière rotation",type:"photo_skf",categorie:"Screen SKF arrière au démontage",required:false},
+    {id:"int_560_p1_avant_m",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
+    {id:"int_560_p2_avant_m",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
+    {id:"int_560_p3_avant_m",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
+    {id:"nettoyage_hp_m",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true},
+    {id:"etuvage_stator_m",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true},
+    {id:"isol_masse_hp_m",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator_m",valeur:"Oui"}},
+    {id:"isol_enroul_min_m",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true},
+    {id:"tech_mesure_avant_m",label:"Qui a mesuré",type:"technicien",required:true},
+  ],
+  "Rotation avant démontage réducteur":[
+    {id:"essai_vide_avant_r",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
+    {id:"essai_vide_avant_r_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,condition:{champ:"essai_vide_avant_r",valeur:"Non"}},
+    {id:"int_p1_avant_r",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_avant_r"},
+    {id:"int_p2_avant_r",label:"Intensité Phase 2",type:"mesure",unite:"A",required:false,groupe:"int_avant_r"},
+    {id:"int_p3_avant_r",label:"Intensité Phase 3",type:"mesure",unite:"A",required:false,groupe:"int_avant_r"},
+    {id:"int_560_p1_avant_r",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_r"},
+    {id:"int_560_p2_avant_r",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_r"},
+    {id:"int_560_p3_avant_r",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_r"},
+    {id:"tech_mesure_avant_r",label:"Qui a mesuré",type:"technicien",required:true},
+  ],
+  "Matériel au démontage moteur":[
+    {id:"moteur_neuf",label:"Moteur neuf",type:"oui_non",required:true},
+    {id:"ventilateur_present",label:"Présence d\'un ventilateur",type:"oui_non",required:true,condition:siAncien},
+    {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips",condition:siAncien},
+    {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips",condition:siAncien},
+    {id:"rondelle_presence",label:"Rondelle souplesse — présence",type:"select",options:["Oui","Non"],required:false,condition:siAncien},
+    {id:"rondelle_avant",label:"Rondelle souplesse avant",type:"select",options:["Oui","Non"],required:false,condition:v=>siAncien(v)&&v.rondelle_presence==="Oui",groupe:"rondelle_pair"},
+    {id:"rondelle_arriere",label:"Rondelle souplesse arrière",type:"select",options:["Oui","Non"],required:false,condition:v=>siAncien(v)&&v.rondelle_presence==="Oui",groupe:"rondelle_pair"},
+    {id:"etat_ventilateur",label:"État ventilateur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:v=>siAncien(v)&&v.ventilateur_present==="Oui",groupe:"ventilateur_pair"},
+    {id:"taille_ventilateur",label:"Taille ventilateur",type:"text",required:false,condition:v=>siAncien(v)&&v.ventilateur_present==="Oui",groupe:"ventilateur_pair"},
+    {id:"type_roulement_av",label:"Type roulement avant",type:"roulement",required:true,condition:siAncien},
+    {id:"etat_roulement_av",label:"État roulement avant",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_av_pair",condition:siAncien},{id:"roulement_av_change",label:"Roulement avant changé",type:"oui_non",required:false,groupe:"roulement_av_pair",condition:siAncien},
+    {id:"etat_flasque_av",label:"État visuel flasque avant",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_av_pair",condition:siAncien},
+    {id:"etat_arbre_av",label:"État visuel arbre avant",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_av_pair",condition:siAncien},
+    {id:"mesure_flasque_av",label:"Mesure flasque avant",type:"number",unite:"mm",required:true,groupe:"flasque_av",condition:siAncien},
+    {id:"mesure_arbre_av",label:"Mesure arbre avant",type:"number",unite:"mm",required:true,groupe:"flasque_av",condition:siAncien},
+    {id:"joint_av",label:"Joints avant",type:"joints",required:false,groupe:"joint_av",condition:siAncien},
+    {id:"type_roulement_ar",label:"Type roulement arrière",type:"roulement",required:true,condition:siAncien},
+    {id:"etat_roulement_ar",label:"État roulement arrière",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_ar_pair",condition:siAncien},{id:"roulement_ar_change",label:"Roulement arrière changé",type:"oui_non",required:false,groupe:"roulement_ar_pair",condition:siAncien},
+    {id:"etat_flasque_ar",label:"État visuel flasque arrière",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_ar_pair",condition:siAncien},
+    {id:"etat_arbre_ar",label:"État visuel arbre arrière",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_ar_pair",condition:siAncien},
+    {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
+    {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
+    {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar",condition:siAncien},
+    {id:"peinture",label:"Peinture à faire",type:"oui_non",required:true,condition:siAncien},
+    {id:"etat_bobinage",label:"État visuel bobinage",type:"select",options:["RAS","Cuit","Sale","Vieux","HS"],required:true,groupe:"bob_rotor",condition:siAncien},
+    {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
+    {id:"tech_demontage_m",label:"Qui a démonté",type:"technicien",required:true,condition:siAncien},
+    {id:"marque_moteur_neuf",label:"Marque du moteur",type:"select",options:MARQUES_MOTEUR,required:false,autreTexte:true,condition:siNeuf,groupe:"neuf_marque_puiss"},
+    {id:"puissance_moteur_neuf",label:"Puissance du moteur",type:"text",unite:"kW",required:false,condition:siNeuf,groupe:"neuf_marque_puiss"},
+    {id:"vitesse_moteur_neuf",label:"Vitesse du moteur",type:"text",unite:"tr/mn",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
+    {id:"type_moteur_neuf",label:"Type du moteur",type:"text",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
+    {id:"numero_serie_moteur_neuf",label:"N° de série",type:"text",required:false,condition:siNeuf},
+  ],
+  "Mécanique réducteur au démontage":[
+    {id:"reducteur_neuf",label:"Réducteur neuf",type:"oui_non",required:true},
+    {id:"type_roulement_av_r",label:"Type roulement avant réducteur",type:"roulement",required:true,condition:siReducteurAncien},
+    {id:"etat_roulement_av_r",label:"État roulement avant réducteur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_av_r_pair",condition:siReducteurAncien},{id:"roulement_av_r_change",label:"Roulement avant réducteur changé",type:"oui_non",required:false,groupe:"roulement_av_r_pair",condition:siReducteurAncien},
+    {id:"joint_av_r",label:"Joints avant réducteur",type:"joints",required:false,groupe:"joint_av_r",condition:siReducteurAncien},
+    {id:"type_roulement_ar_r",label:"Type roulement arrière réducteur",type:"roulement",required:true,condition:siReducteurAncien},
+    {id:"etat_roulement_ar_r",label:"État roulement arrière réducteur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_ar_r_pair",condition:siReducteurAncien},{id:"roulement_ar_r_change",label:"Roulement arrière réducteur changé",type:"oui_non",required:false,groupe:"roulement_ar_r_pair",condition:siReducteurAncien},
+    {id:"joint_ar_r",label:"Joints arrière réducteur",type:"joints",required:false,groupe:"joint_ar_r",condition:siReducteurAncien},
+    {id:"roulements_autres",label:"Autres roulements",type:"roulements_liste",required:false,condition:siReducteurAncien},
+    {id:"tech_demontage_r",label:"Qui a démonté le réducteur",type:"technicien",required:true,condition:siReducteurAncien},
+    {id:"marque_reducteur_neuf",label:"Marque du réducteur",type:"select",options:MARQUES_REDUCTEUR,required:false,autreTexte:true,condition:siReducteurNeuf,groupe:"rneuve_marque_puiss"},
+    {id:"puissance_reducteur_neuf",label:"Puissance",type:"text",unite:"kW",required:false,condition:siReducteurNeuf,groupe:"rneuve_marque_puiss"},
+    {id:"numero_serie_reducteur_neuf",label:"N° de série",type:"text",required:false,condition:siReducteurNeuf,groupe:"rneuve_serie_type"},
+    {id:"type_reducteur_neuf",label:"Type de réducteur",type:"text",required:false,condition:siReducteurNeuf,groupe:"rneuve_serie_type"},
+    {id:"autres_pieces_reducteur",label:"Autres pièces détachées",type:"text",required:false},
+    {id:"travaux_conseille",label:"Travaux conseillé/à effectuer",type:"text",required:true},
+  ],
+  "Essais après remontage":[
+    {id:"tech_remontage",label:"Qui a remonté",type:"technicien",required:true},
+    {id:"essai_vide_apres",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
+    {id:"essai_vide_apres_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,condition:{champ:"essai_vide_apres",valeur:"Non"}},
+    {id:"int_p1_apres",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_apres"},
+    {id:"int_p2_apres",label:"Intensité Phase 2",type:"mesure",unite:"A",required:true,groupe:"int_apres"},
+    {id:"int_p3_apres",label:"Intensité Phase 3",type:"mesure",unite:"A",required:true,groupe:"int_apres"},
+    {id:"int_560_p1_apres",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_apres"},
+    {id:"int_560_p2_apres",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_apres"},
+    {id:"int_560_p3_apres",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_apres"},
+    {id:"vib_av_mms_apres",label:"Vibration avant — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_av_apres"},
+    {id:"vib_av_ge_apres",label:"Vibration avant — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_av_apres"},
+    {id:"vib_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_ar_apres"},
+    {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_ar_apres"},
+    {id:"skf_av_rem",label:"Screen SKF avant remontage",type:"photo_skf",categorie:"Screen SKF avant au remontage",required:false},{id:"skf_ar_rem",label:"Screen SKF arrière remontage",type:"photo_skf",categorie:"Screen SKF arrière au remontage",required:false},{id:"resserage_plaque",label:"Resserrage plaque à bornes",type:"text",required:false},{id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
+    {id:"vib_r_av_mms_apres",label:"Vibration avant réducteur — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_r_avant_apres"},
+    {id:"vib_r_av_ge_apres",label:"Vibration avant réducteur — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_r_avant_apres"},
+    {id:"vib_r_ar_mms_apres",label:"Vibration arrière réducteur — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_r_arriere_apres"},
+    {id:"vib_r_ar_ge_apres",label:"Vibration arrière réducteur — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_r_arriere_apres"},
+    {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true},
+  ],
+};;
+
 function champVisible(c,v){if(!c.condition)return true;if(typeof c.condition==="function")return c.condition(v);return v[c.condition.champ]===c.condition.valeur;}
-function etapeOk(nom,v,nr,cs){if(nr)return true;for(const c of((cs||CHAMPS)[nom]||[])){if(!c.required||!champVisible(c,v))continue;if(!v[c.id])return false;}return true;}
+function etapeOk(nom,v,nr,cs){
+  if(nr)return true;
+  for(const c of((cs||CHAMPS)[nom]||[])){
+    if(!champVisible(c,v))continue;
+    if(c.required&&!v[c.id])return false;
+    if(c.orRequiredWith&&!v[c.id]&&!v[c.orRequiredWith])return false;
+  }
+  return true;
+}
 function enErreur(c,val){if(c.type!=="mesure"||c.seuilMin==null)return false;const vv=parseFloat(val);return !isNaN(vv)&&vv<c.seuilMin;}
 function today(){return new Date().toISOString().split("T")[0];}
 
@@ -550,6 +713,43 @@ function ChampJoints({champId,valeur,onChange}){
   );
 }
 
+function ChampRoulementsListe({champId,valeur,onChange}){
+  function parse(v){try{return JSON.parse(v||"[]");}catch(e){return[];}}
+  function save(arr){onChange(champId,JSON.stringify(arr));}
+  const rlts=parse(valeur);
+  function addR(){save(rlts.concat([{type:"",etat:"",change:""}]));}
+  function delR(n){save(rlts.filter((_,j)=>j!==n));}
+  function updR(n,f,v){save(rlts.map((x,j)=>j===n?{...x,[f]:v}:x));}
+  return(
+    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+      {rlts.map((r,n)=>{
+        const isAutre=r.type&&!ROULEMENTS.slice(0,-1).includes(r.type);
+        return(<div key={n} style={{border:"1px solid #E2E6EA",borderRadius:8,padding:"8px 10px",background:"#F8F9FA"}}>
+          <div style={{display:"flex",gap:6,alignItems:"center",marginBottom:6}}>
+            <select value={isAutre?"Autre":(r.type||"")} onChange={e=>{if(e.target.value==="Autre")updR(n,"type","Autre:");else updR(n,"type",e.target.value);}} style={{...S.sel,flex:1}}>
+              <option value="">Type roulement</option>
+              {ROULEMENTS.map(rr=><option key={rr}>{rr}</option>)}
+            </select>
+            <button onClick={()=>delR(n)} style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,color:"#D73A49",padding:"4px 8px",cursor:"pointer",fontSize:12}}>X</button>
+          </div>
+          {(isAutre||r.type?.startsWith("Autre:"))&&<input type="text" placeholder="Référence précise..." value={r.type?.replace("Autre:","")||""} onChange={e=>updR(n,"type","Autre:"+e.target.value)} style={{...S.inp,marginBottom:6}}/>}
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <select value={r.etat||""} onChange={e=>updR(n,"etat",e.target.value)} style={{...S.sel,flex:1,minWidth:110}}>
+              <option value="">État</option>
+              <option value="RAS">RAS</option><option value="Usé">Usé</option><option value="HS">HS</option><option value="Cassé">Cassé</option>
+            </select>
+            <select value={r.change||""} onChange={e=>updR(n,"change",e.target.value)} style={{...S.sel,flex:1,minWidth:110}}>
+              <option value="">Changé ?</option>
+              <option value="Oui">Changé</option><option value="Non">Non changé</option>
+            </select>
+          </div>
+        </div>);
+      })}
+      <button onClick={addR} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>+ Ajouter un roulement</button>
+    </div>
+  );
+}
+
 function BoutonPhotoSkf({categorie,ficheId,cheminBase,photos=[],onPhotoAdded}){
   var fr=React.useRef();
   var uplState=React.useState(false);
@@ -623,14 +823,15 @@ function SectionPhotos({etape,ficheId,cheminBase,categories,photos,onPhotoAdded}
 
 function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,photos=[],onPhotoAdded}){
   if(!champVisible(c,v))return null;
-  const val=v[c.id]||"";const manque=c.required&&!val;const err=enErreur(c,val);
-  const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>{c.label}{c.required&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}{c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:10}}> — {c.note}</span>}</label>;
+  const val=v[c.id]||"";const manqueOr=c.orRequiredWith&&!val&&!v[c.orRequiredWith];const manque=(c.required&&!val)||manqueOr;const err=enErreur(c,val);
+  const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>{c.label}{(c.required||c.orRequiredWith)&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}{c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:10}}> — {c.note}</span>}</label>;
   let ctrl;
   if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={nv=>onChange(c.id,nv)} clients={clients} onAddClient={onAddClient}/>;
   else if(c.type==="technicien")ctrl=<ChampTechnicien valeur={val} onChange={nv=>onChange(c.id,nv)} techs={techs}/>;
   else if(c.type==="roulement")ctrl=<ChampRoulement valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
   else if(c.type==="ohm")ctrl=<ChampOhm champId={c.id} valeur={val} onChange={onChange}/>;
   else if(c.type==="joints")ctrl=<ChampJoints champId={c.id} valeur={val} onChange={onChange}/>;
+  else if(c.type==="roulements_liste")ctrl=<ChampRoulementsListe champId={c.id} valeur={val} onChange={onChange}/>;
   else if(c.type==="photo_skf")ctrl=<BoutonPhotoSkf categorie={c.categorie} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded}/>;
   else if(c.type==="garniture_mobile")ctrl=<ChampGarnitureMobile valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
   else if(c.type==="garniture_fixe")ctrl=<ChampGarnitureFixe valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
@@ -646,7 +847,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   else if(c.type==="date")ctrl=<input type="date" value={val} onChange={e=>onChange(c.id,e.target.value)} style={S.inp}/>;
   else if(c.type==="number")ctrl=<div style={{display:"flex",alignItems:"center",gap:6}}><input type="number" value={val} onChange={e=>onChange(c.id,e.target.value)} style={{...S.inp,flex:1}} placeholder="—"/>{c.unite&&<span style={{fontSize:12,color:"#6B7280",whiteSpace:"nowrap"}}>{c.unite}</span>}</div>;
   else ctrl=<input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} style={manque?S.inpErr:S.inp} placeholder="—"/>;
-  return <div style={{marginBottom:12}}>{lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>Champ obligatoire</div>}</div>;
+  return <div style={{marginBottom:12}}>{lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>{manqueOr?"L'un des deux — "+c.label+" ou "+(c.orRequiredLabel||"l'autre champ")+" — est obligatoire":"Champ obligatoire"}</div>}</div>;
 }
 
 function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,champsSource}){
@@ -1556,7 +1757,7 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
 }
 
 function PageChoix({onChoisir,onRetour}){
-  const mats=[{id:"Moteur",emoji:"⚙️",desc:"Moteur électrique seul"},{id:"Pompe",emoji:"💧",desc:"Corps de pompe + moteur"},{id:"Ventilation",emoji:"🌀",desc:"Ventilateur + moteur",soon:true},{id:"Réducteur",emoji:"🔩",desc:"Réducteur + moteur",soon:true},{id:"Moto-réducteur",emoji:"🔧",desc:"Moto-réducteur complet",soon:true}];
+  const mats=[{id:"Moteur",emoji:"⚙️",desc:"Moteur électrique seul"},{id:"Pompe",emoji:"💧",desc:"Corps de pompe + moteur"},{id:"Ventilation",emoji:"🌀",desc:"Ventilateur + moteur",soon:true},{id:"Réducteur",emoji:"🔩",desc:"Réducteur + moteur",soon:true},{id:"Moto-réducteur",emoji:"🔧",desc:"Moto-réducteur complet"}];
   return(<div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px"}}><button style={{...S.p2,marginBottom:20}} onClick={onRetour}>← Retour</button><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>Nouvelle fiche — quel matériel ?</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>{mats.map(m=><div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}><div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div><p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.id}</p><p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>{m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}</div>)}</div></div>);
 }
 
@@ -1815,7 +2016,7 @@ function PageRapport({ficheId,techs,onRetour}){
 
 function PageRapportsListe({fiches,onOpen}){
   const [q,setQ]=useState("");
-  const moteurFiches=fiches.filter(f=>(f.type_materiel||"Moteur")!=="Pompe");
+  const moteurFiches=fiches.filter(f=>(f.type_materiel||"Moteur")==="Moteur");
   const filtrees=moteurFiches.filter(f=>{
     const qq=q.toLowerCase();
     return !qq||(f.de||"").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq);
@@ -1845,8 +2046,9 @@ function PageRapportsListe({fiches,onOpen}){
 
 function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport}){
   const isPompe=typeMateriel==="Pompe";
-  const etapesActives=isPompe?ETAPES_POMPE:ETAPES;
-  const champsActifs=isPompe?CHAMPS_POMPE:CHAMPS;
+  const isReducteur=typeMateriel==="Moto-réducteur";
+  const etapesActives=isPompe?ETAPES_POMPE:isReducteur?ETAPES_REDUCTEUR:ETAPES;
+  const champsActifs=isPompe?CHAMPS_POMPE:isReducteur?CHAMPS_REDUCTEUR:CHAMPS;
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
   const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();return d?d.v:{de:ficheInit?.de||"",date_entree:today()};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
 
@@ -1868,7 +2070,17 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   },[ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier]);
 
 const autoSaveTimer=useRef(null);
-const onChange=useCallback((id,val)=>setV(p=>({...p,[id]:val})),[]);
+const onChange=useCallback((id,val)=>setV(p=>{
+  const n={...p,[id]:val};
+  if(id==="rapport_reduction"||id==="vitesse_sortie"){
+    const vm=parseFloat((p.vitesse||"").replace("Autre:",""));
+    if(!isNaN(vm)&&vm>0){
+      if(id==="rapport_reduction"){const r=parseFloat(val);if(!isNaN(r)&&r>0)n.vitesse_sortie=String(Math.round((vm/r)*10)/10);}
+      else{const s=parseFloat(val);if(!isNaN(s)&&s>0)n.rapport_reduction=String(Math.round((vm/s)*100)/100);}
+    }
+  }
+  return n;
+}),[]);
   const onAutoSaveChamp=useCallback(async(champId,valeur)=>{
     if(!ficheId||!champId||valeur===undefined||valeur==="")return;
     try{await db.upsertChamp(ficheId,champId,valeur);}catch(e){}
@@ -2287,7 +2499,7 @@ export default function App(){
 
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
-    {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
+    {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
