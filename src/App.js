@@ -35,6 +35,7 @@ const ETAPES=["Entrée","Infos électriques","Information rotation avant démont
 const STATUTS_CHANTIER=[
   {id:"A_demonter",label:"À démonter",color:"#D73A49",bg:"#FFF5F5"},
   {id:"Devis",label:"Devis",color:"#E8720C",bg:"#FFF8E1"},
+  {id:"Devis_envoye",label:"Devis envoyé",color:"#0891B2",bg:"#ECFEFF"},
   {id:"En_commande",label:"En commande",color:"#1B4F8A",bg:"#EEF4FF"},
   {id:"A_remonter",label:"À remonter",color:"#22863A",bg:"#F0FFF4"},
   {id:"Termine",label:"Terminé",color:"#6B7280",bg:"#F5F6F8"},
@@ -1478,7 +1479,8 @@ function PageSuivi(){
 
 // ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
 function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
-  const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);
+  const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);const [showDevisEnvoye,setShowDevisEnvoye]=useState(false);
+  const [recherche,setRecherche]=useState("");
   const [dragId,setDragId]=useState(null);const [dragOver,setDragOver]=useState(null);
   const [delaisMap,setDelaisMap]=useState({});
   useEffect(()=>{
@@ -1491,8 +1493,13 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
       setDelaisMap(m);
     }).catch(()=>{});
   },[fiches.map(f=>f.id).join(",")]);
-  const statuts=(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");return s;})();
-  const fichesFilt=fiches.filter(f=>filtTech==="tous"||(f.tech_entree||"")==filtTech);
+  const statuts=(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");if(!showDevisEnvoye)s=s.filter(x=>x.id!=="Devis_envoye");return s;})();
+  const rq=recherche.trim().toLowerCase();
+  const fichesFilt=fiches.filter(f=>{
+    const matchTech=filtTech==="tous"||(f.tech_entree||"")==filtTech;
+    const matchQ=!rq||(f.de||"").toLowerCase().includes(rq)||(f.client||"").toLowerCase().includes(rq)||(f.materiel||"").toLowerCase().includes(rq);
+    return matchTech&&matchQ;
+  });
   const parStatut={};STATUTS_CHANTIER.forEach(s=>{parStatut[s.id]=[];});
   fichesFilt.forEach(f=>{const sid=f.statut_chantier||"A_demonter";if(parStatut[sid])parStatut[sid].push(f);});
   const devisCount=parStatut["Devis"]?.length||0;
@@ -1533,10 +1540,12 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
         {devisCount>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"3px 10px",borderRadius:20,fontWeight:600}}>⚠ {devisCount} devis en attente</span>}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        <input value={recherche} onChange={e=>setRecherche(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={{...S.inp,width:170}}/>
         <select value={filtTech} onChange={e=>setFiltTech(e.target.value)} style={{...S.sel,width:130}}>
           <option value="tous">Tous</option>
           {techs.map(t=><option key={t} value={t}>{t}</option>)}
         </select>
+        <button onClick={()=>setShowDevisEnvoye(!showDevisEnvoye)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#0891B2",borderColor:"#0891B2"}}>{showDevisEnvoye?"Masquer Devis envoyé":"Afficher Devis envoyé"}</button>
         <button onClick={()=>setShowTermine(!showTermine)} style={{...S.p2,fontSize:12,padding:"5px 12px"}}>{showTermine?"Masquer Terminé":"Afficher Terminé"}</button>
         <button onClick={()=>setShowAbandonne(!showAbandonne)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#9B59B6",borderColor:"#9B59B6"}}>{showAbandonne?"Masquer Abandonné":"Afficher Abandonné"}</button>
       </div>
