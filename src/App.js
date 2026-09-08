@@ -2591,15 +2591,59 @@ async function copierTexte(texte){
   }
 }
 
+// AR de commande (PDF) : stockés en IndexedDB (localStorage n'a que ~5-10 Mo, insuffisant pour des PDF)
+const AR_DB_NAME="pmv_commandes_ar_db";
+const AR_STORE="ar_pdfs";
+function ouvrirArDb(){
+  return new Promise((resolve,reject)=>{
+    if(!window.indexedDB){reject(new Error("IndexedDB indisponible"));return;}
+    const req=indexedDB.open(AR_DB_NAME,1);
+    req.onupgradeneeded=()=>{req.result.createObjectStore(AR_STORE);};
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function sauverArPdf(id,file){
+  const db=await ouvrirArDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(AR_STORE,"readwrite");
+    tx.objectStore(AR_STORE).put(file,id);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+async function chargerArPdf(id){
+  const db=await ouvrirArDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(AR_STORE,"readonly");
+    const req=tx.objectStore(AR_STORE).get(id);
+    req.onsuccess=()=>resolve(req.result||null);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function supprimerArPdf(id){
+  const db=await ouvrirArDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(AR_STORE,"readwrite");
+    tx.objectStore(AR_STORE).delete(id);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+
+const TYPES_COMMANDE=["Fourniture seule","Atelier","Intervention"];
+
 function ModalCommande({initial,onSave,onClose}){
   const [v,setV]=useState(initial||{
     fournisseur:"",numeroCommande:"",numeroChantier:"",typeCommande:"Fourniture seule",
     typeFournitures:"",dateCommande:today(),delaiLivraison:"",livraisonClient:"Non",recue:false
   });
+  const [arFile,setArFile]=useState(null);
+  const [removeAr,setRemoveAr]=useState(false);
   function upd(k,val){setV(p=>({...p,[k]:val}));}
   function submit(){
     if(!v.fournisseur.trim()||!v.numeroCommande.trim()){alert("Fournisseur et N° de commande sont obligatoires.");return;}
-    onSave(v);
+    onSave(v,arFile,removeAr);
   }
   return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16}}>
     <div style={{background:"#fff",borderRadius:12,padding:24,width:480,maxWidth:"100%",maxHeight:"90vh",overflowY:"auto"}}>
@@ -2610,13 +2654,19 @@ function ModalCommande({initial,onSave,onClose}){
         <div><label style={S.lbl}>N° de chantier</label><input value={v.numeroChantier} onChange={e=>upd("numeroChantier",e.target.value)} placeholder="DEXXXX" style={S.inp}/></div>
       </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
-        <div><label style={S.lbl}>Type de commande</label><select value={v.typeCommande} onChange={e=>upd("typeCommande",e.target.value)} style={S.sel}><option>Fourniture seule</option><option>Atelier</option><option>Intervention</option></select></div>
+        <div><label style={S.lbl}>Type de commande</label><select value={v.typeCommande} onChange={e=>upd("typeCommande",e.target.value)} style={S.sel}>{TYPES_COMMANDE.map(t=><option key={t}>{t}</option>)}</select></div>
         <div><label style={S.lbl}>Livraison chez le client</label><select value={v.livraisonClient} onChange={e=>upd("livraisonClient",e.target.value)} style={S.sel}><option>Non</option><option>Oui</option></select></div>
       </div>
       <div style={{marginBottom:12}}><label style={S.lbl}>Type de fournitures</label><input value={v.typeFournitures} onChange={e=>upd("typeFournitures",e.target.value)} style={S.inp}/></div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div><label style={S.lbl}>Date de commande</label><input type="date" value={v.dateCommande} onChange={e=>upd("dateCommande",e.target.value)} style={S.inp}/></div>
         <div><label style={S.lbl}>Délai de livraison prévu</label><input type="date" value={v.delaiLivraison} onChange={e=>upd("delaiLivraison",e.target.value)} style={S.inp}/></div>
+      </div>
+      <div style={{marginBottom:16}}>
+        <label style={S.lbl}>AR de commande (PDF)</label>
+        {v.hasAR&&!removeAr&&!arFile&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,fontSize:12,color:"#6B7280"}}>📎 Un AR est déjà attaché <button type="button" onClick={()=>setRemoveAr(true)} style={{...S.p2,fontSize:11,padding:"3px 8px",color:"#D73A49",borderColor:"#D73A49"}}>Retirer</button></div>}
+        {removeAr&&<div style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#D73A49",marginBottom:6}}>L'AR sera retiré à l'enregistrement. <button type="button" onClick={()=>setRemoveAr(false)} style={{...S.p2,fontSize:11,padding:"3px 8px"}}>Annuler</button></div>}
+        <input type="file" accept="application/pdf" onChange={e=>{setArFile(e.target.files[0]||null);setRemoveAr(false);}} style={S.inp}/>
       </div>
       <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
         <button onClick={onClose} style={S.p2}>Annuler</button>
@@ -2648,10 +2698,36 @@ function ModalModeles({modeles,onSave,onClose}){
   </div>);
 }
 
+function CarteCommande({c,onCopier,onRecue,onEdit,onDelete,onVoirAr}){
+  const st=statutCommande(c);
+  return(<div style={{background:c.recue?"#F8F9FA":"#fff",border:"1px solid #E2E6EA",borderRadius:8,padding:"10px 12px",marginBottom:8,opacity:c.recue?0.65:1}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,gap:6}}>
+      <span style={{display:"inline-block",padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,color:st.color,background:st.bg,whiteSpace:"nowrap"}}>● {st.label}</span>
+      {c.hasAR&&<span title="AR de commande attaché" style={{fontSize:13}}>📎</span>}
+    </div>
+    <div style={{fontWeight:700,fontSize:13}}>{c.fournisseur}</div>
+    <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{c.numeroChantier||"—"} · Cmd {c.numeroCommande}</div>
+    <div style={{fontSize:11,color:"#1A1A2E",marginBottom:2}}>{c.typeFournitures||"—"}</div>
+    <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>
+      Cmd : {fmtDateFr(c.dateCommande)}<br/>
+      Délai : {c.delaiLivraison?fmtDateFr(c.delaiLivraison):"non communiqué"}
+      {c.livraisonClient==="Oui"&&<><br/>🚚 Livraison chez le client</>}
+    </div>
+    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+      {!c.recue&&<button onClick={()=>onCopier(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✉ Relance</button>}
+      {c.hasAR&&<button onClick={()=>onVoirAr(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>📄 AR</button>}
+      <label style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:"#6B7280",cursor:"pointer"}}><input type="checkbox" checked={!!c.recue} onChange={e=>onRecue(c.id,e.target.checked)}/> Reçue</label>
+      <button onClick={()=>onEdit(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✏️</button>
+      <button onClick={()=>onDelete(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px",color:"#D73A49",borderColor:"#D73A49"}}>🗑</button>
+    </div>
+  </div>);
+}
+
 function PageCommandes(){
   const [commandes,setCommandes]=useState(()=>chargerCommandes());
   const [modeles,setModeles]=useState(()=>chargerModeles());
   const [showRecues,setShowRecues]=useState(false);
+  const [recherche,setRecherche]=useState("");
   const [modalCommande,setModalCommande]=useState(null);
   const [modalModeles,setModalModeles]=useState(false);
   const [flash,setFlash]=useState(null);
@@ -2660,25 +2736,38 @@ function PageCommandes(){
   useEffect(()=>{sauverCommandes(commandes);},[commandes]);
   useEffect(()=>{sauverModeles(modeles);},[modeles]);
 
-  const visibles=showRecues?commandes:commandes.filter(c=>!c.recue);
-  const triees=trierCommandes(visibles);
+  const q=recherche.trim().toLowerCase();
+  const filtrees=commandes.filter(c=>{
+    if(!showRecues&&c.recue)return false;
+    if(!q)return true;
+    return [c.fournisseur,c.numeroCommande,c.numeroChantier,c.typeFournitures].some(x=>(x||"").toLowerCase().includes(q));
+  });
+  function parType(t){return trierCommandes(filtrees.filter(c=>c.typeCommande===t));}
 
-  function ajouter(v){
-    setCommandes(prev=>[...prev,{...v,id:"cmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,8)}]);
+  async function ajouter(v,arFile){
+    const id="cmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,8);
+    setCommandes(prev=>[...prev,{...v,id,hasAR:!!arFile}]);
     setModalCommande(null);
     setFlash("Commande ajoutée");setTimeout(()=>setFlash(null),2000);
+    if(arFile){try{await sauverArPdf(id,arFile);}catch(e){}}
   }
-  function modifier(v){
-    setCommandes(prev=>prev.map(c=>c.id===v.id?v:c));
+  async function modifier(v,arFile,removeAr){
+    let hasAR=!!v.hasAR;
+    if(arFile)hasAR=true;else if(removeAr)hasAR=false;
+    const nv={...v,hasAR};
+    setCommandes(prev=>prev.map(c=>c.id===nv.id?nv:c));
     setModalCommande(null);
     setFlash("Commande modifiée");setTimeout(()=>setFlash(null),2000);
+    if(arFile){try{await sauverArPdf(nv.id,arFile);}catch(e){}}
+    else if(removeAr){try{await supprimerArPdf(nv.id);}catch(e){}}
   }
   function marquerRecue(id,val){
     setCommandes(prev=>prev.map(c=>c.id===id?{...c,recue:val}:c));
   }
-  function supprimer(id){
+  async function supprimer(id){
     setCommandes(prev=>prev.filter(c=>c.id!==id));
     setConfirmSuppr(null);
+    try{await supprimerArPdf(id);}catch(e){}
   }
   async function copierRelance(cmd){
     const modele=cmd.delaiLivraison?modeles.delaiDepasse:modeles.pasDeDelai;
@@ -2687,9 +2776,20 @@ function PageCommandes(){
     setFlash(ok?"✅ Relance copiée dans le presse-papier":"⚠ Impossible de copier — vérifiez les permissions du navigateur");
     setTimeout(()=>setFlash(null),2500);
   }
+  async function voirAr(id){
+    try{
+      const blob=await chargerArPdf(id);
+      if(!blob){setFlash("⚠ Aucun AR retrouvé pour cette commande");setTimeout(()=>setFlash(null),2500);return;}
+      const url=URL.createObjectURL(blob);
+      window.open(url,"_blank");
+      setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(e){setFlash("⚠ Impossible d'ouvrir l'AR sur cet appareil");setTimeout(()=>setFlash(null),2500);}
+  }
 
-  return(<div style={{maxWidth:1200,margin:"0 auto",padding:"20px 16px"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+  const total=filtrees.length;
+
+  return(<div style={{maxWidth:1400,margin:"0 auto",padding:"20px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
       <div>
         <h2 style={{fontSize:20,fontWeight:700,margin:0}}>📦 Suivi des commandes fournisseurs</h2>
         <p style={{fontSize:12,color:"#9CA3AF",margin:"3px 0 0"}}>Module indépendant — stocké uniquement sur cet appareil/navigateur.</p>
@@ -2701,41 +2801,24 @@ function PageCommandes(){
       </div>
     </div>
 
+    <input value={recherche} onChange={e=>setRecherche(e.target.value)} placeholder="🔍 Rechercher (fournisseur, n° commande, chantier, fournitures)…" style={{...S.inp,marginBottom:14}}/>
+
     {flash&&<div style={{...S.ok,marginBottom:12}}>{flash}</div>}
 
-    {triees.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>Aucune commande {showRecues?"":"en cours"}</div>}
+    {total===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{q?"Aucune commande ne correspond à la recherche":"Aucune commande "+(showRecues?"":"en cours")}</div>}
 
-    {triees.length>0&&<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",overflow:"auto"}}>
-      <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
-        <thead>
-          <tr style={{background:"#F8F9FA",textAlign:"left"}}>
-            <th style={{padding:"10px 12px",fontSize:11,color:"#6B7280",textTransform:"uppercase"}}>Statut</th>
-            <th style={{padding:"10px 12px",fontSize:11,color:"#6B7280",textTransform:"uppercase"}}>Fournisseur / Chantier</th>
-            <th style={{padding:"10px 12px",fontSize:11,color:"#6B7280",textTransform:"uppercase"}}>Type / Fournitures</th>
-            <th style={{padding:"10px 12px",fontSize:11,color:"#6B7280",textTransform:"uppercase"}}>Dates</th>
-            <th style={{padding:"10px 12px",fontSize:11,color:"#6B7280",textTransform:"uppercase"}}>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {triees.map(c=>{
-            const st=statutCommande(c);
-            return(<tr key={c.id} style={{borderTop:"1px solid #E2E6EA",opacity:c.recue?0.6:1}}>
-              <td style={{padding:"10px 12px"}}><span style={{display:"inline-block",padding:"3px 10px",borderRadius:20,fontSize:11,fontWeight:700,color:st.color,background:st.bg}}>● {st.label}</span></td>
-              <td style={{padding:"10px 12px"}}><div style={{fontWeight:700}}>{c.fournisseur}</div><div style={{fontSize:11,color:"#6B7280"}}>{c.numeroChantier||"—"} · Cmd {c.numeroCommande}</div></td>
-              <td style={{padding:"10px 12px"}}><div>{c.typeCommande}</div><div style={{fontSize:11,color:"#6B7280"}}>{c.typeFournitures||"—"}</div></td>
-              <td style={{padding:"10px 12px",fontSize:12}}><div>Cmd : {fmtDateFr(c.dateCommande)}</div><div style={{color:"#6B7280"}}>Délai : {c.delaiLivraison?fmtDateFr(c.delaiLivraison):"non communiqué"}</div></td>
-              <td style={{padding:"10px 12px"}}>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                  {!c.recue&&<button onClick={()=>copierRelance(c)} style={{...S.p2,fontSize:11,padding:"5px 8px"}}>✉ Copier relance</button>}
-                  <label style={{display:"flex",alignItems:"center",gap:4,fontSize:11,color:"#6B7280",cursor:"pointer"}}><input type="checkbox" checked={!!c.recue} onChange={e=>marquerRecue(c.id,e.target.checked)}/> Reçue</label>
-                  <button onClick={()=>setModalCommande(c)} style={{...S.p2,fontSize:11,padding:"5px 8px"}}>✏️</button>
-                  <button onClick={()=>setConfirmSuppr(c.id)} style={{...S.p2,fontSize:11,padding:"5px 8px",color:"#D73A49",borderColor:"#D73A49"}}>🗑</button>
-                </div>
-              </td>
-            </tr>);
-          })}
-        </tbody>
-      </table>
+    {total>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(260px,1fr))",gap:14,overflowX:"auto"}}>
+      {TYPES_COMMANDE.map(t=>{
+        const liste=parType(t);
+        return(<div key={t} style={{background:"#F1F3F5",borderRadius:10,border:"1px solid #E2E6EA",padding:"10px 10px"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{t}</span>
+            <span style={{fontSize:11,background:"#fff",border:"1px solid #E2E6EA",borderRadius:20,padding:"1px 8px",color:"#6B7280"}}>{liste.length}</span>
+          </div>
+          {liste.length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
+          {liste.map(c=><CarteCommande key={c.id} c={c} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr}/>)}
+        </div>);
+      })}
     </div>}
 
     {modalCommande&&<ModalCommande initial={modalCommande.id?modalCommande:null} onSave={modalCommande.id?modifier:ajouter} onClose={()=>setModalCommande(null)}/>}
