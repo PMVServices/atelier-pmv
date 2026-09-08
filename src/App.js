@@ -2631,14 +2631,92 @@ async function supprimerArPdf(id){
   });
 }
 
+// Lecture automatique des AR de commande (PDF EBP) : extrait fournisseur/chantier/commande/date/fournitures
+// pdfjs-dist est chargé à la demande (chunk séparé) pour ne pas alourdir le bundle principal
+let _pdfjsLibPromise=null;
+function chargerPdfjs(){
+  if(!_pdfjsLibPromise){
+    _pdfjsLibPromise=Promise.all([
+      import(/* webpackChunkName: "pdfjs" */ "pdfjs-dist/legacy/build/pdf"),
+      import(/* webpackChunkName: "pdfjs" */ "pdfjs-dist/legacy/build/pdf.worker.entry")
+    ]).then(([lib,worker])=>{
+      lib.GlobalWorkerOptions.workerSrc=worker.default;
+      return lib;
+    });
+  }
+  return _pdfjsLibPromise;
+}
+async function extraireLignesPdf(file){
+  const pdfjsLib=await chargerPdfjs();
+  const buf=await file.arrayBuffer();
+  const doc=await pdfjsLib.getDocument({data:buf}).promise;
+  let lignes=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p);
+    const content=await page.getTextContent();
+    content.items.forEach(it=>{if(it.str&&it.str.trim())lignes.push(it.str.trim());});
+  }
+  return lignes;
+}
+function nettoyerNomFournisseur(ligne){
+  const prefixes=[
+    "société par actions simplifiée unipersonnelle","société par actions simplifiée","société par actions simpl",
+    "société à responsabilité limitée","société anonyme","entreprise individuelle à responsabilité limitée",
+    "entreprise individuelle",
+    "sasu","sas","sarl","eurl","eirl","sci","snc","sa"
+  ];
+  let l=(ligne||"").trim();
+  const low=l.toLowerCase();
+  for(const p of prefixes){
+    if(low===p)return "";
+    if(low.startsWith(p+" "))return l.slice(p.length).trim();
+  }
+  return l;
+}
+function analyserArPdf(lignesBrutes){
+  const lignes=lignesBrutes.map(s=>s.trim()).filter(Boolean);
+  const texte=lignes.join(" ~ ");
+  const res={fournisseur:"",numeroChantier:"",numeroCommande:"",dateCommande:"",typeFournitures:""};
+
+  const mChantier=texte.match(/N°\s*DE\s*(\d{2,7})/i);
+  if(mChantier)res.numeroChantier="DE"+mChantier[1];
+
+  const mCommande=texte.match(/offre de prix\s*N°\s*([A-Za-z0-9]{3,15})/i);
+  if(mCommande)res.numeroCommande=mCommande[1].toUpperCase();
+
+  const mDate=texte.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+  if(mDate)res.dateCommande=mDate[3]+"-"+mDate[2]+"-"+mDate[1];
+
+  const idxSiret=lignes.findIndex(l=>/siret\s*:/i.test(l));
+  if(idxSiret>=0){
+    const bloc=[];
+    for(let i=idxSiret+1;i<lignes.length&&bloc.length<5;i++){
+      bloc.push(lignes[i]);
+      if(/^\d{5}\s/.test(lignes[i]))break;
+    }
+    if(bloc.length)res.fournisseur=nettoyerNomFournisseur(bloc[0]);
+  }
+
+  const idxOffrePrix=lignes.findIndex(l=>/offre de prix/i.test(l));
+  if(idxOffrePrix>=0){
+    for(let i=idxOffrePrix+1;i<lignes.length;i++){
+      const l=lignes[i];
+      if(/^[\d.,\s]+€?$/.test(l))continue;
+      if(/^(txt\d+|taux|base ht|montant tva)/i.test(l))break;
+      if(/[a-zA-ZÀ-ÿ]/.test(l)){res.typeFournitures=l;break;}
+    }
+  }
+  return res;
+}
+
 const TYPES_COMMANDE=["Fourniture seule","Atelier","Intervention"];
 
-function ModalCommande({initial,onSave,onClose}){
+function ModalCommande({initial,initialArFile,isEdit,onSave,onClose}){
   const [v,setV]=useState(initial||{
     fournisseur:"",numeroCommande:"",numeroChantier:"",typeCommande:"Fourniture seule",
     typeFournitures:"",dateCommande:today(),delaiLivraison:"",livraisonClient:"Non",recue:false
   });
-  const [arFile,setArFile]=useState(null);
+  const [arFile,setArFile]=useState(initialArFile||null);
   const [removeAr,setRemoveAr]=useState(false);
   function upd(k,val){setV(p=>({...p,[k]:val}));}
   function submit(){
@@ -2647,7 +2725,7 @@ function ModalCommande({initial,onSave,onClose}){
   }
   return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16}}>
     <div style={{background:"#fff",borderRadius:12,padding:24,width:480,maxWidth:"100%",maxHeight:"90vh",overflowY:"auto"}}>
-      <h3 style={{margin:"0 0 16px",fontSize:18,fontWeight:700}}>{initial?"Modifier la commande":"Nouvelle commande"}</h3>
+      <h3 style={{margin:"0 0 16px",fontSize:18,fontWeight:700}}>{isEdit?"Modifier la commande":"Nouvelle commande"}</h3>
       <div style={{marginBottom:12}}><label style={S.lbl}>Fournisseur *</label><input value={v.fournisseur} onChange={e=>upd("fournisseur",e.target.value)} style={S.inp}/></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div><label style={S.lbl}>N° de commande *</label><input value={v.numeroCommande} onChange={e=>upd("numeroCommande",e.target.value)} style={S.inp}/></div>
@@ -2664,6 +2742,7 @@ function ModalCommande({initial,onSave,onClose}){
       </div>
       <div style={{marginBottom:16}}>
         <label style={S.lbl}>AR de commande (PDF)</label>
+        {arFile&&<div style={{fontSize:12,color:"#22863A",marginBottom:6}}>📎 {arFile.name}</div>}
         {v.hasAR&&!removeAr&&!arFile&&<div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,fontSize:12,color:"#6B7280"}}>📎 Un AR est déjà attaché <button type="button" onClick={()=>setRemoveAr(true)} style={{...S.p2,fontSize:11,padding:"3px 8px",color:"#D73A49",borderColor:"#D73A49"}}>Retirer</button></div>}
         {removeAr&&<div style={{display:"flex",alignItems:"center",gap:8,fontSize:12,color:"#D73A49",marginBottom:6}}>L'AR sera retiré à l'enregistrement. <button type="button" onClick={()=>setRemoveAr(false)} style={{...S.p2,fontSize:11,padding:"3px 8px"}}>Annuler</button></div>}
         <input type="file" accept="application/pdf" onChange={e=>{setArFile(e.target.files[0]||null);setRemoveAr(false);}} style={S.inp}/>
@@ -2729,12 +2808,39 @@ function PageCommandes(){
   const [showRecues,setShowRecues]=useState(false);
   const [recherche,setRecherche]=useState("");
   const [modalCommande,setModalCommande]=useState(null);
+  const [modalArFile,setModalArFile]=useState(null);
   const [modalModeles,setModalModeles]=useState(false);
   const [flash,setFlash]=useState(null);
   const [confirmSuppr,setConfirmSuppr]=useState(null);
+  const [chargementAr,setChargementAr]=useState(false);
+  const fileInputArRef=useRef(null);
 
   useEffect(()=>{sauverCommandes(commandes);},[commandes]);
   useEffect(()=>{sauverModeles(modeles);},[modeles]);
+
+  async function onFichierArChoisi(e){
+    const file=e.target.files[0];e.target.value="";
+    if(!file)return;
+    setChargementAr(true);
+    try{
+      const lignes=await extraireLignesPdf(file);
+      const d=analyserArPdf(lignes);
+      setModalArFile(file);
+      setModalCommande({
+        fournisseur:d.fournisseur,numeroCommande:d.numeroCommande,numeroChantier:d.numeroChantier,
+        typeCommande:"Fourniture seule",typeFournitures:d.typeFournitures,
+        dateCommande:d.dateCommande||today(),delaiLivraison:"",livraisonClient:"Non",recue:false
+      });
+      const trouve=Object.values(d).filter(Boolean).length;
+      setFlash(trouve>0?"📄 AR analysé — vérifiez les champs pré-remplis avant d'enregistrer":"⚠ Aucune information reconnue dans ce PDF — remplissez le formulaire manuellement");
+      setTimeout(()=>setFlash(null),4000);
+    }catch(err){
+      setModalArFile(file);
+      setModalCommande({});
+      setFlash("⚠ Impossible de lire ce PDF (scan sans texte ?) — remplissez le formulaire manuellement");
+      setTimeout(()=>setFlash(null),4000);
+    }finally{setChargementAr(false);}
+  }
 
   const q=recherche.trim().toLowerCase();
   const filtrees=commandes.filter(c=>{
@@ -2781,8 +2887,9 @@ function PageCommandes(){
       const blob=await chargerArPdf(id);
       if(!blob){setFlash("⚠ Aucun AR retrouvé pour cette commande");setTimeout(()=>setFlash(null),2500);return;}
       const url=URL.createObjectURL(blob);
-      window.open(url,"_blank");
-      setTimeout(()=>URL.revokeObjectURL(url),60000);
+      const onglet=window.open(url,"_blank");
+      if(!onglet){window.location.href=url;} // fenêtre bloquée par le navigateur : on ouvre dans l'onglet courant
+      else setTimeout(()=>URL.revokeObjectURL(url),60000);
     }catch(e){setFlash("⚠ Impossible d'ouvrir l'AR sur cet appareil");setTimeout(()=>setFlash(null),2500);}
   }
 
@@ -2795,6 +2902,8 @@ function PageCommandes(){
         <p style={{fontSize:12,color:"#9CA3AF",margin:"3px 0 0"}}>Module indépendant — stocké uniquement sur cet appareil/navigateur.</p>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <input ref={fileInputArRef} type="file" accept="application/pdf" style={{display:"none"}} onChange={onFichierArChoisi}/>
+        <button onClick={()=>fileInputArRef.current?.click()} disabled={chargementAr} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>{chargementAr?"Analyse en cours…":"📄 Importer un AR (PDF)"}</button>
         <button onClick={()=>setModalModeles(true)} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>⚙ Modèles de relance</button>
         <button onClick={()=>setShowRecues(!showRecues)} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>{showRecues?"Masquer reçues":"Afficher reçues"}</button>
         <button onClick={()=>setModalCommande({})} style={{...S.p1,fontSize:12,padding:"7px 14px"}}>+ Nouvelle commande</button>
@@ -2821,7 +2930,7 @@ function PageCommandes(){
       })}
     </div>}
 
-    {modalCommande&&<ModalCommande initial={modalCommande.id?modalCommande:null} onSave={modalCommande.id?modifier:ajouter} onClose={()=>setModalCommande(null)}/>}
+    {modalCommande&&<ModalCommande initial={Object.keys(modalCommande).length?modalCommande:null} isEdit={!!modalCommande.id} initialArFile={modalCommande.id?null:modalArFile} onSave={modalCommande.id?modifier:ajouter} onClose={()=>{setModalCommande(null);setModalArFile(null);}}/>}
     {modalModeles&&<ModalModeles modeles={modeles} onSave={m=>{setModeles(m);setModalModeles(false);}} onClose={()=>setModalModeles(false)}/>}
     {confirmSuppr&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
       <div style={{background:"#fff",borderRadius:12,padding:24,width:340}}>
