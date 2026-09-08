@@ -2632,6 +2632,47 @@ async function supprimerArPdf(id){
   });
 }
 
+// Surveillance du dossier "Commandes" (File System Access API, Chrome/Edge) : le FileSystemDirectoryHandle
+// est structured-cloneable et se stocke tel quel en IndexedDB pour être réutilisé d'une session à l'autre.
+const DOSSIER_DB_NAME="pmv_commandes_dossier_db";
+const DOSSIER_STORE="handles";
+function ouvrirDossierDb(){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DOSSIER_DB_NAME,1);
+    req.onupgradeneeded=()=>{req.result.createObjectStore(DOSSIER_STORE);};
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function sauverDossierHandle(handle){
+  const db=await ouvrirDossierDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(DOSSIER_STORE,"readwrite");
+    tx.objectStore(DOSSIER_STORE).put(handle,"commandes");
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+async function chargerDossierHandle(){
+  try{
+    const db=await ouvrirDossierDb();
+    return await new Promise((resolve,reject)=>{
+      const tx=db.transaction(DOSSIER_STORE,"readonly");
+      const req=tx.objectStore(DOSSIER_STORE).get("commandes");
+      req.onsuccess=()=>resolve(req.result||null);
+      req.onerror=()=>reject(req.error);
+    });
+  }catch(e){return null;}
+}
+
+const FICHIERS_VUS_KEY="pmv_commandes_fichiers_vus";
+function chargerFichiersVus(){try{const a=JSON.parse(localStorage.getItem(FICHIERS_VUS_KEY)||"[]");return Array.isArray(a)?a:[];}catch(e){return[];}}
+function sauverFichiersVus(set){try{localStorage.setItem(FICHIERS_VUS_KEY,JSON.stringify(Array.from(set).slice(-500)));}catch(e){}}
+
+const JOURNAL_WATCHER_KEY="pmv_commandes_journal_watcher";
+function chargerJournalWatcher(){try{const a=JSON.parse(localStorage.getItem(JOURNAL_WATCHER_KEY)||"[]");return Array.isArray(a)?a:[];}catch(e){return[];}}
+function sauverJournalWatcher(arr){try{localStorage.setItem(JOURNAL_WATCHER_KEY,JSON.stringify(arr.slice(0,20)));}catch(e){}}
+
 // Lecture automatique des AR de commande (PDF EBP) : extrait fournisseur/chantier/commande/date/fournitures
 // pdfjs-dist est chargé à la demande (chunk séparé) pour ne pas alourdir le bundle principal
 let _pdfjsLibPromise=null;
@@ -2872,8 +2913,107 @@ function PageCommandes(){
   const [chargementAr,setChargementAr]=useState(false);
   const fileInputArRef=useRef(null);
 
+  const [dossierEtat,setDossierEtat]=useState("verification"); // verification | indisponible | non_lie | besoin_permission | actif
+  const [journal,setJournal]=useState(()=>chargerJournalWatcher());
+  const [journalOuvert,setJournalOuvert]=useState(false);
+  const dossierHandleRef=useRef(null);
+  const fichiersVusRef=useRef(new Set(chargerFichiersVus()));
+  const commandesRef=useRef(commandes);
+  const scanRef=useRef(null);
+
   useEffect(()=>{sauverCommandes(commandes);},[commandes]);
   useEffect(()=>{sauverModeles(modeles);},[modeles]);
+  useEffect(()=>{commandesRef.current=commandes;},[commandes]);
+
+  function ajouterJournal(msg){
+    setJournal(prev=>{
+      const next=[{t:Date.now(),msg},...prev].slice(0,20);
+      sauverJournalWatcher(next);
+      return next;
+    });
+  }
+
+  async function traiterNouveauPdf(name,file){
+    try{
+      const lignes=await extraireLignesPdf(file);
+      const d=analyserArPdf(lignes);
+      const doublon=trouverDoublon(d.numeroCommande,commandesRef.current);
+      if(doublon){
+        ajouterJournal("⏭ "+name+" ignoré — doublon de la commande "+doublon.numeroCommande);
+        return;
+      }
+      const id="cmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,8);
+      const nouvelle={id,fournisseur:d.fournisseur,numeroCommande:d.numeroCommande,numeroChantier:d.numeroChantier,typeCommande:"Fourniture seule",typeFournitures:d.typeFournitures,montantHT:d.montantHT,dateCommande:d.dateCommande||today(),delaiLivraison:"",livraisonClient:"Non",recue:false,hasAR:true,brouillon:true,nomFichierSource:name};
+      setCommandes(prev=>[...prev,nouvelle]);
+      await sauverArPdf(id,file).catch(()=>{});
+      ajouterJournal("✅ "+name+" → commande à compléter créée"+(d.numeroCommande?" ("+d.numeroCommande+")":""));
+    }catch(e){
+      const id="cmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,8);
+      setCommandes(prev=>[...prev,{id,fournisseur:"",numeroCommande:"",numeroChantier:"",typeCommande:"Fourniture seule",typeFournitures:"",montantHT:"",dateCommande:today(),delaiLivraison:"",livraisonClient:"Non",recue:false,hasAR:true,brouillon:true,nomFichierSource:name}]);
+      await sauverArPdf(id,file).catch(()=>{});
+      ajouterJournal("⚠ "+name+" : lecture impossible, ajouté en brouillon vide à compléter");
+    }
+  }
+
+  scanRef.current=async function scan(){
+    const handle=dossierHandleRef.current;
+    if(!handle)return;
+    try{
+      const entries=[];
+      for await(const [name,h] of handle.entries()){
+        if(h.kind==="file"&&/\.pdf$/i.test(name))entries.push([name,h]);
+      }
+      for(const [name,h] of entries){
+        const file=await h.getFile();
+        const empreinte=name+"|"+file.size+"|"+file.lastModified;
+        if(fichiersVusRef.current.has(empreinte))continue;
+        fichiersVusRef.current.add(empreinte);
+        sauverFichiersVus(fichiersVusRef.current);
+        await traiterNouveauPdf(name,file);
+      }
+    }catch(e){ajouterJournal("⚠ Erreur de lecture du dossier lié : "+e.message);}
+  };
+
+  useEffect(()=>{
+    if(!("showDirectoryPicker" in window)){setDossierEtat("indisponible");return;}
+    let annule=false;
+    (async()=>{
+      const handle=await chargerDossierHandle();
+      if(annule)return;
+      if(!handle){setDossierEtat("non_lie");return;}
+      dossierHandleRef.current=handle;
+      const perm=await handle.queryPermission({mode:"read"}).catch(()=>"denied");
+      if(annule)return;
+      setDossierEtat(perm==="granted"?"actif":"besoin_permission");
+    })();
+    return()=>{annule=true;};
+  },[]);
+
+  useEffect(()=>{
+    if(dossierEtat!=="actif")return;
+    let annule=false;
+    function tick(){if(!annule&&scanRef.current)scanRef.current();}
+    tick();
+    const interval=setInterval(tick,25000);
+    return()=>{annule=true;clearInterval(interval);};
+  },[dossierEtat]);
+
+  async function lierDossier(){
+    try{
+      const handle=await window.showDirectoryPicker({id:"pmv-commandes",mode:"read"});
+      await sauverDossierHandle(handle).catch(()=>{});
+      dossierHandleRef.current=handle;
+      setDossierEtat("actif");
+      setFlash("📁 Dossier lié — surveillance active");
+      setTimeout(()=>setFlash(null),3000);
+    }catch(e){/* sélection annulée par l'utilisateur */}
+  }
+  async function autoriserDossier(){
+    try{
+      const perm=await dossierHandleRef.current.requestPermission({mode:"read"});
+      if(perm==="granted")setDossierEtat("actif");
+    }catch(e){}
+  }
 
   async function onFichierArChoisi(e){
     const file=e.target.files[0];e.target.value="";
@@ -2899,8 +3039,10 @@ function PageCommandes(){
     }finally{setChargementAr(false);}
   }
 
+  const brouillons=commandes.filter(c=>c.brouillon);
   const q=recherche.trim().toLowerCase();
   const filtrees=commandes.filter(c=>{
+    if(c.brouillon)return false;
     if(!showRecues&&c.recue)return false;
     if(!q)return true;
     return [c.fournisseur,c.numeroCommande,c.numeroChantier,c.typeFournitures].some(x=>(x||"").toLowerCase().includes(q));
@@ -2917,7 +3059,7 @@ function PageCommandes(){
   async function modifier(v,arFile,removeAr){
     let hasAR=!!v.hasAR;
     if(arFile)hasAR=true;else if(removeAr)hasAR=false;
-    const nv={...v,hasAR};
+    const nv={...v,hasAR,brouillon:false};
     setCommandes(prev=>prev.map(c=>c.id===nv.id?nv:c));
     setModalCommande(null);
     setFlash("Commande modifiée");setTimeout(()=>setFlash(null),2000);
@@ -2974,6 +3116,36 @@ function PageCommandes(){
         <button onClick={()=>setModalCommande({})} style={{...S.p1,fontSize:12,padding:"7px 14px"}}>+ Nouvelle commande</button>
       </div>
     </div>
+
+    {dossierEtat!=="indisponible"&&dossierEtat!=="verification"&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12}}>
+      {dossierEtat==="non_lie"&&<>
+        <span style={{color:"#6B7280"}}>📁 Surveillance automatique du dossier Commandes : non liée.</span>
+        <button onClick={lierDossier} style={{...S.p2,fontSize:11,padding:"4px 10px"}}>🔗 Lier le dossier Commandes</button>
+      </>}
+      {dossierEtat==="besoin_permission"&&<>
+        <span style={{color:"#8A4B00"}}>🔓 Le dossier lié a besoin d'une autorisation pour reprendre la surveillance.</span>
+        <button onClick={autoriserDossier} style={{...S.p2,fontSize:11,padding:"4px 10px"}}>Autoriser l'accès</button>
+      </>}
+      {dossierEtat==="actif"&&<>
+        <span style={{color:"#22863A"}}>🟢 Dossier Commandes surveillé — nouveaux PDF détectés automatiquement.</span>
+        <button onClick={()=>scanRef.current&&scanRef.current()} style={{...S.p2,fontSize:11,padding:"4px 10px"}}>🔄 Vérifier maintenant</button>
+      </>}
+      {journal.length>0&&<button onClick={()=>setJournalOuvert(!journalOuvert)} style={{...S.p2,fontSize:11,padding:"4px 10px",marginLeft:"auto"}}>{journalOuvert?"Masquer le journal":"Journal ("+journal.length+")"}</button>}
+    </div>}
+    {journalOuvert&&journal.length>0&&<div style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:11,color:"#6B7280",maxHeight:160,overflowY:"auto"}}>
+      {journal.map((j,i)=><div key={i} style={{padding:"3px 0",borderBottom:i<journal.length-1?"1px solid #F3F4F6":"none"}}>{new Date(j.t).toLocaleString("fr-FR")} — {j.msg}</div>)}
+    </div>}
+
+    {brouillons.length>0&&<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:10,padding:"12px 14px",marginBottom:16}}>
+      <div style={{fontSize:13,fontWeight:700,color:"#8A4B00",marginBottom:8}}>🗂 À compléter ({brouillons.length}) — détectées automatiquement depuis le dossier Commandes</div>
+      {brouillons.map(c=><div key={c.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #F3D9A8",borderRadius:6,padding:"8px 10px",marginBottom:6}}>
+        <div style={{fontSize:12}}>
+          <strong>{c.fournisseur||"Fournisseur inconnu"}</strong>{c.numeroCommande?" — Cmd "+c.numeroCommande:""}{c.numeroChantier?" · "+c.numeroChantier:""}
+          <div style={{fontSize:11,color:"#9CA3AF"}}>📎 {c.nomFichierSource||"AR importé"}</div>
+        </div>
+        <button onClick={()=>setModalCommande(c)} style={{...S.p1,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap"}}>✏️ Compléter</button>
+      </div>)}
+    </div>}
 
     <input value={recherche} onChange={e=>setRecherche(e.target.value)} placeholder="🔍 Rechercher (fournisseur, n° commande, chantier, fournitures)…" style={{...S.inp,marginBottom:14}}/>
 
