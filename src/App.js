@@ -2538,6 +2538,7 @@ function chargerModeles(){
 function sauverModeles(obj){try{localStorage.setItem(MODELES_KEY,JSON.stringify(obj));}catch(e){}}
 
 function fmtDateFr(iso){if(!iso)return "—";const d=new Date(iso+"T00:00:00");if(isNaN(d.getTime()))return "—";return d.toLocaleDateString("fr-FR");}
+function fmtMontant(v){const n=parseFloat(v);if(isNaN(n))return "";return n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" € HT";}
 
 function statutCommande(cmd){
   if(cmd.recue)return{id:"recue",label:"Reçue",color:"#9CA3AF",bg:"#F5F6F8"};
@@ -2676,7 +2677,7 @@ function nettoyerNomFournisseur(ligne){
 function analyserArPdf(lignesBrutes){
   const lignes=lignesBrutes.map(s=>s.trim()).filter(Boolean);
   const texte=lignes.join(" ~ ");
-  const res={fournisseur:"",numeroChantier:"",numeroCommande:"",dateCommande:"",typeFournitures:""};
+  const res={fournisseur:"",numeroChantier:"",numeroCommande:"",dateCommande:"",typeFournitures:"",montantHT:""};
 
   const mChantier=texte.match(/N°\s*DE\s*(\d{2,7})/i);
   if(mChantier)res.numeroChantier="DE"+mChantier[1];
@@ -2699,25 +2700,76 @@ function analyserArPdf(lignesBrutes){
 
   const idxOffrePrix=lignes.findIndex(l=>/offre de prix/i.test(l));
   if(idxOffrePrix>=0){
-    for(let i=idxOffrePrix+1;i<lignes.length;i++){
+    let montantTotal=0,montantTrouve=false;
+    let i=idxOffrePrix+1;
+    while(i<lignes.length){
       const l=lignes[i];
-      if(/^[\d.,\s]+€?$/.test(l))continue;
       if(/^(txt\d+|taux|base ht|montant tva)/i.test(l))break;
-      if(/[a-zA-ZÀ-ÿ]/.test(l)){res.typeFournitures=l;break;}
+      if(/^[\d.,\s]+€?$/.test(l)){
+        // groupe Qté / P.A. HT / Montant HT / TVA% : on prend la 3e valeur (Montant HT de la ligne)
+        const groupe=[];
+        while(i<lignes.length&&/^[\d.,\s]+€?$/.test(lignes[i])&&groupe.length<4){groupe.push(lignes[i]);i++;}
+        if(groupe.length>=3){
+          const m=parseFloat(groupe[2].replace(/[€\s]/g,"").replace(",","."));
+          if(!isNaN(m)){montantTotal+=m;montantTrouve=true;}
+        }
+      }else{
+        if(!res.typeFournitures&&/[a-zA-ZÀ-ÿ]/.test(l))res.typeFournitures=l;
+        i++;
+      }
     }
+    if(montantTrouve)res.montantHT=String(Math.round(montantTotal*100)/100);
   }
   return res;
 }
 
+// Détection de doublon : une commande avec le même n° (fournisseur) existe déjà dans le suivi
+function trouverDoublon(numeroCommande,commandes){
+  if(!numeroCommande||!numeroCommande.trim())return null;
+  const n=numeroCommande.trim().toLowerCase();
+  return commandes.find(c=>c.numeroCommande&&c.numeroCommande.trim().toLowerCase()===n)||null;
+}
+
 const TYPES_COMMANDE=["Fourniture seule","Atelier","Intervention"];
 
-function ModalCommande({initial,initialArFile,isEdit,onSave,onClose}){
+// Liste des fournisseurs : seedée depuis "Liste fournisseurs.xls", puis enrichie/persistée en local (module indépendant, pas de table Supabase)
+const FOURNISSEURS_KEY="pmv_commandes_fournisseurs_liste";
+const FOURNISSEURS_INITIAUX=["ABB Division Discrete automation&Motion","ABE","BERTHAULT","AGECOM","DORISE SAS","CITT Informatique de gestion","THERMALU ENTREPRISE SCOP ARL","LE BOBINAGE SABOLIEN BMP Groupe","FLUKE France","MCM LEVAGE","Pleuger Industries","JET","John Crane France SAS","HEINE Resistors GmbH","SECMO","EUROPE QUALITE LOIRE ATALANTIQUE","SONEL","KSB","ART BATI 68","SUEZ RV CENTRE OUEST","WILO FRANCE","FITEX","OUEST ISOL & VENTIL","ELECTRO-TOURS","ACTHYS","BECOT SAS","SULZER ENSIVAL MORET FRANCE","EMILE MAURIN","ATELIER BOBINAGE BLESOIS ETS PINSON","BERNER INDUSTRY SERVICES","REXEL","NORD REDUCTEURS","GOODIES LOIRE VALLEY","MABEO INDUSTRIES","EUROPE QUALITE","DEMOUSSIS INDUSTRIE","QUINCAILLERIE SETIN","CEF - YESSS ELECTRIQUE","TTA - TTA LUBRIFIANTS","SEBA MOTORISATION","PERRON ET GAY","COMMERCIAL OPS","IMI HYDRONIC ENGINEERING FRANCE","SCHUNK CARBON TECHNOLOGY","VIM","MARTIN HEULIN PROLIANS","TAPIS LOGO PRO","3KATORZE","METAL SPES","BAMO","IBERISA","ASTRA POOL","LECHEVALIER","DEMS","CIMAP","FLOWSERVE FRANCE","VIP VERNIS INDUSTRIE PEINTURES","SOFINTHER","LM SYSTEMES","AIR PN","EBARA FRANCE","SOCIETE D'EXPLOITATION DES ANCIENS ETABLISSEMENTS BRANGER","PCM EUROPE","MOTEURS - VENTILATEURS - INDUSTRIE","ENERFLUID SAS","SOTRELI","L'UNIFORM PRO","SCERAM","CIRCOR IMO ALLWEILER","F2A","LHUILLIER","CSI","MICHIGAN","ETS MEUNIER","SPECK POMPES INDUSTRIES","ATLAS COPCO COMPRESSEURS INDUSTRIELS","FRANS BONHOMME","SUMITOMO","2L INFOSERVICES","SNT","WURTH FRANCE","DELTA SERVICE LOCATION","FRANCE AIR","PROMAC","DYMATEC INDUSTRIES","ABAC - MULTIAIR FRANCE","APA 37","ManoMano","RUBIX","SEFI","WEG France"];
+function chargerFournisseurs(){
+  try{
+    const s=JSON.parse(localStorage.getItem(FOURNISSEURS_KEY)||"null");
+    if(Array.isArray(s)&&s.length)return s;
+  }catch(e){}
+  const initiaux=[...FOURNISSEURS_INITIAUX].sort((a,b)=>a.localeCompare(b));
+  try{localStorage.setItem(FOURNISSEURS_KEY,JSON.stringify(initiaux));}catch(e){}
+  return initiaux;
+}
+function sauverFournisseurs(arr){try{localStorage.setItem(FOURNISSEURS_KEY,JSON.stringify(arr));}catch(e){}}
+
+function ChampFournisseur({valeur,onChange,fournisseurs,onAddFournisseur}){
+  const [q,setQ]=useState(valeur||"");const [ouvert,setOuvert]=useState(false);const [modeAutre,setModeAutre]=useState(false);const ref=useRef(null);
+  useEffect(()=>{function close(e){if(ref.current&&!ref.current.contains(e.target))setOuvert(false);}document.addEventListener("mousedown",close);return()=>document.removeEventListener("mousedown",close);},[]);
+  const filtres=q.length>0?fournisseurs.filter(f=>f.toLowerCase().includes(q.toLowerCase())):fournisseurs.slice(0,8);
+  function select(f){if(f==="Autre"){setModeAutre(true);setQ("");onChange("");}else{setQ(f);onChange(f);setOuvert(false);setModeAutre(false);}}
+  function enregistrer(){if(!q.trim())return;onAddFournisseur(q.trim());onChange(q.trim());setModeAutre(false);setOuvert(false);}
+  if(modeAutre)return(<div><div style={{display:"flex",gap:8}}><input type="text" value={q} onChange={e=>{setQ(e.target.value);onChange(e.target.value);}} placeholder="Nom du fournisseur..." style={{...S.inp,flex:1}}/><button type="button" onClick={enregistrer} style={{...S.p1,fontSize:12,padding:"6px 12px",whiteSpace:"nowrap"}}>+ Enregistrer</button><button type="button" onClick={()=>{setModeAutre(false);setQ("");}} style={{...S.p2,fontSize:12,padding:"6px 10px"}}>✕</button></div></div>);
+  return(<div ref={ref} style={{position:"relative"}}>
+    <input type="text" value={q} onChange={e=>{setQ(e.target.value);setOuvert(true);onChange(e.target.value);}} onFocus={()=>setOuvert(true)} placeholder="Tapez pour rechercher..." style={S.inp}/>
+    {ouvert&&<div style={{position:"absolute",top:"100%",left:0,right:0,background:"#fff",border:"1.5px solid #D1D5DB",borderRadius:6,boxShadow:"0 4px 16px rgba(0,0,0,0.12)",zIndex:50,maxHeight:200,overflowY:"auto"}}>
+      {filtres.map(f=><div key={f} onClick={()=>select(f)} style={{padding:"7px 12px",cursor:"pointer",fontSize:13,borderBottom:"1px solid #F3F4F6"}} onMouseOver={e=>e.currentTarget.style.background="#F5F6F8"} onMouseOut={e=>e.currentTarget.style.background="transparent"}>{f}</div>)}
+      <div onClick={()=>select("Autre")} style={{padding:"7px 12px",cursor:"pointer",fontSize:13,color:"#E8720C",fontWeight:600,borderTop:"1px solid #E2E6EA"}}>+ Autre (nouveau fournisseur)</div>
+    </div>}
+  </div>);
+}
+
+function ModalCommande({initial,initialArFile,isEdit,commandes,fournisseurs,onAddFournisseur,onSave,onClose}){
   const [v,setV]=useState(initial||{
     fournisseur:"",numeroCommande:"",numeroChantier:"",typeCommande:"Fourniture seule",
-    typeFournitures:"",dateCommande:today(),delaiLivraison:"",livraisonClient:"Non",recue:false
+    typeFournitures:"",montantHT:"",dateCommande:today(),delaiLivraison:"",livraisonClient:"Non",recue:false
   });
   const [arFile,setArFile]=useState(initialArFile||null);
   const [removeAr,setRemoveAr]=useState(false);
+  const doublon=!isEdit?trouverDoublon(v.numeroCommande,commandes||[]):null;
   function upd(k,val){setV(p=>({...p,[k]:val}));}
   function submit(){
     if(!v.fournisseur.trim()||!v.numeroCommande.trim()){alert("Fournisseur et N° de commande sont obligatoires.");return;}
@@ -2726,7 +2778,8 @@ function ModalCommande({initial,initialArFile,isEdit,onSave,onClose}){
   return(<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16}}>
     <div style={{background:"#fff",borderRadius:12,padding:24,width:480,maxWidth:"100%",maxHeight:"90vh",overflowY:"auto"}}>
       <h3 style={{margin:"0 0 16px",fontSize:18,fontWeight:700}}>{isEdit?"Modifier la commande":"Nouvelle commande"}</h3>
-      <div style={{marginBottom:12}}><label style={S.lbl}>Fournisseur *</label><input value={v.fournisseur} onChange={e=>upd("fournisseur",e.target.value)} style={S.inp}/></div>
+      {doublon&&<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:6,padding:"8px 12px",marginBottom:14,fontSize:12,color:"#8A4B00"}}>⚠ Une commande n° <strong>{doublon.numeroCommande}</strong> ({doublon.fournisseur}) existe déjà dans le suivi, créée le {fmtDateFr(doublon.dateCommande)}. Vérifiez avant d'enregistrer pour éviter un doublon.</div>}
+      <div style={{marginBottom:12}}><label style={S.lbl}>Fournisseur *</label><ChampFournisseur valeur={v.fournisseur} onChange={nv=>upd("fournisseur",nv)} fournisseurs={fournisseurs} onAddFournisseur={onAddFournisseur}/></div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div><label style={S.lbl}>N° de commande *</label><input value={v.numeroCommande} onChange={e=>upd("numeroCommande",e.target.value)} style={S.inp}/></div>
         <div><label style={S.lbl}>N° de chantier</label><input value={v.numeroChantier} onChange={e=>upd("numeroChantier",e.target.value)} placeholder="DEXXXX" style={S.inp}/></div>
@@ -2735,7 +2788,10 @@ function ModalCommande({initial,initialArFile,isEdit,onSave,onClose}){
         <div><label style={S.lbl}>Type de commande</label><select value={v.typeCommande} onChange={e=>upd("typeCommande",e.target.value)} style={S.sel}>{TYPES_COMMANDE.map(t=><option key={t}>{t}</option>)}</select></div>
         <div><label style={S.lbl}>Livraison chez le client</label><select value={v.livraisonClient} onChange={e=>upd("livraisonClient",e.target.value)} style={S.sel}><option>Non</option><option>Oui</option></select></div>
       </div>
-      <div style={{marginBottom:12}}><label style={S.lbl}>Type de fournitures</label><input value={v.typeFournitures} onChange={e=>upd("typeFournitures",e.target.value)} style={S.inp}/></div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 140px",gap:10,marginBottom:12}}>
+        <div><label style={S.lbl}>Type de fournitures</label><input value={v.typeFournitures} onChange={e=>upd("typeFournitures",e.target.value)} style={S.inp}/></div>
+        <div><label style={S.lbl}>Montant HT (€)</label><input type="number" step="0.01" value={v.montantHT||""} onChange={e=>upd("montantHT",e.target.value)} style={S.inp}/></div>
+      </div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:12}}>
         <div><label style={S.lbl}>Date de commande</label><input type="date" value={v.dateCommande} onChange={e=>upd("dateCommande",e.target.value)} style={S.inp}/></div>
         <div><label style={S.lbl}>Délai de livraison prévu</label><input type="date" value={v.delaiLivraison} onChange={e=>upd("delaiLivraison",e.target.value)} style={S.inp}/></div>
@@ -2786,7 +2842,7 @@ function CarteCommande({c,onCopier,onRecue,onEdit,onDelete,onVoirAr}){
     </div>
     <div style={{fontWeight:700,fontSize:13}}>{c.fournisseur}</div>
     <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{c.numeroChantier||"—"} · Cmd {c.numeroCommande}</div>
-    <div style={{fontSize:11,color:"#1A1A2E",marginBottom:2}}>{c.typeFournitures||"—"}</div>
+    <div style={{fontSize:11,color:"#1A1A2E",marginBottom:2}}>{c.typeFournitures&&c.montantHT?c.typeFournitures+" — "+fmtMontant(c.montantHT):(c.typeFournitures||(c.montantHT?fmtMontant(c.montantHT):"—"))}</div>
     <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>
       Cmd : {fmtDateFr(c.dateCommande)}<br/>
       Délai : {c.delaiLivraison?fmtDateFr(c.delaiLivraison):"non communiqué"}
@@ -2805,6 +2861,7 @@ function CarteCommande({c,onCopier,onRecue,onEdit,onDelete,onVoirAr}){
 function PageCommandes(){
   const [commandes,setCommandes]=useState(()=>chargerCommandes());
   const [modeles,setModeles]=useState(()=>chargerModeles());
+  const [fournisseurs,setFournisseurs]=useState(()=>chargerFournisseurs());
   const [showRecues,setShowRecues]=useState(false);
   const [recherche,setRecherche]=useState("");
   const [modalCommande,setModalCommande]=useState(null);
@@ -2828,7 +2885,7 @@ function PageCommandes(){
       setModalArFile(file);
       setModalCommande({
         fournisseur:d.fournisseur,numeroCommande:d.numeroCommande,numeroChantier:d.numeroChantier,
-        typeCommande:"Fourniture seule",typeFournitures:d.typeFournitures,
+        typeCommande:"Fourniture seule",typeFournitures:d.typeFournitures,montantHT:d.montantHT,
         dateCommande:d.dateCommande||today(),delaiLivraison:"",livraisonClient:"Non",recue:false
       });
       const trouve=Object.values(d).filter(Boolean).length;
@@ -2866,6 +2923,14 @@ function PageCommandes(){
     setFlash("Commande modifiée");setTimeout(()=>setFlash(null),2000);
     if(arFile){try{await sauverArPdf(nv.id,arFile);}catch(e){}}
     else if(removeAr){try{await supprimerArPdf(nv.id);}catch(e){}}
+  }
+  function onAddFournisseur(nom){
+    setFournisseurs(prev=>{
+      if(prev.some(f=>f.toLowerCase()===nom.toLowerCase()))return prev;
+      const next=[...prev,nom].sort((a,b)=>a.localeCompare(b));
+      sauverFournisseurs(next);
+      return next;
+    });
   }
   function marquerRecue(id,val){
     setCommandes(prev=>prev.map(c=>c.id===id?{...c,recue:val}:c));
@@ -2930,7 +2995,7 @@ function PageCommandes(){
       })}
     </div>}
 
-    {modalCommande&&<ModalCommande initial={Object.keys(modalCommande).length?modalCommande:null} isEdit={!!modalCommande.id} initialArFile={modalCommande.id?null:modalArFile} onSave={modalCommande.id?modifier:ajouter} onClose={()=>{setModalCommande(null);setModalArFile(null);}}/>}
+    {modalCommande&&<ModalCommande initial={Object.keys(modalCommande).length?modalCommande:null} isEdit={!!modalCommande.id} initialArFile={modalCommande.id?null:modalArFile} commandes={commandes} fournisseurs={fournisseurs} onAddFournisseur={onAddFournisseur} onSave={modalCommande.id?modifier:ajouter} onClose={()=>{setModalCommande(null);setModalArFile(null);}}/>}
     {modalModeles&&<ModalModeles modeles={modeles} onSave={m=>{setModeles(m);setModalModeles(false);}} onClose={()=>setModalModeles(false)}/>}
     {confirmSuppr&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
       <div style={{background:"#fff",borderRadius:12,padding:24,width:340}}>
