@@ -15,6 +15,7 @@ const db = {
   async del(t,p){try{await fetch(SUPA_URL+"/rest/v1/"+t+p,{method:"DELETE",headers:H});}catch(e){}},
   async uploadPhoto(path,file){const r=await fetch(SUPA_URL+"/storage/v1/object/photos/"+path,{method:"POST",headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Content-Type":file.type,"x-upsert":"true"},body:file});if(!r.ok){const e=await r.text();throw new Error(e);}return true;},
   photoUrl(path){return SUPA_URL+"/storage/v1/object/public/photos/"+path;},
+  async deleteFile(path){try{await fetch(SUPA_URL+"/storage/v1/object/photos/"+path,{method:"DELETE",headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY}});}catch(e){}},
   async upsert(table,body,conflict){
     const r=await fetch(SUPA_URL+"/rest/v1/"+table+"?on_conflict="+conflict,{method:"POST",headers:{"Content-Type":"application/json","apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Prefer":"resolution=merge-duplicates,return=minimal"},body:JSON.stringify(body)});
     if(!r.ok){const e=await r.text();throw new Error(e);}
@@ -2635,6 +2636,89 @@ function chargerModeles(){
 }
 function sauverModeles(obj){try{localStorage.setItem(MODELES_KEY,JSON.stringify(obj));}catch(e){}}
 
+// ── Suivi des commandes fournisseurs : stockage partagé (Supabase), visible sur tous les appareils ──
+async function chargerModelesCloud(){
+  try{
+    const rows=await db.get("commandes_modeles","?id=eq.default");
+    if(Array.isArray(rows)&&rows[0]&&rows[0].delai_depasse&&rows[0].pas_de_delai){
+      return {delaiDepasse:rows[0].delai_depasse,pasDeDelai:rows[0].pas_de_delai};
+    }
+  }catch(e){}
+  return {delaiDepasse:MODELE_DELAI_DEPASSE_DEFAUT,pasDeDelai:MODELE_PAS_DE_DELAI_DEFAUT};
+}
+async function sauverModelesCloud(obj){
+  try{await db.upsert("commandes_modeles",{id:"default",delai_depasse:obj.delaiDepasse,pas_de_delai:obj.pasDeDelai},"id");}catch(e){}
+}
+async function chargerFournisseursCloud(){
+  try{
+    const rows=await db.get("fournisseurs_commandes","?order=nom");
+    if(Array.isArray(rows)&&rows.length)return rows.map(r=>r.nom);
+  }catch(e){}
+  return [];
+}
+async function ajouterFournisseurCloud(nom){
+  try{await db.post("fournisseurs_commandes",{nom});}catch(e){}
+}
+
+function commandeToRow(c){
+  return {
+    id:c.id,
+    fournisseur:c.fournisseur||"",
+    numero_commande:c.numeroCommande||"",
+    numero_chantier:c.numeroChantier||"",
+    type_commande:c.typeCommande||"Fourniture seule",
+    type_fournitures:c.typeFournitures||"",
+    montant_ht:c.montantHT||"",
+    date_commande:c.dateCommande||"",
+    delai_livraison:c.delaiLivraison||"",
+    livraison_client:c.livraisonClient||"Non",
+    recue:!!c.recue,
+    date_reception:c.dateReception||"",
+    ar_url:c.arUrl||null,
+    nom_fichier_source:c.nomFichierSource||"",
+    brouillon:!!c.brouillon,
+    pieces:c.pieces||[],
+  };
+}
+function rowToCommande(r){
+  return {
+    id:r.id,
+    fournisseur:r.fournisseur||"",
+    numeroCommande:r.numero_commande||"",
+    numeroChantier:r.numero_chantier||"",
+    typeCommande:r.type_commande||"Fourniture seule",
+    typeFournitures:r.type_fournitures||"",
+    montantHT:r.montant_ht||"",
+    dateCommande:r.date_commande||"",
+    delaiLivraison:r.delai_livraison||"",
+    livraisonClient:r.livraison_client||"Non",
+    recue:!!r.recue,
+    dateReception:r.date_reception||"",
+    arUrl:r.ar_url||null,
+    hasAR:!!r.ar_url,
+    nomFichierSource:r.nom_fichier_source||"",
+    brouillon:!!r.brouillon,
+    pieces:Array.isArray(r.pieces)?r.pieces:[],
+  };
+}
+async function chargerCommandesCloud(){
+  try{
+    const rows=await db.get("commandes_fournisseurs","?order=created_at.desc");
+    if(Array.isArray(rows))return rows.map(rowToCommande);
+  }catch(e){}
+  return [];
+}
+function pathDeUrlPhoto(url){return (url||"").replace(SUPA_URL+"/storage/v1/object/public/photos/","");}
+
+const MIGRATION_CLOUD_FLAG_KEY="pmv_commandes_migre_cloud";
+function migrationCommandesDisponible(){
+  try{
+    if(localStorage.getItem(MIGRATION_CLOUD_FLAG_KEY)==="1")return false;
+    const legacy=JSON.parse(localStorage.getItem(COMMANDES_KEY)||"[]");
+    return Array.isArray(legacy)&&legacy.length>0;
+  }catch(e){return false;}
+}
+
 function fmtDateFr(iso){if(!iso)return "—";const d=new Date(iso+"T00:00:00");if(isNaN(d.getTime()))return "—";return d.toLocaleDateString("fr-FR");}
 function fmtMontant(v){const n=parseFloat(v);if(isNaN(n))return "";return n.toLocaleString("fr-FR",{minimumFractionDigits:2,maximumFractionDigits:2})+" € HT";}
 
@@ -3061,7 +3145,7 @@ function CarteCommande({c,ficheLiee,onOuvrirFiche,onCopier,onRecue,onEdit,onDele
         <div style={{fontSize:9,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:".05em",marginBottom:4}}>Pièces jointes</div>
         <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
           {(c.pieces||[]).map(p=><span key={p.id} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#F1F3F5",borderRadius:14,padding:"3px 8px",fontSize:10}}>
-            <span onClick={()=>onVoirPiece(p.id)} style={{cursor:"pointer",color:"#1B4F8A"}} title={p.nom}>📎 {p.nom.length>18?p.nom.slice(0,16)+"…":p.nom}</span>
+            <span onClick={()=>onVoirPiece(p.url)} style={{cursor:"pointer",color:"#1B4F8A"}} title={p.nom}>📎 {p.nom.length>18?p.nom.slice(0,16)+"…":p.nom}</span>
             <span onClick={()=>onSupprimerPiece(c.id,p.id)} style={{cursor:"pointer",color:"#D73A49",fontWeight:700}}>✕</span>
           </span>)}
           <button onClick={()=>onAjouterPiece(c.id)} style={{...S.p2,fontSize:10,padding:"3px 8px"}}>+ 📎 Ajouter</button>
@@ -3069,7 +3153,7 @@ function CarteCommande({c,ficheLiee,onOuvrirFiche,onCopier,onRecue,onEdit,onDele
       </div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
         {!c.recue&&<button onClick={()=>onCopier(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✉ Relance</button>}
-        {c.hasAR&&<button onClick={()=>onVoirAr(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>📄 AR</button>}
+        {c.hasAR&&<button onClick={()=>onVoirAr(c.arUrl)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>📄 AR</button>}
         <label style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:"#6B7280",cursor:"pointer"}}><input type="checkbox" checked={!!c.recue} onChange={e=>onRecue(c.id,e.target.checked)}/> Reçue</label>
         <button onClick={()=>onEdit(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✏️</button>
         <button onClick={()=>onDelete(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px",color:"#D73A49",borderColor:"#D73A49"}}>🗑</button>
@@ -3204,9 +3288,12 @@ function StatsCommandes({commandes}){
 }
 
 function PageCommandes({fiches,onOuvrirFiche,onResume}){
-  const [commandes,setCommandes]=useState(()=>chargerCommandes());
-  const [modeles,setModeles]=useState(()=>chargerModeles());
-  const [fournisseurs,setFournisseurs]=useState(()=>chargerFournisseurs());
+  const [commandes,setCommandes]=useState([]);
+  const [modeles,setModeles]=useState({delaiDepasse:MODELE_DELAI_DEPASSE_DEFAUT,pasDeDelai:MODELE_PAS_DE_DELAI_DEFAUT});
+  const [fournisseurs,setFournisseurs]=useState([]);
+  const [chargement,setChargement]=useState(true);
+  const [migrationDispo,setMigrationDispo]=useState(()=>migrationCommandesDisponible());
+  const [migrationEnCours,setMigrationEnCours]=useState(false);
   const [vue,setVue]=useState("actives"); // actives | recues | stats
   const [recherche,setRecherche]=useState("");
   const [dragId,setDragId]=useState(null);
@@ -3231,8 +3318,14 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
   const commandesRef=useRef(commandes);
   const scanRef=useRef(null);
 
-  useEffect(()=>{sauverCommandes(commandes);},[commandes]);
-  useEffect(()=>{sauverModeles(modeles);},[modeles]);
+  useEffect(()=>{
+    let annule=false;
+    Promise.all([chargerCommandesCloud(),chargerModelesCloud(),chargerFournisseursCloud()]).then(([c,m,f])=>{
+      if(annule)return;
+      setCommandes(c);setModeles(m);setFournisseurs(f);setChargement(false);
+    });
+    return()=>{annule=true;};
+  },[]);
   useEffect(()=>{commandesRef.current=commandes;},[commandes]);
   useEffect(()=>{if(onResume)onResume(calculerResumeCommandes(commandes));},[commandes]);
 
@@ -3245,25 +3338,29 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
   }
 
   async function traiterNouveauPdf(name,file){
+    const id="cmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,8);
+    let arUrl=null;
+    try{
+      const path="commandes/"+id+"/"+name;
+      await db.uploadPhoto(path,file);
+      arUrl=db.photoUrl(path);
+    }catch(e){}
+    let d={fournisseur:"",numeroChantier:"",numeroCommande:"",dateCommande:"",typeFournitures:"",montantHT:""};
+    let erreurLecture=false;
     try{
       const lignes=await extraireLignesPdf(file);
-      const d=analyserArPdf(lignes);
-      const doublon=trouverDoublon(d.numeroCommande,commandesRef.current);
-      if(doublon){
-        ajouterJournal("⏭ "+name+" ignoré — doublon de la commande "+doublon.numeroCommande);
-        return;
-      }
-      const id="cmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,8);
-      const nouvelle={id,fournisseur:d.fournisseur,numeroCommande:d.numeroCommande,numeroChantier:d.numeroChantier,typeCommande:"Fourniture seule",typeFournitures:d.typeFournitures,montantHT:d.montantHT,dateCommande:d.dateCommande||today(),delaiLivraison:"",livraisonClient:"Non",recue:false,hasAR:true,brouillon:true,nomFichierSource:name};
-      setCommandes(prev=>[...prev,nouvelle]);
-      await sauverArPdf(id,file).catch(()=>{});
-      ajouterJournal("✅ "+name+" → commande à compléter créée"+(d.numeroCommande?" ("+d.numeroCommande+")":""));
-    }catch(e){
-      const id="cmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,8);
-      setCommandes(prev=>[...prev,{id,fournisseur:"",numeroCommande:"",numeroChantier:"",typeCommande:"Fourniture seule",typeFournitures:"",montantHT:"",dateCommande:today(),delaiLivraison:"",livraisonClient:"Non",recue:false,hasAR:true,brouillon:true,nomFichierSource:name}]);
-      await sauverArPdf(id,file).catch(()=>{});
-      ajouterJournal("⚠ "+name+" : lecture impossible, ajouté en brouillon vide à compléter");
+      d=analyserArPdf(lignes);
+    }catch(e){erreurLecture=true;}
+    const doublon=trouverDoublon(d.numeroCommande,commandesRef.current);
+    if(doublon){
+      ajouterJournal("⏭ "+name+" ignoré — doublon de la commande "+doublon.numeroCommande);
+      if(arUrl)db.deleteFile(pathDeUrlPhoto(arUrl)).catch(()=>{});
+      return;
     }
+    const nouvelle={id,fournisseur:d.fournisseur,numeroCommande:d.numeroCommande,numeroChantier:d.numeroChantier,typeCommande:"Fourniture seule",typeFournitures:d.typeFournitures,montantHT:d.montantHT,dateCommande:d.dateCommande||today(),delaiLivraison:"",livraisonClient:"Non",recue:false,hasAR:!!arUrl,arUrl,brouillon:true,nomFichierSource:name,pieces:[]};
+    setCommandes(prev=>[...prev,nouvelle]);
+    try{await db.post("commandes_fournisseurs",commandeToRow(nouvelle));}catch(e){}
+    ajouterJournal(erreurLecture?"⚠ "+name+" : lecture impossible, ajouté en brouillon vide à compléter":"✅ "+name+" → commande à compléter créée"+(d.numeroCommande?" ("+d.numeroCommande+")":""));
   }
 
   scanRef.current=async function scan(){
@@ -3381,49 +3478,59 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
 
   async function ajouter(v,arFile){
     const id="cmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,8);
-    setCommandes(prev=>[...prev,{...v,id,hasAR:!!arFile}]);
+    let arUrl=null;
+    if(arFile){
+      try{const path="commandes/"+id+"/"+arFile.name;await db.uploadPhoto(path,arFile);arUrl=db.photoUrl(path);}catch(e){}
+    }
+    const nouvelle={...v,id,hasAR:!!arUrl,arUrl,pieces:v.pieces||[]};
+    setCommandes(prev=>[...prev,nouvelle]);
     setModalCommande(null);
     setFlash("Commande ajoutée");setTimeout(()=>setFlash(null),2000);
-    if(arFile){try{await sauverArPdf(id,arFile);}catch(e){}}
+    try{await db.post("commandes_fournisseurs",commandeToRow(nouvelle));}catch(e){}
   }
   async function modifier(v,arFile,removeAr){
-    let hasAR=!!v.hasAR;
-    if(arFile)hasAR=true;else if(removeAr)hasAR=false;
-    const nv={...v,hasAR,brouillon:false};
+    let arUrl=v.arUrl||null;
+    if(arFile){
+      try{const path="commandes/"+v.id+"/"+arFile.name;await db.uploadPhoto(path,arFile);arUrl=db.photoUrl(path);}catch(e){}
+    }else if(removeAr){
+      arUrl=null;
+    }
+    const nv={...v,hasAR:!!arUrl,arUrl,brouillon:false};
     setCommandes(prev=>prev.map(c=>c.id===nv.id?nv:c));
     setModalCommande(null);
     setFlash("Commande modifiée");setTimeout(()=>setFlash(null),2000);
-    if(arFile){try{await sauverArPdf(nv.id,arFile);}catch(e){}}
-    else if(removeAr){try{await supprimerArPdf(nv.id);}catch(e){}}
+    try{await db.patch("commandes_fournisseurs","?id=eq."+nv.id,commandeToRow(nv));}catch(e){}
   }
   function onAddFournisseur(nom){
     setFournisseurs(prev=>{
       if(prev.some(f=>f.toLowerCase()===nom.toLowerCase()))return prev;
-      const next=[...prev,nom].sort((a,b)=>a.localeCompare(b));
-      sauverFournisseurs(next);
-      return next;
+      return [...prev,nom].sort((a,b)=>a.localeCompare(b));
     });
+    ajouterFournisseurCloud(nom);
   }
   function marquerRecue(id,val){
-    setCommandes(prev=>prev.map(c=>c.id===id?{...c,recue:val,dateReception:val?today():""}:c));
+    const dateReception=val?today():"";
+    setCommandes(prev=>prev.map(c=>c.id===id?{...c,recue:val,dateReception}:c));
+    db.patch("commandes_fournisseurs","?id=eq."+id,{recue:val,date_reception:dateReception}).catch(()=>{});
   }
-  async function finaliserSuppression(cmd){
-    try{await supprimerArPdf(cmd.id);}catch(e){}
-    for(const p of cmd.pieces||[]){try{await supprimerPieceJointe(p.id);}catch(e){}}
+  async function purgerFichiers(cmd){
+    if(cmd.arUrl){try{await db.deleteFile(pathDeUrlPhoto(cmd.arUrl));}catch(e){}}
+    for(const p of cmd.pieces||[]){if(p.url){try{await db.deleteFile(pathDeUrlPhoto(p.url));}catch(e){}}}
   }
   function supprimer(id){
     const cmd=commandes.find(c=>c.id===id);
     if(!cmd)return;
     setCommandes(prev=>prev.filter(c=>c.id!==id));
     setConfirmSuppr(null);
+    db.del("commandes_fournisseurs","?id=eq."+id).catch(()=>{});
     if(timeoutSuppressionRef.current){
       clearTimeout(timeoutSuppressionRef.current);
       timeoutSuppressionRef.current=null;
-      if(dernierSupprime)finaliserSuppression(dernierSupprime); // purge l'action non annulée précédente avant de la remplacer
+      if(dernierSupprime)purgerFichiers(dernierSupprime); // purge l'action non annulée précédente avant de la remplacer
     }
     setDernierSupprime(cmd);
     timeoutSuppressionRef.current=setTimeout(()=>{
-      finaliserSuppression(cmd);
+      purgerFichiers(cmd);
       setDernierSupprime(null);
       timeoutSuppressionRef.current=null;
     },6000);
@@ -3432,6 +3539,7 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
     if(!dernierSupprime)return;
     if(timeoutSuppressionRef.current){clearTimeout(timeoutSuppressionRef.current);timeoutSuppressionRef.current=null;}
     setCommandes(prev=>[...prev,dernierSupprime]);
+    db.post("commandes_fournisseurs",commandeToRow(dernierSupprime)).catch(()=>{});
     setDernierSupprime(null);
   }
   function declencherAjoutPiece(id){setPieceCibleId(id);fileInputPieceRef.current?.click();}
@@ -3441,24 +3549,28 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
     const cibleId=pieceCibleId;setPieceCibleId(null);
     const pieceId=cibleId+"_"+Date.now()+"_"+Math.random().toString(36).slice(2,6);
     try{
-      await sauverPieceJointe(pieceId,file);
-      setCommandes(prev=>prev.map(c=>c.id===cibleId?{...c,pieces:[...(c.pieces||[]),{id:pieceId,nom:file.name,dateAjout:today()}]}:c));
+      const path="commandes/"+cibleId+"/pieces/"+pieceId+"_"+file.name;
+      await db.uploadPhoto(path,file);
+      const url=db.photoUrl(path);
+      const cible=commandes.find(c=>c.id===cibleId);
+      const piecesMaj=[...(cible?.pieces||[]),{id:pieceId,nom:file.name,url,dateAjout:today()}];
+      setCommandes(prev=>prev.map(c=>c.id===cibleId?{...c,pieces:piecesMaj}:c));
+      await db.patch("commandes_fournisseurs","?id=eq."+cibleId,{pieces:piecesMaj});
       setFlash("📎 Pièce jointe ajoutée");setTimeout(()=>setFlash(null),2000);
     }catch(err){setFlash("⚠ Impossible d'ajouter cette pièce jointe");setTimeout(()=>setFlash(null),2500);}
   }
   async function supprimerPiece(commandeId,pieceId){
-    setCommandes(prev=>prev.map(c=>c.id===commandeId?{...c,pieces:(c.pieces||[]).filter(p=>p.id!==pieceId)}:c));
-    try{await supprimerPieceJointe(pieceId);}catch(e){}
+    const cible=commandes.find(c=>c.id===commandeId);
+    const piece=cible?.pieces?.find(p=>p.id===pieceId);
+    const piecesMaj=(cible?.pieces||[]).filter(p=>p.id!==pieceId);
+    setCommandes(prev=>prev.map(c=>c.id===commandeId?{...c,pieces:piecesMaj}:c));
+    try{await db.patch("commandes_fournisseurs","?id=eq."+commandeId,{pieces:piecesMaj});}catch(e){}
+    if(piece?.url){try{await db.deleteFile(pathDeUrlPhoto(piece.url));}catch(e){}}
   }
-  async function voirPiece(pieceId){
-    try{
-      const blob=await chargerPieceJointe(pieceId);
-      if(!blob){setFlash("⚠ Pièce jointe introuvable");setTimeout(()=>setFlash(null),2500);return;}
-      const url=URL.createObjectURL(blob);
-      const onglet=window.open(url,"_blank");
-      if(!onglet){window.location.href=url;}
-      else setTimeout(()=>URL.revokeObjectURL(url),60000);
-    }catch(e){setFlash("⚠ Impossible d'ouvrir cette pièce jointe");setTimeout(()=>setFlash(null),2500);}
+  function voirPiece(url){
+    if(!url){setFlash("⚠ Pièce jointe introuvable");setTimeout(()=>setFlash(null),2500);return;}
+    const onglet=window.open(url,"_blank");
+    if(!onglet)window.location.href=url;
   }
   async function copierRelance(cmd){
     const modele=cmd.delaiLivraison?modeles.delaiDepasse:modeles.pasDeDelai;
@@ -3467,22 +3579,68 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
     setFlash(ok?"✅ Relance copiée dans le presse-papier":"⚠ Impossible de copier — vérifiez les permissions du navigateur");
     setTimeout(()=>setFlash(null),2500);
   }
-  async function voirAr(id){
+  function voirAr(url){
+    if(!url){setFlash("⚠ Aucun AR retrouvé pour cette commande");setTimeout(()=>setFlash(null),2500);return;}
+    const onglet=window.open(url,"_blank");
+    if(!onglet)window.location.href=url; // fenêtre bloquée par le navigateur : on ouvre dans l'onglet courant
+  }
+  async function migrerVersCloud(){
+    setMigrationEnCours(true);
     try{
-      const blob=await chargerArPdf(id);
-      if(!blob){setFlash("⚠ Aucun AR retrouvé pour cette commande");setTimeout(()=>setFlash(null),2500);return;}
-      const url=URL.createObjectURL(blob);
-      const onglet=window.open(url,"_blank");
-      if(!onglet){window.location.href=url;} // fenêtre bloquée par le navigateur : on ouvre dans l'onglet courant
-      else setTimeout(()=>URL.revokeObjectURL(url),60000);
-    }catch(e){setFlash("⚠ Impossible d'ouvrir l'AR sur cet appareil");setTimeout(()=>setFlash(null),2500);}
+      const legacyCommandes=chargerCommandes();
+      const legacyFournisseurs=chargerFournisseurs();
+      const legacyModeles=chargerModeles();
+      let compte=0;
+      for(const c of legacyCommandes){
+        let arUrl=null;
+        if(c.hasAR){
+          try{
+            const blob=await chargerArPdf(c.id);
+            if(blob){
+              const path="commandes/"+c.id+"/"+(c.nomFichierSource||"ar.pdf");
+              await db.uploadPhoto(path,new File([blob],c.nomFichierSource||"ar.pdf",{type:blob.type||"application/pdf"}));
+              arUrl=db.photoUrl(path);
+            }
+          }catch(e){}
+        }
+        const piecesMigrees=[];
+        for(const p of c.pieces||[]){
+          try{
+            const blob=await chargerPieceJointe(p.id);
+            if(blob){
+              const path="commandes/"+c.id+"/pieces/"+p.id+"_"+p.nom;
+              await db.uploadPhoto(path,new File([blob],p.nom,{type:blob.type||"application/octet-stream"}));
+              piecesMigrees.push({id:p.id,nom:p.nom,url:db.photoUrl(path),dateAjout:p.dateAjout});
+            }
+          }catch(e){}
+        }
+        const migree={...c,arUrl,hasAR:!!arUrl,pieces:piecesMigrees};
+        try{await db.post("commandes_fournisseurs",commandeToRow(migree));compte++;}catch(e){}
+      }
+      for(const f of legacyFournisseurs){
+        try{await db.upsert("fournisseurs_commandes",{nom:f},"nom");}catch(e){}
+      }
+      try{await sauverModelesCloud(legacyModeles);}catch(e){}
+      localStorage.setItem(MIGRATION_CLOUD_FLAG_KEY,"1");
+      setMigrationDispo(false);
+      setFlash("☁ "+compte+" commande"+(compte>1?"s":"")+" migrée"+(compte>1?"s":"")+" vers le cloud");
+      setTimeout(()=>setFlash(null),4000);
+      const [fraiches,foursFraiches,modelesFrais]=await Promise.all([chargerCommandesCloud(),chargerFournisseursCloud(),chargerModelesCloud()]);
+      setCommandes(fraiches);setFournisseurs(foursFraiches);setModeles(modelesFrais);
+    }catch(e){
+      setFlash("⚠ Erreur pendant la migration — réessayez");setTimeout(()=>setFlash(null),3000);
+    }finally{setMigrationEnCours(false);}
+  }
+
+  if(chargement){
+    return(<div style={{maxWidth:1400,margin:"0 auto",padding:"60px 16px",textAlign:"center",color:"#9CA3AF"}}>Chargement du suivi des commandes…</div>);
   }
 
   return(<div style={{maxWidth:1400,margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
       <div>
         <h2 style={{fontSize:20,fontWeight:700,margin:0}}>📦 Suivi des commandes fournisseurs</h2>
-        <p style={{fontSize:12,color:"#9CA3AF",margin:"3px 0 0"}}>Module indépendant — stocké uniquement sur cet appareil/navigateur.</p>
+        <p style={{fontSize:12,color:"#9CA3AF",margin:"3px 0 0"}}>Visible sur tous les appareils connectés à l'appli.</p>
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <input ref={fileInputArRef} type="file" accept="application/pdf" style={{display:"none"}} onChange={onFichierArChoisi}/>
@@ -3492,6 +3650,11 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
         <button onClick={()=>setModalCommande({})} style={{...S.p1,fontSize:12,padding:"7px 14px"}}>+ Nouvelle commande</button>
       </div>
     </div>
+
+    {migrationDispo&&<div style={{background:"#EEF4FF",border:"1px solid #1B4F8A",borderRadius:10,padding:"12px 14px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+      <div style={{fontSize:12,color:"#1B4F8A"}}>☁ Des commandes enregistrées sur cet appareil ne sont pas encore visibles sur les autres. Migrez-les une fois vers le cloud partagé.</div>
+      <button onClick={migrerVersCloud} disabled={migrationEnCours} style={{...S.p1,fontSize:12,padding:"7px 14px"}}>{migrationEnCours?"Migration en cours…":"☁ Migrer vers le cloud"}</button>
+    </div>}
 
     <div style={{display:"flex",gap:6,marginBottom:14,background:"#F1F3F5",borderRadius:8,padding:4,width:"fit-content"}}>
       <button onClick={()=>setVue("actives")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="actives"?"#1B4F8A":"transparent",color:vue==="actives"?"#fff":"#6B7280"}}>📋 En cours</button>
@@ -3574,7 +3737,7 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
     {vue==="stats"&&<StatsCommandes commandes={commandes}/>}
 
     {modalCommande&&<ModalCommande initial={Object.keys(modalCommande).length?modalCommande:null} isEdit={!!modalCommande.id} initialArFile={modalCommande.id?null:modalArFile} commandes={commandes} fournisseurs={fournisseurs} onAddFournisseur={onAddFournisseur} onSave={modalCommande.id?modifier:ajouter} onClose={()=>{setModalCommande(null);setModalArFile(null);}}/>}
-    {modalModeles&&<ModalModeles modeles={modeles} onSave={m=>{setModeles(m);setModalModeles(false);}} onClose={()=>setModalModeles(false)}/>}
+    {modalModeles&&<ModalModeles modeles={modeles} onSave={m=>{setModeles(m);setModalModeles(false);sauverModelesCloud(m);}} onClose={()=>setModalModeles(false)}/>}
     {confirmSuppr&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
       <div style={{background:"#fff",borderRadius:12,padding:24,width:340}}>
         <p style={{margin:"0 0 16px",fontWeight:600}}>Supprimer cette commande ?</p>
@@ -3623,9 +3786,10 @@ export default function App(){
 
   const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
 
-  const [commandesResume,setCommandesResume]=useState(()=>calculerResumeCommandes(chargerCommandes()));
+  const [commandesResume,setCommandesResume]=useState({retard:0,aCompleter:0});
   useEffect(()=>{
-    function rafraichir(){setCommandesResume(calculerResumeCommandes(chargerCommandes()));}
+    function rafraichir(){chargerCommandesCloud().then(c=>setCommandesResume(calculerResumeCommandes(c)));}
+    rafraichir();
     const interval=setInterval(rafraichir,15000);
     window.addEventListener("focus",rafraichir);
     return()=>{clearInterval(interval);window.removeEventListener("focus",rafraichir);};
