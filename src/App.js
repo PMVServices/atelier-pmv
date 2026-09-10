@@ -2883,28 +2883,42 @@ function ModalModeles({modeles,onSave,onClose}){
   </div>);
 }
 
-function CarteCommande({c,onCopier,onRecue,onEdit,onDelete,onVoirAr}){
+function CarteCommande({c,onCopier,onRecue,onEdit,onDelete,onVoirAr,onDragStart,onDragEnd,onTouchStart,onTouchEnd,isDragging,arrangeable=true}){
+  const [ouvert,setOuvert]=useState(false);
   const st=statutCommande(c);
-  return(<div style={{background:c.recue?"#F8F9FA":"#fff",border:"1px solid #E2E6EA",borderRadius:8,padding:"10px 12px",marginBottom:8,opacity:c.recue?0.65:1}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,gap:6}}>
-      <span style={{display:"inline-block",padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,color:st.color,background:st.bg,whiteSpace:"nowrap"}}>● {st.label}</span>
-      {c.hasAR&&<span title="AR de commande attaché" style={{fontSize:13}}>📎</span>}
+  return(<div
+    draggable={arrangeable}
+    onDragStart={arrangeable?e=>onDragStart(e,c.id):undefined}
+    onDragEnd={arrangeable?onDragEnd:undefined}
+    onTouchStart={arrangeable?()=>onTouchStart(c.id):undefined}
+    onTouchEnd={arrangeable?e=>onTouchEnd(e,c.id):undefined}
+    style={{background:isDragging?"#EEF4FF":(c.recue?"#F8F9FA":"#fff"),border:"1px solid "+(isDragging?"#1B4F8A":"#E2E6EA"),borderRadius:8,marginBottom:8,opacity:isDragging?0.6:(c.recue?0.75:1),cursor:arrangeable?"grab":"default",userSelect:"none",transition:"opacity .15s,border-color .15s"}}>
+    <div style={{display:"flex",alignItems:"center",gap:6,padding:"8px 10px",cursor:"pointer"}} onClick={()=>setOuvert(!ouvert)}>
+      {arrangeable&&<span style={{fontSize:12,color:"#9CA3AF"}}>⠿</span>}
+      <span style={{display:"inline-block",width:8,height:8,borderRadius:"50%",background:st.color,flexShrink:0}}/>
+      <div style={{flex:1,minWidth:0,overflow:"hidden",whiteSpace:"nowrap",textOverflow:"ellipsis"}}>
+        <span style={{fontSize:12,fontWeight:700}}>{c.fournisseur||"—"}</span>
+        <span style={{fontSize:11,color:"#6B7280",marginLeft:6}}>{c.numeroChantier||("Cmd "+(c.numeroCommande||"—"))}</span>
+      </div>
+      {c.hasAR&&<span style={{fontSize:11}}>📎</span>}
+      <span style={{fontSize:11,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
-    <div style={{fontWeight:700,fontSize:13}}>{c.fournisseur}</div>
-    <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{c.numeroChantier||"—"} · Cmd {c.numeroCommande}</div>
-    <div style={{fontSize:11,color:"#1A1A2E",marginBottom:2}}>{c.typeFournitures&&c.montantHT?c.typeFournitures+" — "+fmtMontant(c.montantHT):(c.typeFournitures||(c.montantHT?fmtMontant(c.montantHT):"—"))}</div>
-    <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>
-      Cmd : {fmtDateFr(c.dateCommande)}<br/>
-      Délai : {c.delaiLivraison?fmtDateFr(c.delaiLivraison):"non communiqué"}
-      {c.livraisonClient==="Oui"&&<><br/>🚚 Livraison chez le client</>}
-    </div>
-    <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
-      {!c.recue&&<button onClick={()=>onCopier(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✉ Relance</button>}
-      {c.hasAR&&<button onClick={()=>onVoirAr(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>📄 AR</button>}
-      <label style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:"#6B7280",cursor:"pointer"}}><input type="checkbox" checked={!!c.recue} onChange={e=>onRecue(c.id,e.target.checked)}/> Reçue</label>
-      <button onClick={()=>onEdit(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✏️</button>
-      <button onClick={()=>onDelete(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px",color:"#D73A49",borderColor:"#D73A49"}}>🗑</button>
-    </div>
+    {ouvert&&<div style={{padding:"0 10px 10px"}}>
+      <div style={{marginBottom:6}}><span style={{display:"inline-block",padding:"2px 9px",borderRadius:20,fontSize:10,fontWeight:700,color:st.color,background:st.bg}}>● {st.label}</span></div>
+      <div style={{fontSize:11,color:"#1A1A2E",marginBottom:2}}>{c.typeCommande}{(c.typeFournitures||c.montantHT)?" · ":""}{c.typeFournitures&&c.montantHT?c.typeFournitures+" — "+fmtMontant(c.montantHT):(c.typeFournitures||(c.montantHT?fmtMontant(c.montantHT):""))}</div>
+      <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>
+        Cmd : {fmtDateFr(c.dateCommande)}<br/>
+        Délai : {c.delaiLivraison?fmtDateFr(c.delaiLivraison):"non communiqué"}
+        {c.livraisonClient==="Oui"&&<><br/>🚚 Livraison chez le client</>}
+      </div>
+      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+        {!c.recue&&<button onClick={()=>onCopier(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✉ Relance</button>}
+        {c.hasAR&&<button onClick={()=>onVoirAr(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>📄 AR</button>}
+        <label style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:"#6B7280",cursor:"pointer"}}><input type="checkbox" checked={!!c.recue} onChange={e=>onRecue(c.id,e.target.checked)}/> Reçue</label>
+        <button onClick={()=>onEdit(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✏️</button>
+        <button onClick={()=>onDelete(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px",color:"#D73A49",borderColor:"#D73A49"}}>🗑</button>
+      </div>
+    </div>}
   </div>);
 }
 
@@ -2912,8 +2926,10 @@ function PageCommandes(){
   const [commandes,setCommandes]=useState(()=>chargerCommandes());
   const [modeles,setModeles]=useState(()=>chargerModeles());
   const [fournisseurs,setFournisseurs]=useState(()=>chargerFournisseurs());
-  const [showRecues,setShowRecues]=useState(false);
+  const [vue,setVue]=useState("actives"); // actives | recues
   const [recherche,setRecherche]=useState("");
+  const [dragId,setDragId]=useState(null);
+  const [dragOverType,setDragOverType]=useState(null);
   const [modalCommande,setModalCommande]=useState(null);
   const [modalArFile,setModalArFile]=useState(null);
   const [modalModeles,setModalModeles]=useState(false);
@@ -3049,14 +3065,29 @@ function PageCommandes(){
   }
 
   const brouillons=commandes.filter(c=>c.brouillon);
+  const totalRecues=commandes.filter(c=>c.recue&&!c.brouillon).length;
   const q=recherche.trim().toLowerCase();
-  const filtrees=commandes.filter(c=>{
-    if(c.brouillon)return false;
-    if(!showRecues&&c.recue)return false;
-    if(!q)return true;
-    return [c.fournisseur,c.numeroCommande,c.numeroChantier,c.typeFournitures].some(x=>(x||"").toLowerCase().includes(q));
-  });
-  function parType(t){return trierCommandes(filtrees.filter(c=>c.typeCommande===t));}
+  function matchQ(c){return !q||[c.fournisseur,c.numeroCommande,c.numeroChantier,c.typeFournitures].some(x=>(x||"").toLowerCase().includes(q));}
+  const actives=commandes.filter(c=>!c.brouillon&&!c.recue&&matchQ(c));
+  const recues=trierCommandes(commandes.filter(c=>!c.brouillon&&c.recue&&matchQ(c)));
+  function parType(t){return trierCommandes(actives.filter(c=>c.typeCommande===t));}
+  const montantColonne=t=>parType(t).reduce((s,c)=>s+(parseFloat(c.montantHT)||0),0);
+
+  function changerType(id,type){
+    setCommandes(prev=>prev.map(c=>c.id===id?{...c,typeCommande:type}:c));
+  }
+  function handleDragStart(e,id){setDragId(id);e.dataTransfer.effectAllowed="move";e.dataTransfer.setData("text/plain",id);}
+  function handleDragOver(e,type){e.preventDefault();e.dataTransfer.dropEffect="move";setDragOverType(type);}
+  function handleDrop(e,type){e.preventDefault();if(dragId)changerType(dragId,type);setDragId(null);setDragOverType(null);}
+  function handleDragEnd(){setDragId(null);setDragOverType(null);}
+  function handleTouchStart(id){setDragId(id);}
+  function handleTouchEnd(e,id){
+    const touch=e.changedTouches[0];
+    const el=document.elementFromPoint(touch.clientX,touch.clientY);
+    const col=el?.closest("[data-type]");
+    if(col){const newType=col.getAttribute("data-type");if(newType)changerType(id,newType);}
+    setDragId(null);setDragOverType(null);
+  }
 
   async function ajouter(v,arFile){
     const id="cmd_"+Date.now()+"_"+Math.random().toString(36).slice(2,8);
@@ -3109,8 +3140,6 @@ function PageCommandes(){
     }catch(e){setFlash("⚠ Impossible d'ouvrir l'AR sur cet appareil");setTimeout(()=>setFlash(null),2500);}
   }
 
-  const total=filtrees.length;
-
   return(<div style={{maxWidth:1400,margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
       <div>
@@ -3121,12 +3150,16 @@ function PageCommandes(){
         <input ref={fileInputArRef} type="file" accept="application/pdf" style={{display:"none"}} onChange={onFichierArChoisi}/>
         <button onClick={()=>fileInputArRef.current?.click()} disabled={chargementAr} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>{chargementAr?"Analyse en cours…":"📄 Importer un AR (PDF)"}</button>
         <button onClick={()=>setModalModeles(true)} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>⚙ Modèles de relance</button>
-        <button onClick={()=>setShowRecues(!showRecues)} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>{showRecues?"Masquer reçues":"Afficher reçues"}</button>
         <button onClick={()=>setModalCommande({})} style={{...S.p1,fontSize:12,padding:"7px 14px"}}>+ Nouvelle commande</button>
       </div>
     </div>
 
-    {dossierEtat!=="indisponible"&&dossierEtat!=="verification"&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12}}>
+    <div style={{display:"flex",gap:6,marginBottom:14,background:"#F1F3F5",borderRadius:8,padding:4,width:"fit-content"}}>
+      <button onClick={()=>setVue("actives")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="actives"?"#1B4F8A":"transparent",color:vue==="actives"?"#fff":"#6B7280"}}>📋 En cours</button>
+      <button onClick={()=>setVue("recues")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="recues"?"#1B4F8A":"transparent",color:vue==="recues"?"#fff":"#6B7280"}}>✅ Reçues ({totalRecues})</button>
+    </div>
+
+    {vue==="actives"&&dossierEtat!=="indisponible"&&dossierEtat!=="verification"&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12}}>
       {dossierEtat==="non_lie"&&<>
         <span style={{color:"#6B7280"}}>📁 Surveillance automatique du dossier Commandes : non liée.</span>
         <button onClick={lierDossier} style={{...S.p2,fontSize:11,padding:"4px 10px"}}>🔗 Lier le dossier Commandes</button>
@@ -3141,11 +3174,11 @@ function PageCommandes(){
       </>}
       {journal.length>0&&<button onClick={()=>setJournalOuvert(!journalOuvert)} style={{...S.p2,fontSize:11,padding:"4px 10px",marginLeft:"auto"}}>{journalOuvert?"Masquer le journal":"Journal ("+journal.length+")"}</button>}
     </div>}
-    {journalOuvert&&journal.length>0&&<div style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:11,color:"#6B7280",maxHeight:160,overflowY:"auto"}}>
+    {vue==="actives"&&journalOuvert&&journal.length>0&&<div style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:11,color:"#6B7280",maxHeight:160,overflowY:"auto"}}>
       {journal.map((j,i)=><div key={i} style={{padding:"3px 0",borderBottom:i<journal.length-1?"1px solid #F3F4F6":"none"}}>{new Date(j.t).toLocaleString("fr-FR")} — {j.msg}</div>)}
     </div>}
 
-    {brouillons.length>0&&<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:10,padding:"12px 14px",marginBottom:16}}>
+    {vue==="actives"&&brouillons.length>0&&<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:10,padding:"12px 14px",marginBottom:16}}>
       <div style={{fontSize:13,fontWeight:700,color:"#8A4B00",marginBottom:8}}>🗂 À compléter ({brouillons.length}) — détectées automatiquement depuis le dossier Commandes</div>
       {brouillons.map(c=><div key={c.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #F3D9A8",borderRadius:6,padding:"8px 10px",marginBottom:6}}>
         <div style={{fontSize:12}}>
@@ -3160,21 +3193,38 @@ function PageCommandes(){
 
     {flash&&<div style={{...S.ok,marginBottom:12}}>{flash}</div>}
 
-    {total===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{q?"Aucune commande ne correspond à la recherche":"Aucune commande "+(showRecues?"":"en cours")}</div>}
+    {vue==="actives"&&<>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px",textAlign:"right"}}>💡 Glissez les cartes entre les colonnes pour changer le type</p>
+      {actives.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{q?"Aucune commande ne correspond à la recherche":"Aucune commande en cours"}</div>}
+      {actives.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(260px,1fr))",gap:14,overflowX:"auto"}}>
+        {TYPES_COMMANDE.map(t=>{
+          const liste=parType(t);
+          const montant=montantColonne(t);
+          return(<div key={t}
+            data-type={t}
+            onDragOver={e=>handleDragOver(e,t)}
+            onDrop={e=>handleDrop(e,t)}
+            onDragEnd={handleDragEnd}
+            style={{background:dragOverType===t?"#EEF4FF":"#F1F3F5",borderRadius:10,border:"1.5px solid "+(dragOverType===t?"#1B4F8A":"#E2E6EA"),padding:"10px 10px",minHeight:120,transition:"background .15s,border-color .15s"}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{t}</span>
+              <span style={{fontSize:11,background:"#fff",border:"1px solid #E2E6EA",borderRadius:20,padding:"1px 8px",color:"#6B7280"}}>{liste.length}</span>
+            </div>
+            {montant>0&&<div style={{fontSize:11,color:"#6B7280",marginBottom:8}}>{fmtMontant(montant)}</div>}
+            {montant===0&&<div style={{marginBottom:8}}/>}
+            {liste.length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
+            {liste.map(c=><CarteCommande key={c.id} c={c} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===c.id}/>)}
+          </div>);
+        })}
+      </div>}
+    </>}
 
-    {total>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(260px,1fr))",gap:14,overflowX:"auto"}}>
-      {TYPES_COMMANDE.map(t=>{
-        const liste=parType(t);
-        return(<div key={t} style={{background:"#F1F3F5",borderRadius:10,border:"1px solid #E2E6EA",padding:"10px 10px"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{t}</span>
-            <span style={{fontSize:11,background:"#fff",border:"1px solid #E2E6EA",borderRadius:20,padding:"1px 8px",color:"#6B7280"}}>{liste.length}</span>
-          </div>
-          {liste.length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
-          {liste.map(c=><CarteCommande key={c.id} c={c} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr}/>)}
-        </div>);
-      })}
-    </div>}
+    {vue==="recues"&&<>
+      {recues.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{q?"Aucune commande reçue ne correspond à la recherche":"Aucune commande reçue pour le moment"}</div>}
+      {recues.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
+        {recues.map(c=><CarteCommande key={c.id} c={c} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} arrangeable={false}/>)}
+      </div>}
+    </>}
 
     {modalCommande&&<ModalCommande initial={Object.keys(modalCommande).length?modalCommande:null} isEdit={!!modalCommande.id} initialArFile={modalCommande.id?null:modalArFile} commandes={commandes} fournisseurs={fournisseurs} onAddFournisseur={onAddFournisseur} onSave={modalCommande.id?modifier:ajouter} onClose={()=>{setModalCommande(null);setModalArFile(null);}}/>}
     {modalModeles&&<ModalModeles modeles={modeles} onSave={m=>{setModeles(m);setModalModeles(false);}} onClose={()=>setModalModeles(false)}/>}
