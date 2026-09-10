@@ -1477,6 +1477,95 @@ function PageSuivi(){
 }
 
 
+// ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
+function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer}){
+  const [delaisMap,setDelaisMap]=useState({});
+  useEffect(()=>{
+    if(!fiches.length){setDelaisMap({});return;}
+    const ids=fiches.map(f=>f.id).join(",");
+    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite)").then(rows=>{
+      if(!Array.isArray(rows))return;
+      const m={};
+      rows.forEach(r=>{if(!m[r.fiche_id])m[r.fiche_id]={};m[r.fiche_id][r.champ_id]=r.valeur;});
+      setDelaisMap(m);
+    }).catch(()=>{});
+  },[fiches.map(f=>f.id).join(",")]);
+
+  const devisEnAttente=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis");
+
+  const fichesActives=fiches.filter(f=>!["Termine","Abandonne"].includes(f.statut_chantier||"A_demonter"));
+  const avecUrgence=fichesActives
+    .map(f=>({f,urgence:delaisMap[f.id]?urgenceInfo(delaisMap[f.id]):null}))
+    .filter(x=>x.urgence&&(x.urgence.id==="urgent"||x.urgence.id==="rapide"))
+    .sort((a,b)=>a.urgence.jours-b.urgence.jours);
+  const fichesUrgentes=avecUrgence.filter(x=>x.urgence.id==="urgent");
+  const fichesRapides=avecUrgence.filter(x=>x.urgence.id==="rapide");
+
+  const fichesParDe={};fiches.forEach(f=>{if(f.de)fichesParDe[f.de.trim().toLowerCase()]=f;});
+  const piecesAReco=pieces.filter(p=>p.statut==="A_recommander"||!p.statut);
+  const parDEReco={};
+  piecesAReco.forEach(p=>{if(!parDEReco[p.de])parDEReco[p.de]={de:p.de,client:p.client,n:0};parDEReco[p.de].n++;});
+  const listeDEReco=Object.values(parDEReco);
+
+  const commandesAlerte=(commandesResume?.retard||0)+(commandesResume?.aCompleter||0);
+  const rienASignaler=devisEnAttente.length===0&&fichesUrgentes.length===0&&fichesRapides.length===0&&listeDEReco.length===0&&commandesAlerte===0;
+
+  const ligneFiche=(f,detail)=>(
+    <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #F3D9A8",borderRadius:6,padding:"8px 10px",marginBottom:6}}>
+      <div style={{fontSize:12,minWidth:0}}>
+        <strong>{f.de}</strong> — {f.client||"—"}
+        {detail&&<div style={{fontSize:11,color:"#9CA3AF"}}>{detail}</div>}
+      </div>
+      <button onClick={()=>onOuvrirFiche(f)} style={{...S.p2,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap"}}>📂 Ouvrir</button>
+    </div>
+  );
+
+  const section=(titre,color,bg,contenu)=>(
+    <div style={{background:bg,border:"1px solid "+color,borderRadius:10,padding:"12px 14px",marginBottom:16}}>
+      <div style={{fontSize:13,fontWeight:700,color,marginBottom:8}}>{titre}</div>
+      {contenu}
+    </div>
+  );
+
+  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+    <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 16px"}}>🏠 Tableau de bord</h2>
+
+    {rienASignaler&&<div style={{textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
+
+    {fichesUrgentes.length>0&&section("🔴 Fiches urgentes ("+fichesUrgentes.length+")","#D73A49","#FFF5F5",
+      fichesUrgentes.map(({f,urgence})=>ligneFiche(f,urgence.label+" — échéance le "+urgence.echeance))
+    )}
+
+    {fichesRapides.length>0&&section("🟡 À faire rapidement ("+fichesRapides.length+")","#CA8A04","#FFFBEB",
+      fichesRapides.map(({f,urgence})=>ligneFiche(f,urgence.label+" — échéance le "+urgence.echeance))
+    )}
+
+    {devisEnAttente.length>0&&section("⚠ Devis en attente ("+devisEnAttente.length+")","#E8720C","#FFF8E1",
+      devisEnAttente.map(f=>ligneFiche(f,"Devis à préparer"))
+    )}
+
+    {commandesAlerte>0&&section("📦 Commandes fournisseurs","#D73A49","#FFF5F5",<>
+      <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>{commandesResume.retard} en retard · {commandesResume.aCompleter} à compléter</div>
+      <button onClick={()=>onNaviguer("commandes")} style={{...S.p1,fontSize:12,padding:"6px 14px"}}>📦 Voir le suivi des commandes →</button>
+    </>)}
+
+    {listeDEReco.length>0&&section("🔧 Matériel à recommander ("+listeDEReco.length+")","#E8720C","#FFF8E1",
+      listeDEReco.map(d=>{
+        const ficheLiee=fichesParDe[(d.de||"").trim().toLowerCase()];
+        return(<div key={d.de} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #F3D9A8",borderRadius:6,padding:"8px 10px",marginBottom:6}}>
+          <div style={{fontSize:12}}>
+            <strong>{d.de||"—"}</strong> — {d.client||"—"}
+            <div style={{fontSize:11,color:"#9CA3AF"}}>{d.n} pièce{d.n>1?"s":""} à recommander</div>
+          </div>
+          {ficheLiee
+            ?<button onClick={()=>onOuvrirFiche(ficheLiee)} style={{...S.p2,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap"}}>📂 Ouvrir</button>
+            :<button onClick={()=>onNaviguer("suivi")} style={{...S.p2,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap"}}>🔧 Voir</button>}
+        </div>);
+      })
+    )}
+  </div>);
+}
+
 // ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
 function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
   const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);const [showDevisEnvoye,setShowDevisEnvoye]=useState(false);
@@ -3549,6 +3638,7 @@ export default function App(){
   if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
 
   const navItems=[
+    {id:"dashboard",label:"🏠 Tableau de bord"},
     {id:"accueil",label:"📁 Fiche Atelier"},{id:"chantier",label:"🏗 Fiche Chantier"},
     {id:"planning",label:"📋 Planning"},
     {id:"rapport",label:"📧 Rapport"},
@@ -3604,6 +3694,7 @@ export default function App(){
     </div>}
 
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
+    {page==="dashboard"&&<PageDashboard fiches={fiches} pieces={pieces} commandesResume={commandesResume} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
