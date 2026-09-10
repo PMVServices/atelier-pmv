@@ -2780,6 +2780,29 @@ function trouverDoublon(numeroCommande,commandes){
   return commandes.find(c=>c.numeroCommande&&c.numeroCommande.trim().toLowerCase()===n)||null;
 }
 
+// Écart entre la date de réception réelle et le délai annoncé par le fournisseur
+function ecartReception(c){
+  if(!c.dateReception||!c.delaiLivraison)return "";
+  const recu=new Date(c.dateReception+"T00:00:00");
+  const prevu=new Date(c.delaiLivraison+"T00:00:00");
+  const diff=Math.round((recu-prevu)/86400000);
+  if(diff>0)return "⚠ "+diff+"j de retard";
+  if(diff<0)return "🎉 "+(-diff)+"j d'avance";
+  return "✅ à temps";
+}
+
+// Résumé pour le badge de nav : commandes actives à surveiller (retard/sans délai) + brouillons à compléter
+function calculerResumeCommandes(commandes){
+  const actives=commandes.filter(c=>!c.brouillon&&!c.recue);
+  const brouillons=commandes.filter(c=>c.brouillon);
+  let retard=0;
+  actives.forEach(c=>{
+    const id=statutCommande(c).id;
+    if(id==="retard_fort"||id==="retard_leger"||id==="sans_delai_urgent")retard++;
+  });
+  return {retard,aCompleter:brouillons.length};
+}
+
 const TYPES_COMMANDE=["Fourniture seule","Atelier","Intervention"];
 
 // Liste des fournisseurs : seedée depuis "Liste fournisseurs.xls", puis enrichie/persistée en local (module indépendant, pas de table Supabase)
@@ -2883,7 +2906,7 @@ function ModalModeles({modeles,onSave,onClose}){
   </div>);
 }
 
-function CarteCommande({c,onCopier,onRecue,onEdit,onDelete,onVoirAr,onDragStart,onDragEnd,onTouchStart,onTouchEnd,isDragging,arrangeable=true}){
+function CarteCommande({c,ficheLiee,onOuvrirFiche,onCopier,onRecue,onEdit,onDelete,onVoirAr,onDragStart,onDragEnd,onTouchStart,onTouchEnd,isDragging,arrangeable=true}){
   const [ouvert,setOuvert]=useState(false);
   const st=statutCommande(c);
   return(<div
@@ -2909,8 +2932,10 @@ function CarteCommande({c,onCopier,onRecue,onEdit,onDelete,onVoirAr,onDragStart,
       <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>
         Cmd : {fmtDateFr(c.dateCommande)}<br/>
         Délai : {c.delaiLivraison?fmtDateFr(c.delaiLivraison):"non communiqué"}
+        {c.recue&&c.dateReception&&<><br/>Reçue le {fmtDateFr(c.dateReception)}{c.delaiLivraison&&" — "+ecartReception(c)}</>}
         {c.livraisonClient==="Oui"&&<><br/>🚚 Livraison chez le client</>}
       </div>
+      {ficheLiee&&<button onClick={()=>onOuvrirFiche(ficheLiee)} style={{...S.p2,fontSize:10,padding:"4px 7px",width:"100%",marginBottom:6,color:"#1B4F8A",borderColor:"#1B4F8A"}}>🔗 Voir la fiche {ficheLiee.client?"— "+ficheLiee.client:""}</button>}
       <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
         {!c.recue&&<button onClick={()=>onCopier(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✉ Relance</button>}
         {c.hasAR&&<button onClick={()=>onVoirAr(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>📄 AR</button>}
@@ -2922,7 +2947,7 @@ function CarteCommande({c,onCopier,onRecue,onEdit,onDelete,onVoirAr,onDragStart,
   </div>);
 }
 
-function PageCommandes(){
+function PageCommandes({fiches,onOuvrirFiche,onResume}){
   const [commandes,setCommandes]=useState(()=>chargerCommandes());
   const [modeles,setModeles]=useState(()=>chargerModeles());
   const [fournisseurs,setFournisseurs]=useState(()=>chargerFournisseurs());
@@ -2949,6 +2974,7 @@ function PageCommandes(){
   useEffect(()=>{sauverCommandes(commandes);},[commandes]);
   useEffect(()=>{sauverModeles(modeles);},[modeles]);
   useEffect(()=>{commandesRef.current=commandes;},[commandes]);
+  useEffect(()=>{if(onResume)onResume(calculerResumeCommandes(commandes));},[commandes]);
 
   function ajouterJournal(msg){
     setJournal(prev=>{
@@ -3069,9 +3095,13 @@ function PageCommandes(){
   const q=recherche.trim().toLowerCase();
   function matchQ(c){return !q||[c.fournisseur,c.numeroCommande,c.numeroChantier,c.typeFournitures].some(x=>(x||"").toLowerCase().includes(q));}
   const actives=commandes.filter(c=>!c.brouillon&&!c.recue&&matchQ(c));
-  const recues=trierCommandes(commandes.filter(c=>!c.brouillon&&c.recue&&matchQ(c)));
+  const recues=commandes.filter(c=>!c.brouillon&&c.recue&&matchQ(c)).sort((a,b)=>(b.dateReception||"").localeCompare(a.dateReception||""));
   function parType(t){return trierCommandes(actives.filter(c=>c.typeCommande===t));}
   const montantColonne=t=>parType(t).reduce((s,c)=>s+(parseFloat(c.montantHT)||0),0);
+  const nbRetard=actives.filter(c=>{const id=statutCommande(c).id;return id==="retard_fort"||id==="retard_leger";}).length;
+  const nbSansDelai=actives.filter(c=>statutCommande(c).id==="sans_delai_urgent").length;
+  const fichesParDe={};(fiches||[]).forEach(f=>{if(f.de)fichesParDe[f.de.trim().toLowerCase()]=f;});
+  function ficheLieePour(c){return c.numeroChantier?fichesParDe[c.numeroChantier.trim().toLowerCase()]||null:null;}
 
   function changerType(id,type){
     setCommandes(prev=>prev.map(c=>c.id===id?{...c,typeCommande:type}:c));
@@ -3115,7 +3145,7 @@ function PageCommandes(){
     });
   }
   function marquerRecue(id,val){
-    setCommandes(prev=>prev.map(c=>c.id===id?{...c,recue:val}:c));
+    setCommandes(prev=>prev.map(c=>c.id===id?{...c,recue:val,dateReception:val?today():""}:c));
   }
   async function supprimer(id){
     setCommandes(prev=>prev.filter(c=>c.id!==id));
@@ -3158,6 +3188,11 @@ function PageCommandes(){
       <button onClick={()=>setVue("actives")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="actives"?"#1B4F8A":"transparent",color:vue==="actives"?"#fff":"#6B7280"}}>📋 En cours</button>
       <button onClick={()=>setVue("recues")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="recues"?"#1B4F8A":"transparent",color:vue==="recues"?"#fff":"#6B7280"}}>✅ Reçues ({totalRecues})</button>
     </div>
+
+    {vue==="actives"&&(nbRetard>0||nbSansDelai>0)&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+      {nbRetard>0&&<span style={{background:"#FFF5F5",color:"#D73A49",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>🔴 {nbRetard} en retard de livraison</span>}
+      {nbSansDelai>0&&<span style={{background:"#FFF8E1",color:"#8A4B00",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>🟡 {nbSansDelai} sans délai depuis 7j+</span>}
+    </div>}
 
     {vue==="actives"&&dossierEtat!=="indisponible"&&dossierEtat!=="verification"&&<div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:8,padding:"8px 12px",marginBottom:14,fontSize:12}}>
       {dossierEtat==="non_lie"&&<>
@@ -3213,7 +3248,7 @@ function PageCommandes(){
             {montant>0&&<div style={{fontSize:11,color:"#6B7280",marginBottom:8}}>{fmtMontant(montant)}</div>}
             {montant===0&&<div style={{marginBottom:8}}/>}
             {liste.length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
-            {liste.map(c=><CarteCommande key={c.id} c={c} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===c.id}/>)}
+            {liste.map(c=><CarteCommande key={c.id} c={c} ficheLiee={ficheLieePour(c)} onOuvrirFiche={onOuvrirFiche} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===c.id}/>)}
           </div>);
         })}
       </div>}
@@ -3222,7 +3257,7 @@ function PageCommandes(){
     {vue==="recues"&&<>
       {recues.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{q?"Aucune commande reçue ne correspond à la recherche":"Aucune commande reçue pour le moment"}</div>}
       {recues.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
-        {recues.map(c=><CarteCommande key={c.id} c={c} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} arrangeable={false}/>)}
+        {recues.map(c=><CarteCommande key={c.id} c={c} ficheLiee={ficheLieePour(c)} onOuvrirFiche={onOuvrirFiche} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} arrangeable={false}/>)}
       </div>}
     </>}
 
@@ -3272,6 +3307,15 @@ export default function App(){
 
   const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
 
+  const [commandesResume,setCommandesResume]=useState(()=>calculerResumeCommandes(chargerCommandes()));
+  useEffect(()=>{
+    function rafraichir(){setCommandesResume(calculerResumeCommandes(chargerCommandes()));}
+    const interval=setInterval(rafraichir,15000);
+    window.addEventListener("focus",rafraichir);
+    return()=>{clearInterval(interval);window.removeEventListener("focus",rafraichir);};
+  },[]);
+  const commandesAlerte=commandesResume.retard+commandesResume.aCompleter;
+
   const width=useWidth();
   const isMobile=width<900;
   const [menuOuvert,setMenuOuvert]=useState(false);
@@ -3298,6 +3342,7 @@ export default function App(){
           <button key={n.id} onClick={()=>setPage(n.id)} style={{background:page===n.id?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"none",padding:"6px 14px",borderRadius:6,fontSize:13,cursor:"pointer",fontWeight:page===n.id?700:400,position:"relative",whiteSpace:"nowrap"}}>
             {n.label}
             {n.id==="planning"&&devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{devisCount}</span>}
+            {n.id==="commandes"&&commandesAlerte>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#D73A49",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{commandesAlerte}</span>}
           </button>
         ))}
       </div>}
@@ -3322,6 +3367,7 @@ export default function App(){
         <button key={n.id} onClick={()=>{setPage(n.id);setMenuOuvert(false);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:page===n.id?"rgba(255,255,255,0.15)":"transparent",color:"#fff",border:"none",borderBottom:"1px solid rgba(255,255,255,0.1)",padding:"14px 20px",fontSize:15,fontWeight:page===n.id?700:400,cursor:"pointer",textAlign:"left"}}>
           <span>{n.label}</span>
           {n.id==="planning"&&devisCount>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{devisCount}</span>}
+          {n.id==="commandes"&&commandesAlerte>0&&<span style={{background:"#D73A49",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{commandesAlerte}</span>}
         </button>
       ))}
       {sessionTech&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 20px",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
@@ -3340,7 +3386,7 @@ export default function App(){
     {page==="suivi"&&<PageSuivi/>}
     {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
-    {page==="commandes"&&<PageCommandes/>}
+    {page==="commandes"&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume}/>}
     {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
   </div>);
 }
