@@ -941,6 +941,40 @@ function SelecteurStatut({statutId,onChange}){
 }
 
 // ─── SECTION MATÉRIEL À COMMANDER (fin de fiche) ────────────────────────
+function SectionCommandesLiees({de,onOuvrirCommandes}){
+  const [commandes,setCommandes]=useState([]);
+  const [charge,setCharge]=useState(false);
+
+  useEffect(()=>{
+    if(!de){setCommandes([]);setCharge(true);return;}
+    let annule=false;
+    db.get("commandes_fournisseurs","?numero_chantier=eq."+encodeURIComponent(de)).then(rows=>{
+      if(annule)return;
+      setCommandes(Array.isArray(rows)?rows:[]);
+      setCharge(true);
+    }).catch(()=>{if(!annule)setCharge(true);});
+    return()=>{annule=true;};
+  },[de]);
+
+  if(!charge||commandes.length===0)return null;
+
+  return(<div style={{...S.card,border:"1px solid #1B4F8A",marginTop:8}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10,flexWrap:"wrap",gap:8}}>
+      <p style={{fontSize:14,fontWeight:700,margin:0}}>📦 Commandes liées à ce N° DE</p>
+      <span style={{background:"#EEF4FF",color:"#1B4F8A",fontSize:12,padding:"3px 10px",borderRadius:20,fontWeight:600}}>{commandes.length}</span>
+    </div>
+    {commandes.map(c=>{
+      const st=statutCommande(rowToCommande(c));
+      return(<div key={c.id} style={{background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:6,padding:"8px 10px",marginBottom:6,fontSize:12}}>
+        <span style={{display:"inline-block",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700,color:st.color,background:st.bg,marginRight:6}}>● {st.label}</span>
+        <strong>{c.fournisseur||"—"}</strong> — Cmd {c.numero_commande||"—"}
+        {c.montant_ht&&<span style={{color:"#6B7280"}}> · {fmtMontant(c.montant_ht)}</span>}
+      </div>);
+    })}
+    <button onClick={onOuvrirCommandes} style={{...S.p2,fontSize:12,padding:"6px 14px",width:"100%",marginTop:4}}>📦 Voir dans le suivi des commandes →</button>
+  </div>);
+}
+
 function SectionMaterielCommander({v,ficheId,de,client,piecesInit,onSave,typeMateriel}){
   const [pieces,setPieces]=useState([]);
   const [newDesig,setNewDesig]=useState("");const [newRef,setNewRef]=useState("");const [saving,setSaving]=useState(false);const [saved,setSaved]=useState(false);
@@ -2206,7 +2240,7 @@ function PageRapportsListe({fiches,onOpen}){
   </div>);
 }
 
-function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,seedValeurs,onSeedConsumed}){
+function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed}){
   const isPompe=typeMateriel==="Pompe";
   const isReducteur=typeMateriel==="Moto-réducteur";
   const etapesActives=isPompe?ETAPES_POMPE:isReducteur?ETAPES_REDUCTEUR:ETAPES;
@@ -2330,6 +2364,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>setNrMap(p=>({...p,[i]:!p[i]}))} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={champsActifs}/>)}
 
       <SectionMaterielCommander v={v} ficheId={ficheId} de={v.de} client={v.client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeMateriel}/>
+      <SectionCommandesLiees de={v.de} onOuvrirCommandes={onOuvrirCommandes}/>
 
       <div style={{...S.card,marginTop:8}}>
         <p style={{fontSize:13,fontWeight:700,margin:"0 0 10px"}}>💬 Commentaires divers</p>
@@ -3861,7 +3896,7 @@ export default function App(){
     {page==="dashboard"&&<PageDashboard fiches={fiches} pieces={pieces} commandesResume={commandesResume} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
-    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
+    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={()=>setPage("commandes")} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
