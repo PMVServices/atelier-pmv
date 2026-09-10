@@ -2601,16 +2601,48 @@ async function copierTexte(texte){
   }
 }
 
-// AR de commande (PDF) : stockés en IndexedDB (localStorage n'a que ~5-10 Mo, insuffisant pour des PDF)
+// AR de commande + pièces jointes (PDF/images) : stockés en IndexedDB (localStorage n'a que ~5-10 Mo, insuffisant pour des fichiers)
 const AR_DB_NAME="pmv_commandes_ar_db";
 const AR_STORE="ar_pdfs";
+const PIECES_STORE="pieces_jointes";
 function ouvrirArDb(){
   return new Promise((resolve,reject)=>{
     if(!window.indexedDB){reject(new Error("IndexedDB indisponible"));return;}
-    const req=indexedDB.open(AR_DB_NAME,1);
-    req.onupgradeneeded=()=>{req.result.createObjectStore(AR_STORE);};
+    const req=indexedDB.open(AR_DB_NAME,2);
+    req.onupgradeneeded=()=>{
+      const db=req.result;
+      if(!db.objectStoreNames.contains(AR_STORE))db.createObjectStore(AR_STORE);
+      if(!db.objectStoreNames.contains(PIECES_STORE))db.createObjectStore(PIECES_STORE);
+    };
     req.onsuccess=()=>resolve(req.result);
     req.onerror=()=>reject(req.error);
+  });
+}
+async function sauverPieceJointe(id,file){
+  const db=await ouvrirArDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(PIECES_STORE,"readwrite");
+    tx.objectStore(PIECES_STORE).put(file,id);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
+  });
+}
+async function chargerPieceJointe(id){
+  const db=await ouvrirArDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(PIECES_STORE,"readonly");
+    const req=tx.objectStore(PIECES_STORE).get(id);
+    req.onsuccess=()=>resolve(req.result||null);
+    req.onerror=()=>reject(req.error);
+  });
+}
+async function supprimerPieceJointe(id){
+  const db=await ouvrirArDb();
+  return new Promise((resolve,reject)=>{
+    const tx=db.transaction(PIECES_STORE,"readwrite");
+    tx.objectStore(PIECES_STORE).delete(id);
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error);
   });
 }
 async function sauverArPdf(id,file){
@@ -2906,7 +2938,7 @@ function ModalModeles({modeles,onSave,onClose}){
   </div>);
 }
 
-function CarteCommande({c,ficheLiee,onOuvrirFiche,onCopier,onRecue,onEdit,onDelete,onVoirAr,onDragStart,onDragEnd,onTouchStart,onTouchEnd,isDragging,arrangeable=true}){
+function CarteCommande({c,ficheLiee,onOuvrirFiche,onCopier,onRecue,onEdit,onDelete,onVoirAr,onAjouterPiece,onVoirPiece,onSupprimerPiece,onDragStart,onDragEnd,onTouchStart,onTouchEnd,isDragging,arrangeable=true}){
   const [ouvert,setOuvert]=useState(false);
   const st=statutCommande(c);
   return(<div
@@ -2923,7 +2955,7 @@ function CarteCommande({c,ficheLiee,onOuvrirFiche,onCopier,onRecue,onEdit,onDele
         <span style={{fontSize:12,fontWeight:700}}>{c.fournisseur||"—"}</span>
         <span style={{fontSize:11,color:"#6B7280",marginLeft:6}}>{c.numeroChantier||("Cmd "+(c.numeroCommande||"—"))}</span>
       </div>
-      {c.hasAR&&<span style={{fontSize:11}}>📎</span>}
+      {(c.hasAR||(c.pieces&&c.pieces.length>0))&&<span style={{fontSize:11}}>📎</span>}
       <span style={{fontSize:11,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{padding:"0 10px 10px"}}>
@@ -2936,6 +2968,16 @@ function CarteCommande({c,ficheLiee,onOuvrirFiche,onCopier,onRecue,onEdit,onDele
         {c.livraisonClient==="Oui"&&<><br/>🚚 Livraison chez le client</>}
       </div>
       {ficheLiee&&<button onClick={()=>onOuvrirFiche(ficheLiee)} style={{...S.p2,fontSize:10,padding:"4px 7px",width:"100%",marginBottom:6,color:"#1B4F8A",borderColor:"#1B4F8A"}}>🔗 Voir la fiche {ficheLiee.client?"— "+ficheLiee.client:""}</button>}
+      <div style={{marginBottom:8}}>
+        <div style={{fontSize:9,fontWeight:700,color:"#9CA3AF",textTransform:"uppercase",letterSpacing:".05em",marginBottom:4}}>Pièces jointes</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+          {(c.pieces||[]).map(p=><span key={p.id} style={{display:"inline-flex",alignItems:"center",gap:4,background:"#F1F3F5",borderRadius:14,padding:"3px 8px",fontSize:10}}>
+            <span onClick={()=>onVoirPiece(p.id)} style={{cursor:"pointer",color:"#1B4F8A"}} title={p.nom}>📎 {p.nom.length>18?p.nom.slice(0,16)+"…":p.nom}</span>
+            <span onClick={()=>onSupprimerPiece(c.id,p.id)} style={{cursor:"pointer",color:"#D73A49",fontWeight:700}}>✕</span>
+          </span>)}
+          <button onClick={()=>onAjouterPiece(c.id)} style={{...S.p2,fontSize:10,padding:"3px 8px"}}>+ 📎 Ajouter</button>
+        </div>
+      </div>
       <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
         {!c.recue&&<button onClick={()=>onCopier(c)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>✉ Relance</button>}
         {c.hasAR&&<button onClick={()=>onVoirAr(c.id)} style={{...S.p2,fontSize:10,padding:"4px 7px"}}>📄 AR</button>}
@@ -2947,11 +2989,136 @@ function CarteCommande({c,ficheLiee,onOuvrirFiche,onCopier,onRecue,onEdit,onDele
   </div>);
 }
 
+const COULEUR_TYPE={"Fourniture seule":"#1B4F8A","Atelier":"#22863A","Intervention":"#E8720C"};
+
+function StatsCommandes({commandes}){
+  const [periode,setPeriode]=useState("total");
+
+  function filtrerParPeriode(liste){
+    if(periode==="total")return liste;
+    const now=new Date();
+    const mois=periode==="6mois"?6:12;
+    const limite=new Date(now.getFullYear(),now.getMonth()-mois,now.getDate());
+    return liste.filter(c=>c.dateCommande&&new Date(c.dateCommande)>=limite);
+  }
+
+  const toutes=commandes.filter(c=>!c.brouillon);
+  const commandesFilt=filtrerParPeriode(toutes);
+  const total=commandesFilt.length;
+  const montantTotal=commandesFilt.reduce((s,c)=>s+(parseFloat(c.montantHT)||0),0);
+
+  const parType={};TYPES_COMMANDE.forEach(t=>{parType[t]=commandesFilt.filter(c=>c.typeCommande===t).length;});
+
+  const parFournisseur={};
+  commandesFilt.forEach(c=>{
+    const f=c.fournisseur||"—";
+    if(!parFournisseur[f])parFournisseur[f]={n:0,montant:0};
+    parFournisseur[f].n++;
+    parFournisseur[f].montant+=parseFloat(c.montantHT)||0;
+  });
+  const fournisseurList=Object.entries(parFournisseur).sort((a,b)=>b[1].n-a[1].n).slice(0,8);
+  const maxFournisseur=fournisseurList[0]?.[1].n||1;
+
+  const parMois={};
+  const now2=new Date();
+  for(let i=5;i>=0;i--){
+    const d=new Date(now2.getFullYear(),now2.getMonth()-i,1);
+    const k=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+    parMois[k]=0;
+  }
+  toutes.forEach(c=>{
+    if(c.dateCommande){
+      const d=new Date(c.dateCommande+"T00:00:00");
+      const k=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+      if(parMois[k]!==undefined)parMois[k]++;
+    }
+  });
+  const moisData=Object.entries(parMois);
+  const maxMois=Math.max(...moisData.map(m=>m[1]),1);
+
+  const recuesAvecDelai=commandesFilt.filter(c=>c.recue&&c.dateReception&&c.delaiLivraison);
+  const aTemps=recuesAvecDelai.filter(c=>new Date(c.dateReception+"T00:00:00")<=new Date(c.delaiLivraison+"T00:00:00")).length;
+  const tauxATemps=recuesAvecDelai.length>0?Math.round((aTemps/recuesAvecDelai.length)*100):null;
+
+  const card=(titre,valeur,detail,color="#1B4F8A")=>(
+    <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"14px 16px"}}>
+      <div style={{fontSize:11,color:"#6B7280",marginBottom:4,fontWeight:500}}>{titre}</div>
+      <div style={{fontSize:24,fontWeight:700,color,lineHeight:1.2}}>{valeur}</div>
+      {detail&&<div style={{fontSize:11,color:"#9CA3AF",marginTop:4}}>{detail}</div>}
+    </div>
+  );
+
+  return(<div>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <div style={{display:"flex",gap:6}}>
+        {[["6mois","6 derniers mois"],["annee","Dernière année"],["total","Total"]].map(([v,l])=>(
+          <button key={v} onClick={()=>setPeriode(v)} style={{padding:"6px 14px",borderRadius:20,border:"1.5px solid "+(periode===v?"#1B4F8A":"#E2E6EA"),background:periode===v?"#1B4F8A":"#fff",color:periode===v?"#fff":"#6B7280",fontSize:12,fontWeight:600,cursor:"pointer"}}>{l}</button>
+        ))}
+      </div>
+    </div>
+
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:20}}>
+      {card("Commandes",total,"","#1B4F8A")}
+      {card("Montant total HT",fmtMontant(montantTotal)||"0,00 € HT","","#22863A")}
+      {card("Fournisseur principal",fournisseurList[0]?fournisseurList[0][0]:"—",fournisseurList[0]?fournisseurList[0][1].n+" commande"+(fournisseurList[0][1].n>1?"s":""):"","#E8720C")}
+      {tauxATemps!==null&&card("Livré à temps",tauxATemps+"%","Sur "+recuesAvecDelai.length+" commande"+(recuesAvecDelai.length>1?"s":"")+" reçues","#6B7280")}
+    </div>
+
+    <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Répartition par type</div>
+    <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"14px 16px",marginBottom:20}}>
+      {total===0&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:12}}>Aucune donnée</div>}
+      {TYPES_COMMANDE.map(t=>{
+        const n=parType[t]||0;
+        const pct=total>0?Math.round((n/total)*100):0;
+        return(<div key={t} style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+          <span style={{fontSize:12,fontWeight:600,color:COULEUR_TYPE[t],width:120,flexShrink:0}}>{t}</span>
+          <div style={{flex:1,background:"#F5F6F8",borderRadius:20,height:8,overflow:"hidden"}}>
+            <div style={{height:8,borderRadius:20,background:COULEUR_TYPE[t],width:pct+"%",transition:"width .4s"}}/>
+          </div>
+          <span style={{fontSize:12,fontWeight:700,color:"#1A1A2E",width:30,textAlign:"right"}}>{n}</span>
+          <span style={{fontSize:11,color:"#9CA3AF",width:32}}>{pct}%</span>
+        </div>);
+      })}
+    </div>
+
+    <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Commandes — 6 derniers mois</div>
+    <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"14px 16px",marginBottom:20}}>
+      <div style={{display:"flex",alignItems:"flex-end",gap:8,height:80}}>
+        {moisData.map(([k,n])=>{
+          const h=maxMois>0?Math.round((n/maxMois)*64):0;
+          const [y,m]=k.split("-");
+          const nom=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"][parseInt(m)-1];
+          return(<div key={k} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+            <span style={{fontSize:10,fontWeight:700,color:"#1B4F8A"}}>{n||""}</span>
+            <div style={{width:"100%",background:"#EEF4FF",borderRadius:"4px 4px 0 0",height:h+4,minHeight:4,transition:"height .4s"}}/>
+            <span style={{fontSize:9,color:"#9CA3AF"}}>{nom}</span>
+          </div>);
+        })}
+      </div>
+    </div>
+
+    <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Par fournisseur</div>
+    <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px"}}>
+      {fournisseurList.length===0&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:12}}>Aucune donnée</div>}
+      {fournisseurList.map(([f,d])=>(
+        <div key={f} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+          <span style={{fontSize:12,fontWeight:600,color:"#1A1A2E",width:140,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={f}>{f}</span>
+          <div style={{flex:1,background:"#F5F6F8",borderRadius:20,height:6,overflow:"hidden"}}>
+            <div style={{height:6,borderRadius:20,background:"#1B4F8A",width:Math.round((d.n/maxFournisseur)*100)+"%"}}/>
+          </div>
+          <span style={{fontSize:12,fontWeight:700,color:"#1A1A2E",width:20,textAlign:"right"}}>{d.n}</span>
+          <span style={{fontSize:11,color:"#9CA3AF",width:80,textAlign:"right"}}>{fmtMontant(d.montant)}</span>
+        </div>
+      ))}
+    </div>
+  </div>);
+}
+
 function PageCommandes({fiches,onOuvrirFiche,onResume}){
   const [commandes,setCommandes]=useState(()=>chargerCommandes());
   const [modeles,setModeles]=useState(()=>chargerModeles());
   const [fournisseurs,setFournisseurs]=useState(()=>chargerFournisseurs());
-  const [vue,setVue]=useState("actives"); // actives | recues
+  const [vue,setVue]=useState("actives"); // actives | recues | stats
   const [recherche,setRecherche]=useState("");
   const [dragId,setDragId]=useState(null);
   const [dragOverType,setDragOverType]=useState(null);
@@ -2962,6 +3129,10 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
   const [confirmSuppr,setConfirmSuppr]=useState(null);
   const [chargementAr,setChargementAr]=useState(false);
   const fileInputArRef=useRef(null);
+  const [pieceCibleId,setPieceCibleId]=useState(null);
+  const fileInputPieceRef=useRef(null);
+  const [dernierSupprime,setDernierSupprime]=useState(null);
+  const timeoutSuppressionRef=useRef(null);
 
   const [dossierEtat,setDossierEtat]=useState("verification"); // verification | indisponible | non_lie | besoin_permission | actif
   const [journal,setJournal]=useState(()=>chargerJournalWatcher());
@@ -3147,10 +3318,58 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
   function marquerRecue(id,val){
     setCommandes(prev=>prev.map(c=>c.id===id?{...c,recue:val,dateReception:val?today():""}:c));
   }
-  async function supprimer(id){
+  async function finaliserSuppression(cmd){
+    try{await supprimerArPdf(cmd.id);}catch(e){}
+    for(const p of cmd.pieces||[]){try{await supprimerPieceJointe(p.id);}catch(e){}}
+  }
+  function supprimer(id){
+    const cmd=commandes.find(c=>c.id===id);
+    if(!cmd)return;
     setCommandes(prev=>prev.filter(c=>c.id!==id));
     setConfirmSuppr(null);
-    try{await supprimerArPdf(id);}catch(e){}
+    if(timeoutSuppressionRef.current){
+      clearTimeout(timeoutSuppressionRef.current);
+      timeoutSuppressionRef.current=null;
+      if(dernierSupprime)finaliserSuppression(dernierSupprime); // purge l'action non annulée précédente avant de la remplacer
+    }
+    setDernierSupprime(cmd);
+    timeoutSuppressionRef.current=setTimeout(()=>{
+      finaliserSuppression(cmd);
+      setDernierSupprime(null);
+      timeoutSuppressionRef.current=null;
+    },6000);
+  }
+  function annulerSuppression(){
+    if(!dernierSupprime)return;
+    if(timeoutSuppressionRef.current){clearTimeout(timeoutSuppressionRef.current);timeoutSuppressionRef.current=null;}
+    setCommandes(prev=>[...prev,dernierSupprime]);
+    setDernierSupprime(null);
+  }
+  function declencherAjoutPiece(id){setPieceCibleId(id);fileInputPieceRef.current?.click();}
+  async function onFichierPieceChoisi(e){
+    const file=e.target.files[0];e.target.value="";
+    if(!file||!pieceCibleId)return;
+    const cibleId=pieceCibleId;setPieceCibleId(null);
+    const pieceId=cibleId+"_"+Date.now()+"_"+Math.random().toString(36).slice(2,6);
+    try{
+      await sauverPieceJointe(pieceId,file);
+      setCommandes(prev=>prev.map(c=>c.id===cibleId?{...c,pieces:[...(c.pieces||[]),{id:pieceId,nom:file.name,dateAjout:today()}]}:c));
+      setFlash("📎 Pièce jointe ajoutée");setTimeout(()=>setFlash(null),2000);
+    }catch(err){setFlash("⚠ Impossible d'ajouter cette pièce jointe");setTimeout(()=>setFlash(null),2500);}
+  }
+  async function supprimerPiece(commandeId,pieceId){
+    setCommandes(prev=>prev.map(c=>c.id===commandeId?{...c,pieces:(c.pieces||[]).filter(p=>p.id!==pieceId)}:c));
+    try{await supprimerPieceJointe(pieceId);}catch(e){}
+  }
+  async function voirPiece(pieceId){
+    try{
+      const blob=await chargerPieceJointe(pieceId);
+      if(!blob){setFlash("⚠ Pièce jointe introuvable");setTimeout(()=>setFlash(null),2500);return;}
+      const url=URL.createObjectURL(blob);
+      const onglet=window.open(url,"_blank");
+      if(!onglet){window.location.href=url;}
+      else setTimeout(()=>URL.revokeObjectURL(url),60000);
+    }catch(e){setFlash("⚠ Impossible d'ouvrir cette pièce jointe");setTimeout(()=>setFlash(null),2500);}
   }
   async function copierRelance(cmd){
     const modele=cmd.delaiLivraison?modeles.delaiDepasse:modeles.pasDeDelai;
@@ -3178,6 +3397,7 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <input ref={fileInputArRef} type="file" accept="application/pdf" style={{display:"none"}} onChange={onFichierArChoisi}/>
+        <input ref={fileInputPieceRef} type="file" accept="application/pdf,image/*" style={{display:"none"}} onChange={onFichierPieceChoisi}/>
         <button onClick={()=>fileInputArRef.current?.click()} disabled={chargementAr} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>{chargementAr?"Analyse en cours…":"📄 Importer un AR (PDF)"}</button>
         <button onClick={()=>setModalModeles(true)} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>⚙ Modèles de relance</button>
         <button onClick={()=>setModalCommande({})} style={{...S.p1,fontSize:12,padding:"7px 14px"}}>+ Nouvelle commande</button>
@@ -3187,6 +3407,7 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
     <div style={{display:"flex",gap:6,marginBottom:14,background:"#F1F3F5",borderRadius:8,padding:4,width:"fit-content"}}>
       <button onClick={()=>setVue("actives")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="actives"?"#1B4F8A":"transparent",color:vue==="actives"?"#fff":"#6B7280"}}>📋 En cours</button>
       <button onClick={()=>setVue("recues")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="recues"?"#1B4F8A":"transparent",color:vue==="recues"?"#fff":"#6B7280"}}>✅ Reçues ({totalRecues})</button>
+      <button onClick={()=>setVue("stats")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="stats"?"#1B4F8A":"transparent",color:vue==="stats"?"#fff":"#6B7280"}}>📊 Statistiques</button>
     </div>
 
     {vue==="actives"&&(nbRetard>0||nbSansDelai>0)&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
@@ -3248,7 +3469,7 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
             {montant>0&&<div style={{fontSize:11,color:"#6B7280",marginBottom:8}}>{fmtMontant(montant)}</div>}
             {montant===0&&<div style={{marginBottom:8}}/>}
             {liste.length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
-            {liste.map(c=><CarteCommande key={c.id} c={c} ficheLiee={ficheLieePour(c)} onOuvrirFiche={onOuvrirFiche} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===c.id}/>)}
+            {liste.map(c=><CarteCommande key={c.id} c={c} ficheLiee={ficheLieePour(c)} onOuvrirFiche={onOuvrirFiche} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} onAjouterPiece={declencherAjoutPiece} onVoirPiece={voirPiece} onSupprimerPiece={supprimerPiece} onDragStart={handleDragStart} onDragEnd={handleDragEnd} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===c.id}/>)}
           </div>);
         })}
       </div>}
@@ -3257,9 +3478,11 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
     {vue==="recues"&&<>
       {recues.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{q?"Aucune commande reçue ne correspond à la recherche":"Aucune commande reçue pour le moment"}</div>}
       {recues.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12}}>
-        {recues.map(c=><CarteCommande key={c.id} c={c} ficheLiee={ficheLieePour(c)} onOuvrirFiche={onOuvrirFiche} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} arrangeable={false}/>)}
+        {recues.map(c=><CarteCommande key={c.id} c={c} ficheLiee={ficheLieePour(c)} onOuvrirFiche={onOuvrirFiche} onCopier={copierRelance} onRecue={marquerRecue} onEdit={setModalCommande} onDelete={id=>setConfirmSuppr(id)} onVoirAr={voirAr} onAjouterPiece={declencherAjoutPiece} onVoirPiece={voirPiece} onSupprimerPiece={supprimerPiece} arrangeable={false}/>)}
       </div>}
     </>}
+
+    {vue==="stats"&&<StatsCommandes commandes={commandes}/>}
 
     {modalCommande&&<ModalCommande initial={Object.keys(modalCommande).length?modalCommande:null} isEdit={!!modalCommande.id} initialArFile={modalCommande.id?null:modalArFile} commandes={commandes} fournisseurs={fournisseurs} onAddFournisseur={onAddFournisseur} onSave={modalCommande.id?modifier:ajouter} onClose={()=>{setModalCommande(null);setModalArFile(null);}}/>}
     {modalModeles&&<ModalModeles modeles={modeles} onSave={m=>{setModeles(m);setModalModeles(false);}} onClose={()=>setModalModeles(false)}/>}
@@ -3271,6 +3494,10 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
           <button onClick={()=>supprimer(confirmSuppr)} style={{...S.p1,background:"#D73A49"}}>Supprimer</button>
         </div>
       </div>
+    </div>}
+    {dernierSupprime&&<div style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",background:"#1A1A2E",color:"#fff",padding:"10px 18px",borderRadius:8,display:"flex",alignItems:"center",gap:14,zIndex:400,boxShadow:"0 4px 16px rgba(0,0,0,0.25)",fontSize:13}}>
+      <span>🗑 Commande supprimée</span>
+      <button onClick={annulerSuppression} style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"4px 12px",borderRadius:6,cursor:"pointer",fontWeight:600,fontSize:12}}>Annuler</button>
     </div>}
   </div>);
 }
