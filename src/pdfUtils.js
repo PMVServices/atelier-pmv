@@ -95,9 +95,9 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
 }
 
 
-export function imprimerFiche(v,photos,sc,comm,pieces,nrMap){
+export function imprimerFiche(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
   var w=window.open("","_blank","width=900,height=700");
-  w.document.write(genHtml(v,photos,sc,comm,pieces,nrMap));
+  w.document.write(genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData));
   w.document.close();
   setTimeout(function(){w.print();},800);
 }

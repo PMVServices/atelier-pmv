@@ -2400,45 +2400,127 @@ const onChange=useCallback((id,val)=>setV(p=>{
 // PAGE FICHE CHANTIER
 // ═══════════════════════════════════════════════════
 
-const ETAPES_CHANTIER = ["Informations","Travaux réalisés","Matériel utilisé","Observations"];
+const TYPES_CHANTIER=["Pompe","Moteur","Moto-réducteur","Ventilation","Autre"];
+const MANUTENTION_OPTIONS=["Pont roulant","Chariot élévateur","Palan","Transpalette","Outillage manuel","Chèvre","Élingues","Diable électrique"];
 
-const CHAMPS_CHANTIER = {
-  "Informations": [
-    {id:"ch_date",label:"Date intervention",type:"date",required:true},
-    {id:"ch_client",label:"Client",type:"client",required:true},
-    {id:"ch_de",label:"N° DE",type:"text",required:true},
-    {id:"ch_adresse",label:"Adresse / Site",type:"text",required:false},
-    {id:"ch_contact",label:"Contact sur place",type:"text",required:false},
-    {id:"ch_tel",label:"Téléphone contact",type:"text",required:false},
-    {id:"ch_tech",label:"Technicien(s)",type:"technicien",required:true},
+function ChampMarque({valeur,onChange,marques}){
+  var listeSansAutre=marques.filter(function(m){return m!=="Autre";});
+  var estConnue=listeSansAutre.includes(valeur);
+  var [modeAutre,setModeAutre]=React.useState(!!valeur&&!estConnue);
+  return(<div style={{display:"flex",flexDirection:"column",gap:6}}>
+    <select value={modeAutre?"Autre":(valeur||"")} onChange={function(e){if(e.target.value==="Autre"){setModeAutre(true);onChange("");}else{setModeAutre(false);onChange(e.target.value);}}} style={S.sel}>
+      <option value="">{"— Sélectionner —"}</option>
+      {listeSansAutre.map(function(m){return <option key={m}>{m}</option>;})}
+      <option value="Autre">{"Autre"}</option>
+    </select>
+    {modeAutre&&<input type="text" placeholder="Préciser la marque..." value={valeur||""} onChange={function(e){onChange(e.target.value);}} style={S.inp}/>}
+  </div>);
+}
+function ChampTechniciensMultiples({valeur,onChange,techs}){
+  var parts=(valeur||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
+  var listeConnue=techs.filter(function(t){return t!=="Autre";});
+  var connus=parts.filter(function(p){return listeConnue.includes(p);});
+  var autres=parts.filter(function(p){return !listeConnue.includes(p);}).join(", ");
+  function toggle(t){
+    var n=connus.includes(t)?connus.filter(function(x){return x!==t;}):connus.concat([t]);
+    onChange(n.concat([autres]).filter(Boolean).join(", "));
+  }
+  return(<div>
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:6}}>
+      {listeConnue.map(function(t){return(<span key={t} onClick={function(){toggle(t);}} style={{padding:"6px 12px",borderRadius:20,border:"1.5px solid "+(connus.includes(t)?"#1B4F8A":"#D1D5DB"),background:connus.includes(t)?"#EEF4FF":"#fff",color:connus.includes(t)?"#1B4F8A":"#1A1A2E",fontSize:12,fontWeight:connus.includes(t)?700:500,cursor:"pointer",userSelect:"none"}}>{t}</span>);})}
+    </div>
+    <input type="text" value={autres} onChange={function(e){onChange(connus.concat([e.target.value]).filter(Boolean).join(", "));}} placeholder="Autre(s) technicien(s)..." style={S.inp}/>
+  </div>);
+}
+function ChampTags({valeur,onChange,options}){
+  var set=new Set((valeur||"").split(",").map(function(s){return s.trim();}).filter(Boolean));
+  function toggle(o){
+    var n=new Set(set);
+    if(n.has(o))n.delete(o);else n.add(o);
+    onChange(Array.from(n).join(", "));
+  }
+  return(<div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+    {options.map(function(o){return(<span key={o} onClick={function(){toggle(o);}} style={{padding:"6px 12px",borderRadius:20,border:"1.5px solid "+(set.has(o)?"#1B4F8A":"#D1D5DB"),background:set.has(o)?"#EEF4FF":"#fff",color:set.has(o)?"#1B4F8A":"#1A1A2E",fontSize:12,fontWeight:set.has(o)?700:500,cursor:"pointer",userSelect:"none"}}>{o}</span>);})}
+  </div>);
+}
+
+const INFOS_CHANTIER_COMMUN=[
+  {id:"ch_de",label:"N° de chantier / N° DE",type:"text",required:true},
+  {id:"ch_date",label:"Date d'intervention",type:"date",required:true},
+  {id:"ch_client",label:"Client",type:"client",required:true},
+  {id:"ch_adresse",label:"Lieu du chantier / Adresse",type:"text",required:false},
+  {id:"ch_contact",label:"Contact sur place",type:"text",required:false},
+  {id:"ch_tel",label:"Téléphone contact",type:"text",required:false},
+  {id:"ch_type_travaux",label:"Type de travaux",type:"select",options:["Maintenance préventive","Maintenance corrective","Mise en service","Dépannage","Contrôle / Diagnostic","Remplacement","Installation","Autre"],required:true},
+  {id:"ch_travaux_precision",label:"Précision (si Autre / complément)",type:"text",required:false},
+  {id:"ch_tech",label:"Technicien(s)",type:"techniciens_multi",required:true},
+];
+const IDENTIFICATION_CHANTIER_PAR_TYPE={
+  "Pompe":[
+    {id:"ch_eq_marque",label:"Marque",type:"marque",marques:MARQUES_POMPE,required:false},
+    {id:"ch_eq_ref",label:"Référence / Modèle",type:"text",required:false},
+    {id:"ch_eq_serie",label:"N° de série",type:"text",required:false},
+    {id:"ch_eq_type",label:"Type de pompe",type:"select",options:["Centrifuge","Immergée","Doseuse","À vis","À engrenages","Autre"],required:false},
+    {id:"ch_eq_puissance",label:"Puissance (kW)",type:"text",required:false},
+    {id:"ch_eq_vitesse",label:"Vitesse (tr/min)",type:"text",required:false},
   ],
-  "Travaux réalisés": [
-    {id:"ch_type_travaux",label:"Type de travaux",type:"select",options:["Maintenance préventive","Maintenance corrective","Mise en service","Dépannage","Contrôle / Diagnostic","Remplacement","Installation","Autre"],required:true},
-    {id:"ch_equipement",label:"Equipement concerné",type:"text",required:true},
-    {id:"ch_description",label:"Description des travaux",type:"textarea",required:true},
-    {id:"ch_duree",label:"Durée intervention (h)",type:"number",required:false},
-    {id:"ch_comm_travaux",label:"Commentaire",type:"textarea",required:false},
+  "Moteur":[
+    {id:"ch_eq_marque",label:"Marque",type:"marque",marques:MARQUES_MOTEUR,required:false},
+    {id:"ch_eq_type",label:"Type de moteur",type:"text",required:false},
+    {id:"ch_eq_serie",label:"N° de série",type:"text",required:false},
+    {id:"ch_eq_puissance",label:"Puissance (kW)",type:"text",required:false},
+    {id:"ch_eq_vitesse",label:"Vitesse (tr/min)",type:"text",required:false},
+    {id:"ch_eq_fixation",label:"Type de fixation",type:"text",required:false},
   ],
-  "Matériel utilisé": [
-    {id:"ch_pieces",label:"Pièces remplacées / utilisées",type:"textarea",required:false},
-    {id:"ch_ref_pieces",label:"Références pièces",type:"textarea",required:false},
-    {id:"ch_comm_materiel",label:"Commentaire",type:"textarea",required:false},
+  "Moto-réducteur":[
+    {id:"ch_eq_marque",label:"Marque",type:"marque",marques:MARQUES_REDUCTEUR,required:false},
+    {id:"ch_eq_ref",label:"Référence / Modèle",type:"text",required:false},
+    {id:"ch_eq_serie",label:"N° de série",type:"text",required:false},
+    {id:"ch_eq_puissance",label:"Puissance (kW)",type:"text",required:false},
+    {id:"ch_eq_vitesse",label:"Vitesse de sortie (tr/min)",type:"text",required:false},
+    {id:"ch_eq_rapport",label:"Rapport de réduction",type:"text",required:false},
+    {id:"ch_eq_fixation",label:"Type de fixation",type:"text",required:false},
   ],
-  "Observations": [
-    {id:"ch_etat_general",label:"Etat général",type:"select",options:["Bon","Moyen","Mauvais","A surveiller"],required:false},
-    {id:"ch_anomalies",label:"Anomalies constatées",type:"textarea",required:false},
-    {id:"ch_preconisations",label:"Préconisations",type:"textarea",required:false},
-    {id:"ch_suite",label:"Suite à donner",type:"select",options:["Aucune","A planifier","Urgent","Devis nécessaire"],required:false},
-    {id:"ch_comm_obs",label:"Commentaire",type:"textarea",required:false},
-    {id:"ch_tech_fin",label:"Technicien clôture",type:"technicien",required:false},
+  "Ventilation":[
+    {id:"ch_eq_marque",label:"Marque",type:"text",required:false},
+    {id:"ch_eq_ref",label:"Référence / Modèle",type:"text",required:false},
+    {id:"ch_eq_serie",label:"N° de série",type:"text",required:false},
+    {id:"ch_eq_type",label:"Type",type:"select",options:["VMC simple flux","VMC double flux","Extracteur","Caisson de ventilation","Autre"],required:false},
+  ],
+  "Autre":[
+    {id:"ch_eq_nom",label:"Nom de l'équipement",type:"text",required:false},
+    {id:"ch_eq_marque",label:"Marque",type:"text",required:false},
+    {id:"ch_eq_ref",label:"Référence",type:"text",required:false},
+    {id:"ch_eq_serie",label:"N° de série",type:"text",required:false},
   ],
 };
+const OBSERVATIONS_CHANTIER_COMMUN=[
+  {id:"ch_etat_general",label:"État général",type:"select",options:["Bon","Moyen","Mauvais","À surveiller"],required:false},
+  {id:"ch_anomalies",label:"Anomalies constatées",type:"textarea",required:false},
+  {id:"ch_preconisations",label:"Préconisations",type:"textarea",required:false},
+  {id:"ch_suite",label:"Suite à donner",type:"select",options:["Aucune","À planifier","Urgent","Devis nécessaire"],required:false},
+  {id:"ch_manutention",label:"Moyens de manutention",type:"tags",options:MANUTENTION_OPTIONS,required:false},
+  {id:"ch_manutention_autre",label:"Autre moyen",type:"text",required:false},
+  {id:"ch_materiel_non_renouvele",label:"Matériel vérifié, en bon état (non renouvelé)",type:"textarea",required:false},
+  {id:"ch_comm_obs",label:"Commentaire",type:"textarea",required:false},
+  {id:"ch_tech_fin",label:"Technicien clôture",type:"technicien",required:false},
+];
+const ETAPES_CHANTIER=["Informations générales","Identification équipement","Manutention & Observations"];
+function champsChantierPourType(type){
+  return {
+    "Informations générales":INFOS_CHANTIER_COMMUN,
+    "Identification équipement":IDENTIFICATION_CHANTIER_PAR_TYPE[type]||IDENTIFICATION_CHANTIER_PAR_TYPE["Autre"],
+    "Manutention & Observations":OBSERVATIONS_CHANTIER_COMMUN,
+  };
+}
 
 function PageChantier({techs,clients,onAddClient,categories,sessionTech}){
-  const [view,setView]=React.useState("liste");
+  const [view,setView]=React.useState("liste"); // liste | choix | fiche
   const [ficheOuverte,setFicheOuverte]=React.useState(null);
+  const [typeChoisi,setTypeChoisi]=React.useState("Moteur");
   const [fiches2,setFiches2]=React.useState([]);
   const [loading,setLoading]=React.useState(true);
+  const [filtreRecup,setFiltreRecup]=React.useState("tous"); // tous | attente | recupere
 
   React.useEffect(function(){
     db.get("fiches_chantier","?order=created_at.desc").then(function(d){
@@ -2450,6 +2532,7 @@ function PageChantier({techs,clients,onAddClient,categories,sessionTech}){
   if(view==="fiche"){
     return(<FicheChantier
       fiche={ficheOuverte}
+      typeEquipementInit={ficheOuverte&&ficheOuverte.type_equipement?ficheOuverte.type_equipement:typeChoisi}
       techs={techs}
       clients={clients}
       onAddClient={onAddClient}
@@ -2466,29 +2549,61 @@ function PageChantier({techs,clients,onAddClient,categories,sessionTech}){
     />);
   }
 
+  if(view==="choix"){
+    return(<div style={{padding:16,maxWidth:500,margin:"0 auto"}}>
+      <h2 style={{fontSize:18,fontWeight:700,color:"#1B4F8A",margin:"0 0 16px"}}>{"Type d'équipement"}</h2>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:20}}>
+        {TYPES_CHANTIER.map(function(t){
+          return(<div key={t} onClick={function(){setTypeChoisi(t);}} style={{border:"1.5px solid "+(typeChoisi===t?"#1B4F8A":"#E2E6EA"),background:typeChoisi===t?"#EEF4FF":"#fff",borderRadius:10,padding:"18px 10px",textAlign:"center",cursor:"pointer",fontWeight:600,fontSize:13,color:typeChoisi===t?"#1B4F8A":"#1A1A2E"}}>{t}</div>);
+        })}
+      </div>
+      <div style={{display:"flex",gap:8}}>
+        <button onClick={function(){setView("liste");}} style={S.p2}>{"Annuler"}</button>
+        <button onClick={function(){setFicheOuverte(null);setView("fiche");}} style={{...S.p1,flex:1,justifyContent:"center"}}>{"Continuer"}</button>
+      </div>
+    </div>);
+  }
+
+  var fichesFiltrees=fiches2.filter(function(f){
+    if(filtreRecup==="attente")return (f.statut_recuperation||"En attente")==="En attente";
+    if(filtreRecup==="recupere")return f.statut_recuperation==="Récupéré";
+    return true;
+  });
+
   return(<div style={{padding:"0 0 80px"}}>
     <div style={{padding:"16px 16px 8px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
       <h2 style={{fontSize:18,fontWeight:700,color:"#1B4F8A",margin:0}}>{"Fiches Chantier"}</h2>
-      <button onClick={function(){setFicheOuverte(null);setView("fiche");}} style={{...S.p1,fontSize:13,padding:"8px 16px"}}>{"+ Nouvelle fiche"}</button>
+      <button onClick={function(){setTypeChoisi("Moteur");setView("choix");}} style={{...S.p1,fontSize:13,padding:"8px 16px"}}>{"+ Nouvelle fiche"}</button>
+    </div>
+    <div style={{display:"flex",gap:6,padding:"0 16px 12px"}}>
+      {[["tous","Tous"],["attente","⏳ En attente"],["recupere","✅ Récupérés"]].map(function(f){
+        return(<button key={f[0]} onClick={function(){setFiltreRecup(f[0]);}} style={{flex:1,padding:"7px 4px",borderRadius:8,border:"1px solid "+(filtreRecup===f[0]?"#1B4F8A":"#E2E6EA"),background:filtreRecup===f[0]?"#1B4F8A":"#fff",color:filtreRecup===f[0]?"#fff":"#6B7280",fontSize:11,fontWeight:600,cursor:"pointer"}}>{f[1]}</button>);
+      })}
     </div>
     {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>{"Chargement..."}</div>}
-    {!loading&&fiches2.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>{"Aucune fiche chantier"}</div>}
-    {!loading&&fiches2.map(function(f){
-      return(<div key={f.id} style={{...S.card,margin:"0 16px 10px",cursor:"pointer"}} onClick={function(){setFicheOuverte(f);setView("fiche");}}>
+    {!loading&&fichesFiltrees.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>{"Aucune fiche chantier"}</div>}
+    {!loading&&fichesFiltrees.map(function(f){
+      var recup=f.statut_recuperation==="Récupéré";
+      return(<div key={f.id} style={{...S.card,margin:"0 16px 10px",cursor:"pointer",borderLeft:"4px solid "+(recup?"#22863A":"#E8720C")}} onClick={function(){setFicheOuverte(f);setView("fiche");}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
           <div>
             <p style={{margin:0,fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{f.de||"Sans N° DE"}</p>
             <p style={{margin:"2px 0 0",fontSize:12,color:"#6B7280"}}>{f.client||"Sans client"}</p>
-            <p style={{margin:"2px 0 0",fontSize:11,color:"#9CA3AF"}}>{f.materiel||""}</p>
+            <p style={{margin:"2px 0 0",fontSize:11,color:"#9CA3AF"}}>{(f.type_equipement||"")+(f.materiel?" · "+f.materiel:"")}</p>
           </div>
-          <span style={{fontSize:11,background:"#EEF4FF",color:"#1B4F8A",padding:"3px 8px",borderRadius:10,fontWeight:600}}>{f.statut||"En cours"}</span>
+          <div style={{display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end"}}>
+            <span style={{fontSize:11,background:"#EEF4FF",color:"#1B4F8A",padding:"3px 8px",borderRadius:10,fontWeight:600}}>{f.statut||"En cours"}</span>
+            <span style={{fontSize:10,background:recup?"#F0FFF4":"#FFF8E1",color:recup?"#22863A":"#E8720C",padding:"2px 8px",borderRadius:10,fontWeight:700}}>{recup?"✅ Récupéré":"⏳ En attente"}</span>
+          </div>
         </div>
       </div>);
     })}
   </div>);
 }
 
-function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,onRetour,onSaved}){
+function FicheChantier({fiche,typeEquipementInit,techs,clients,onAddClient,categories,sessionTech,onRetour,onSaved}){
+  var typeEquipement=fiche&&fiche.type_equipement?fiche.type_equipement:(typeEquipementInit||"Moteur");
+  var champsParEtape=champsChantierPourType(typeEquipement);
   var etapes=ETAPES_CHANTIER;
   var [ficheId,setFicheId]=React.useState(fiche?fiche.id:null);
   var vInit={ch_date:today()};
@@ -2498,6 +2613,8 @@ function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,o
   var [saving,setSaving]=React.useState(false);
   var [photos,setPhotos]=React.useState([]);
   var [statutChantier,setStatutChantier]=React.useState("En cours");
+  var [statutRecuperation,setStatutRecuperation]=React.useState(fiche&&fiche.statut_recuperation?fiche.statut_recuperation:"En attente");
+  var [piecesCommande,setPiecesCommande]=React.useState([]);
   var [flash,setFlash]=React.useState(null);
   var [erreur,setErreur]=React.useState(null);
 
@@ -2511,7 +2628,9 @@ function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,o
     db.get("fiches_chantier_photos","?fiche_id=eq."+fiche.id+"&order=created_at").then(function(p){
       if(Array.isArray(p))setPhotos(p.map(function(ph){return Object.assign({},ph,{url:db.photoUrl(ph.storage_path)});}));
     });
+    db.get("suivi_pieces","?fiche_id=eq."+fiche.id).then(function(p){if(Array.isArray(p))setPiecesCommande(p);});
     if(fiche.statut)setStatutChantier(fiche.statut);
+    if(fiche.statut_recuperation)setStatutRecuperation(fiche.statut_recuperation);
   },[fiche]);
 
   var onChange=React.useCallback(function(id,val){
@@ -2523,18 +2642,19 @@ function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,o
     setSaving(true);setErreur(null);
     try{
       var fid=ficheId;
+      var equipLabel=v.ch_eq_nom||v.ch_eq_ref||typeEquipement;
       if(!fid){
-        var res=await db.post("fiches_chantier",{de:v.ch_de||"",client:v.ch_client||"",materiel:v.ch_equipement||"Chantier",statut:statutChantier});
+        var res=await db.post("fiches_chantier",{de:v.ch_de||"",client:v.ch_client||"",materiel:equipLabel,statut:statutChantier,statut_recuperation:statutRecuperation,type_equipement:typeEquipement});
         fid=Array.isArray(res)?res[0]&&res[0].id:res&&res.id;
         if(!fid)throw new Error("Impossible de creer la fiche");
         setFicheId(fid);
-        onSaved(Object.assign({id:fid},v,{statut:statutChantier}));
+        onSaved(Object.assign({id:fid},v,{statut:statutChantier,statut_recuperation:statutRecuperation,type_equipement:typeEquipement}));
       }else{
-        await db.patch("fiches_chantier","?id=eq."+fid,{de:v.ch_de||"",client:v.ch_client||"",materiel:v.ch_equipement||"Chantier",statut:statutChantier});
+        await db.patch("fiches_chantier","?id=eq."+fid,{de:v.ch_de||"",client:v.ch_client||"",materiel:equipLabel,statut:statutChantier,statut_recuperation:statutRecuperation});
       }
-      var champs=Object.keys(v).filter(function(k){return v[k]!==undefined&&v[k]!=="";});
-      if(champs.length>0){
-        var rows=champs.map(function(k){return {fiche_id:fid,champ_id:k,valeur:String(v[k])};});
+      var champsAEnregistrer=Object.keys(v).filter(function(k){return v[k]!==undefined&&v[k]!=="";});
+      if(champsAEnregistrer.length>0){
+        var rows=champsAEnregistrer.map(function(k){return {fiche_id:fid,champ_id:k,valeur:String(v[k])};});
         await db.upsert("fiches_chantier_valeurs",rows,"fiche_id,champ_id");
       }
       if(idx2!==undefined){
@@ -2548,21 +2668,35 @@ function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,o
     setSaving(false);
   }
 
+  async function toggleRecuperation(){
+    if(!ficheId)return;
+    var nouveau=statutRecuperation==="Récupéré"?"En attente":"Récupéré";
+    setStatutRecuperation(nouveau);
+    try{await db.patch("fiches_chantier","?id=eq."+ficheId,{statut_recuperation:nouveau});}catch(e){}
+  }
+
+  function imprimer(){
+    var vImpression=Object.assign({},v,{client:v.ch_client,de:v.ch_de,materiel_lieu:typeEquipement});
+    imprimerFiche(vImpression,photos,statutChantier,"",piecesCommande,{},champsParEtape,etapes);
+  }
+
   var prog=Math.round((validees.length/etapes.length)*100);
-  var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(v.ch_de||"de")+"/"+(v.ch_equipement||"chantier").replace(/[^a-z0-9]/gi,"_");
+  var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(v.ch_de||"de")+"/"+typeEquipement.replace(/[^a-z0-9]/gi,"_");
 
   return(<div style={{paddingBottom:80}}>
     <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div>
-          <p style={{margin:0,fontSize:12,fontWeight:700}}>{(v.ch_client||"Client")+" / "+(v.ch_de||"DE")+" / "+(v.ch_equipement||"Chantier")}</p>
+          <p style={{margin:0,fontSize:12,fontWeight:700}}>{(v.ch_client||"Client")+" / "+(v.ch_de||"DE")+" / "+typeEquipement}</p>
           <p style={{margin:0,fontSize:10,opacity:0.7}}>{"Fiche Chantier"}</p>
         </div>
-        <div style={{display:"flex",alignItems:"center",gap:8}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}>
             <div style={{background:"#4ADE80",borderRadius:20,height:6,width:prog+"%",transition:"width 0.3s"}}/>
           </div>
           <span style={{fontSize:11,opacity:0.85}}>{prog+"%"}</span>
+          {ficheId&&<button onClick={toggleRecuperation} style={{...S.p2,fontSize:11,padding:"4px 10px",background:statutRecuperation==="Récupéré"?"#22863A":"#FFF8E1",color:statutRecuperation==="Récupéré"?"#fff":"#8A4B00",border:"none"}}>{statutRecuperation==="Récupéré"?"✅ Récupéré":"⏳ En attente"}</button>}
+          {ficheId&&<button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={imprimer}>{"📄"}</button>}
           <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>{"Liste"}</button>
         </div>
       </div>
@@ -2574,7 +2708,7 @@ function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,o
         var estAct=i===actif;
         var estVal=validees.includes(i);
         var estLock=i>actif&&!estVal;
-        var champs=CHAMPS_CHANTIER[nom]||[];
+        var champs=champsParEtape[nom]||[];
         if(estLock)return(<div key={nom} style={{...S.cLock,marginBottom:10}}>
           <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px"}}>
             <span>{"🔒"}</span><span style={{fontSize:14,color:"#9CA3AF"}}>{(i+1)+". "+nom}</span>
@@ -2597,7 +2731,10 @@ function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,o
               </select>);
               else if(c.type==="textarea")ctrl=(<div style={{display:"flex",gap:6,alignItems:"flex-start"}}><textarea value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={{...S.inp,height:80,resize:"vertical",flex:1}}/><BoutonDictee onTexte={function(txt){onChange(c.id,appendTexte(val,txt));}}/></div>);
               else if(c.type==="technicien")ctrl=<ChampTechnicien valeur={val} onChange={function(nv){onChange(c.id,nv);}} techs={techs}/>;
+              else if(c.type==="techniciens_multi")ctrl=<ChampTechniciensMultiples valeur={val} onChange={function(nv){onChange(c.id,nv);}} techs={techs}/>;
               else if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={function(nv){onChange(c.id,nv);}} clients={clients} onAddClient={onAddClient}/>;
+              else if(c.type==="marque")ctrl=<ChampMarque valeur={val} onChange={function(nv){onChange(c.id,nv);}} marques={c.marques}/>;
+              else if(c.type==="tags")ctrl=<ChampTags valeur={val} onChange={function(nv){onChange(c.id,nv);}} options={c.options}/>;
               else ctrl=<input type="text" value={val} onChange={function(e){onChange(c.id,e.target.value);}} style={S.inp}/>;
               return(<div key={c.id} style={{marginBottom:12}}>
                 <label style={{fontSize:11,fontWeight:600,color:"#6B7280",display:"block",marginBottom:4}}>{c.label}{c.required?" *":""}</label>
@@ -2612,6 +2749,7 @@ function FicheChantier({fiche,techs,clients,onAddClient,categories,sessionTech,o
           </div>}
         </div>);
       })}
+      <SectionMaterielCommander v={v} ficheId={ficheId} de={v.ch_de||""} client={v.ch_client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeEquipement}/>
     </div>
   </div>);
 }
