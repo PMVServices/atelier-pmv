@@ -65,6 +65,63 @@ function champsIdentitePour(typeMateriel){
   return CHAMPS_IDENTITE_COMMUN;
 }
 
+function suffixerChamps(champs,suf){
+  return champs.map(c=>{
+    const n={...c,id:c.id+suf};
+    if(c.groupe)n.groupe=c.groupe+suf;
+    if(c.condition){
+      if(Array.isArray(c.condition))n.condition=c.condition.map(cd=>({...cd,champ:cd.champ+suf}));
+      else if(typeof c.condition==="object")n.condition={...c.condition,champ:c.condition.champ+suf};
+    }
+    return n;
+  });
+}
+const CHAMPS_INFOS_ELECTRIQUES=[
+    {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
+    {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",unite:"DAR",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",unite:"DAR",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",unite:"DAR",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",unite:"DAR",required:false,groupe:"isol_wu_pair"},
+    {id:"adx_resultat",label:"ADX mesure isol. — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true},
+    {id:"adx_valeur",label:"ADX mesure isol. — valeur",type:"ohm",required:true},
+    {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
+    {id:"plaque_bornes_taille",label:"Plaque à bornes — taille",type:"text",required:true,condition:{champ:"plaque_bornes_etat",valeur:"HS"}},
+    {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
+    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
+    {id:"tech_elec",label:"Technicien",type:"technicien",required:true},
+    {id:"conclusion",label:"Conclusion",type:"text",required:true,dictee:true},
+];
+const CHAMPS_ROTATION_AVANT=[
+    {id:"essai_vide_avant",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
+    {id:"essai_vide_avant_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,dictee:true,condition:{champ:"essai_vide_avant",valeur:"Non"}},
+    {id:"essai_vide_avant_etape_effectuee",label:"Étape effectuée suite à l'essai impossible",type:"text",required:true,dictee:true,condition:{champ:"essai_vide_avant",valeur:"Non"}},
+    {id:"rotor_cc_realise",label:"Vérif rotor court-circuit — réalisée",type:"select",options:["Oui","Non"],required:true,condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"rotor_cc_resultat",label:"Vérif rotor court-circuit — résultat",type:"select",options:["OK","HS"],required:true,condition:[{champ:"essai_vide_avant",valeur:"Oui"},{champ:"rotor_cc_realise",valeur:"Oui"}]},
+    {id:"int_p1_avant",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"int_p2_avant",label:"Intensité Phase 2",type:"mesure",unite:"A",required:true,groupe:"int_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"int_p3_avant",label:"Intensité Phase 3",type:"mesure",unite:"A",required:true,groupe:"int_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"vib_av_mms_avant",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"vib_av_ge_avant",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"vib_ar_mms_avant",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"vib_ar_ge_avant",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"skf_av_rot",label:"Screen SKF avant rotation",type:"photo_skf",categorie:"Screen SKF avant au démontage",required:false,condition:{champ:"essai_vide_avant",valeur:"Oui"}},{id:"skf_ar_rot",label:"Screen SKF arrière rotation",type:"photo_skf",categorie:"Screen SKF arrière au démontage",required:false,condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"int_560_p1_avant",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"int_560_p2_avant",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"int_560_p3_avant",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
+    {id:"moteur_neuf",label:"Moteur neuf",type:"oui_non",required:true,condition:{champ:"essai_vide_avant",valeur:"Non"}},
+    {id:"nettoyage_hp",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true,groupe:"hp_etuvage"},
+    {id:"etuvage_stator",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true,groupe:"hp_etuvage"},
+    {id:"isol_masse_hp",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator",valeur:"Oui"}},
+    {id:"isol_enroul_min",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true},
+    {id:"tech_mesure_avant",label:"Qui a mesuré",type:"technicien",required:true},
+];
+const ETAPE_ELEC_2="Infos électriques (2e passage)";
+const ETAPE_ROTATION_2="Information rotation avant démontage (2e passage)";
+const CHAMPS_INFOS_ELECTRIQUES_2=suffixerChamps(CHAMPS_INFOS_ELECTRIQUES,"_2");
+const CHAMPS_ROTATION_AVANT_2=suffixerChamps(CHAMPS_ROTATION_AVANT.filter(c=>c.id!=="moteur_neuf"),"_2");
+function etapesMoteurPour(v){
+  if(v&&v.essai_vide_avant==="Non"&&v.moteur_neuf==="Non"){
+    return [ETAPES[0],ETAPES[1],ETAPES[2],ETAPE_ELEC_2,ETAPE_ROTATION_2,ETAPES[3],ETAPES[4]];
+  }
+  return ETAPES;
+}
 const CHAMPS={
   "Entrée":[
     {id:"date_entree",label:"Date d'entrée",type:"date",required:true,groupe:"entree_de"},
@@ -87,42 +144,12 @@ const CHAMPS={
     {id:"tech_entree",label:"Technicien",type:"technicien",required:true},
     {id:"demande_client",label:"Demande client",type:"text",required:true,dictee:true},
   ],
-  "Infos électriques":[
-    {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
-    {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",unite:"DAR",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",unite:"DAR",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",unite:"DAR",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",unite:"DAR",required:false,groupe:"isol_wu_pair"},
-    {id:"adx_resultat",label:"ADX mesure isol. — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true},
-    {id:"adx_valeur",label:"ADX mesure isol. — valeur",type:"ohm",required:true},
-    {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
-    {id:"plaque_bornes_taille",label:"Plaque à bornes — taille",type:"text",required:true,condition:{champ:"plaque_bornes_etat",valeur:"HS"}},
-    {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
-    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
-    {id:"tech_elec",label:"Technicien",type:"technicien",required:true},
-    {id:"conclusion",label:"Conclusion",type:"text",required:true,dictee:true},
-  ],
-  "Information rotation avant démontage":[
-    {id:"essai_vide_avant",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
-    {id:"essai_vide_avant_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,dictee:true,condition:{champ:"essai_vide_avant",valeur:"Non"}},
-    {id:"rotor_cc_realise",label:"Vérif rotor court-circuit — réalisée",type:"select",options:["Oui","Non"],required:true},
-    {id:"rotor_cc_resultat",label:"Vérif rotor court-circuit — résultat",type:"select",options:["OK","HS"],required:true,condition:{champ:"rotor_cc_realise",valeur:"Oui"}},
-    {id:"int_p1_avant",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_avant"},
-    {id:"int_p2_avant",label:"Intensité Phase 2",type:"mesure",unite:"A",required:true,groupe:"int_avant"},
-    {id:"int_p3_avant",label:"Intensité Phase 3",type:"mesure",unite:"A",required:true,groupe:"int_avant"},
-    {id:"vib_av_mms_avant",label:"Vibration avant à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_avant"},
-    {id:"vib_av_ge_avant",label:"Vibration avant à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_avant"},
-    {id:"vib_ar_mms_avant",label:"Vibration arrière à 400V — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_arriere"},
-    {id:"vib_ar_ge_avant",label:"Vibration arrière à 400V — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_arriere"},
-    {id:"skf_av_rot",label:"Screen SKF avant rotation",type:"photo_skf",categorie:"Screen SKF avant au démontage",required:false},{id:"skf_ar_rot",label:"Screen SKF arrière rotation",type:"photo_skf",categorie:"Screen SKF arrière au démontage",required:false},
-    {id:"int_560_p1_avant",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
-    {id:"int_560_p2_avant",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
-    {id:"int_560_p3_avant",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant"},
-    {id:"nettoyage_hp",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true,groupe:"hp_etuvage"},
-    {id:"etuvage_stator",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true,groupe:"hp_etuvage"},
-    {id:"isol_masse_hp",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator",valeur:"Oui"}},
-    {id:"isol_enroul_min",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true},
-    {id:"tech_mesure_avant",label:"Qui a mesuré",type:"technicien",required:true},
-  ],
+  "Infos électriques":CHAMPS_INFOS_ELECTRIQUES,
+  "Information rotation avant démontage":CHAMPS_ROTATION_AVANT,
+  [ETAPE_ELEC_2]:CHAMPS_INFOS_ELECTRIQUES_2,
+  [ETAPE_ROTATION_2]:CHAMPS_ROTATION_AVANT_2,
   "Information matériel au démontage":[
-    {id:"moteur_neuf",label:"Moteur neuf",type:"oui_non",required:true},
+    {id:"moteur_neuf",label:"Moteur neuf",type:"oui_non",required:true,condition:v=>v.essai_vide_avant!=="Non"},
     {id:"ventilateur_present",label:"Présence d'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips",condition:siAncien},
     {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips",condition:siAncien},
@@ -509,7 +536,7 @@ const CHAMPS_REDUCTEUR={
   ],
 };;
 
-function champVisible(c,v){if(!c.condition)return true;if(typeof c.condition==="function")return c.condition(v);return v[c.condition.champ]===c.condition.valeur;}
+function champVisible(c,v){if(!c.condition)return true;if(typeof c.condition==="function")return c.condition(v);if(Array.isArray(c.condition))return c.condition.every(cd=>v[cd.champ]===cd.valeur);return v[c.condition.champ]===c.condition.valeur;}
 function etapeOk(nom,v,nr,cs){
   if(nr)return true;
   for(const c of((cs||CHAMPS)[nom]||[])){
@@ -2243,10 +2270,10 @@ function PageRapportsListe({fiches,onOpen}){
 function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed}){
   const isPompe=typeMateriel==="Pompe";
   const isReducteur=typeMateriel==="Moto-réducteur";
-  const etapesActives=isPompe?ETAPES_POMPE:isReducteur?ETAPES_REDUCTEUR:ETAPES;
   const champsActifs=isPompe?CHAMPS_POMPE:isReducteur?CHAMPS_REDUCTEUR:CHAMPS;
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
   const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {de:ficheInit?.de||"",date_entree:today(),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
+  const etapesActives=isPompe?ETAPES_POMPE:isReducteur?ETAPES_REDUCTEUR:etapesMoteurPour(v);
 
   useEffect(()=>{
     if(seedValeurs&&onSeedConsumed)onSeedConsumed();
@@ -2336,7 +2363,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       await db.del("fiche_valeurs","?fiche_id=eq."+fid+"&champ_id=not.in.(__commentaires)");
       const vals=Object.entries(v).filter(([k,val])=>!k.startsWith("__")&&val!==undefined&&val!=="").map(([champ_id,valeur])=>({fiche_id:fid,champ_id,valeur:String(valeur)}));
       if(vals.length>0)await db.post("fiche_valeurs",vals);
-      await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Étape validée",etape:ETAPES[idx]});
+      await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Étape validée",etape:etapesActives[idx]});
       if(onFicheUpdated)onFicheUpdated(fid,{statut:toutFini?"Terminée":"En cours",statut_chantier:newSC});
       setValidees(newVal);if(idx+1<etapesActives.length)setActif(idx+1);setFlash(idx);setTimeout(()=>setFlash(null),3000);onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut_chantier:newSC});
       clearDraft();
