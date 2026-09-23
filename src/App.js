@@ -114,7 +114,10 @@ const CHAMPS_ROTATION_AVANT=[
 ];
 const ETAPE_ELEC_2="Infos électriques (2e passage)";
 const ETAPE_ROTATION_2="Information rotation avant démontage (2e passage)";
-const CHAMPS_INFOS_ELECTRIQUES_2=suffixerChamps(CHAMPS_INFOS_ELECTRIQUES,"_2");
+const CHAMPS_INFOS_ELECTRIQUES_2=suffixerChamps(
+  CHAMPS_INFOS_ELECTRIQUES.filter(c=>!["couplage","plaque_bornes_etat","plaque_bornes_taille","sonde_presence"].includes(c.id)),
+  "_2"
+).map(c=>c.id==="sonde_valeur_2"?{...c,condition:{champ:"sonde_presence",valeur:"Présente"}}:c);
 const CHAMPS_ROTATION_AVANT_2=suffixerChamps(CHAMPS_ROTATION_AVANT.filter(c=>c.id!=="moteur_neuf"),"_2");
 function etapesMoteurPour(v){
   if(v&&v.essai_vide_avant==="Non"&&v.moteur_neuf==="Non"){
@@ -3197,15 +3200,9 @@ function ecartReception(c){
 }
 
 // Résumé pour le badge de nav : commandes actives à surveiller (retard/sans délai) + brouillons à compléter
+// Module Commandes mis en stand by : alertes désactivées (badge nav + tableau de bord) sans rien supprimer.
 function calculerResumeCommandes(commandes){
-  const actives=commandes.filter(c=>!c.brouillon&&!c.recue);
-  const brouillons=commandes.filter(c=>c.brouillon);
-  let retard=0;
-  actives.forEach(c=>{
-    const id=statutCommande(c).id;
-    if(id==="retard_fort"||id==="retard_leger"||id==="sans_delai_urgent")retard++;
-  });
-  return {retard,aCompleter:brouillons.length};
+  return {retard:0,aCompleter:0};
 }
 
 const TYPES_COMMANDE=["Fourniture seule","Atelier","Intervention"];
