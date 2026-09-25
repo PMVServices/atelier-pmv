@@ -96,7 +96,7 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
 
 
 export function imprimerFiche(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
-  var w=window.open("","_blank","width=900,height=700");
+  var w=window.open("","_blank");
   w.document.write(genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData));
   w.document.close();
   setTimeout(function(){w.print();},800);
@@ -113,7 +113,7 @@ export async function telechargerZip(photos,valeurs,nomDossier){
     if(valeurs&&Object.keys(valeurs).length>0){
       var html=genHtml(valeurs,photos,"A_demonter","",[]); 
       var pdfBlob=await new Promise(function(resolve){
-        var w=window.open("","_blank","width=900,height=700");
+        var w=window.open("","_blank");
         if(!w){resolve(null);return;}
         w.document.write(html);
         w.document.close();
@@ -375,14 +375,14 @@ export function genRapportHtml(v,data,photos){
 }
 
 export function apercuRapport(v,data,photos){
-  var w=window.open("","_blank","width=1000,height=800,scrollbars=yes");
+  var w=window.open("","_blank");
   if(!w){alert("La fenêtre d'aperçu a été bloquée par le navigateur. Autorisez les pop-up pour ce site puis réessayez.");return;}
   w.document.write(genRapportHtml(v,data,photos));
   w.document.close();
 }
 
 export function imprimerRapport(v,data,photos){
-  var w=window.open("","_blank","width=900,height=700");
+  var w=window.open("","_blank");
   if(!w){alert("La fenêtre d'impression a été bloquée par le navigateur. Autorisez les pop-up pour ce site puis réessayez.");return;}
   w.document.write(genRapportHtml(v,data,photos));
   w.document.close();

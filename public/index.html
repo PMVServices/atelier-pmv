@@ -2,7 +2,7 @@
 <html lang="fr">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#1B4F8A" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -34,22 +34,38 @@
     <noscript>Vous devez activer JavaScript pour utiliser cette application.</noscript>
     <div id="root"></div>
     <script>
-      // Certaines tablettes Android restent bloquées à la mauvaise échelle après une rotation
-      // (paysage -> portrait) : on force le navigateur à recalculer le viewport en modifiant
-      // brièvement son contenu.
+      // Bug connu sur certaines tablettes Android (PWA installée en mode "standalone") :
+      // après une rotation, la page reste affichée à l'échelle de l'ancienne orientation,
+      // minuscule et collée en haut à gauche, tant qu'on ne force pas un vrai recalcul.
+      // orientationchange se déclenche souvent AVANT que innerWidth/innerHeight n'aient la
+      // bonne valeur, donc on réessaie plusieurs fois avec un délai.
       (function () {
         var vp = document.querySelector('meta[name="viewport"]');
         if (!vp) return;
-        var original = vp.getAttribute('content');
-        function fixViewport() {
-          vp.setAttribute('content', original + ', shrink-to-fit=no');
+        var base = vp.getAttribute('content');
+        var busy = false;
+        function reflow() {
+          var s = document.documentElement.style;
+          s.display = "none";
+          void document.documentElement.offsetHeight;
+          s.display = "";
+          vp.setAttribute("content", base + ", shrink-to-fit=no");
           requestAnimationFrame(function () {
-            vp.setAttribute('content', original);
+            vp.setAttribute("content", base);
+            window.dispatchEvent(new Event("resize"));
           });
         }
-        window.addEventListener('orientationchange', fixViewport);
+        function onRotate() {
+          if (busy) return;
+          busy = true;
+          [50, 200, 500, 900].forEach(function (delay) {
+            setTimeout(reflow, delay);
+          });
+          setTimeout(function () { busy = false; }, 1200);
+        }
+        window.addEventListener("orientationchange", onRotate);
         if (window.screen && window.screen.orientation) {
-          window.screen.orientation.addEventListener('change', fixViewport);
+          window.screen.orientation.addEventListener("change", onRotate);
         }
       })();
     </script>

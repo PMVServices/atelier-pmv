@@ -1092,7 +1092,7 @@ function SectionMaterielCommander({v,ficheId,de,client,piecesInit,onSave,typeMat
 // ─── APERÇU FICHE ───────────────────────────────────────────────────────
 function ApercuFiche({v,photos,statutChantier,commentaires,pieces,nrMap,champsData,etapesData,onClose}){
   const html=genHtml(v,photos||[],statutChantier,commentaires||"",pieces||[],nrMap||{},champsData,etapesData);
-  var w=window.open("","_blank","width=1000,height=800,scrollbars=yes");
+  var w=window.open("","_blank");
   if(w){w.document.write(html);w.document.close();}
   onClose();
   return null;
