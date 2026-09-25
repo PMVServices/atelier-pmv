@@ -34,6 +34,25 @@
     <noscript>Vous devez activer JavaScript pour utiliser cette application.</noscript>
     <div id="root"></div>
     <script>
+      // Verrouille l'orientation en portrait quand le navigateur le permet (en plus du
+      // verrou déclaré dans manifest.json, qui est la méthode principale pour une PWA
+      // installée). Échoue silencieusement si l'API n'est pas disponible ou refuse
+      // (hors plein écran par exemple) : ce n'est qu'un filet de sécurité.
+      (function () {
+        function verrouiller() {
+          try {
+            if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
+              window.screen.orientation.lock("portrait").catch(function () {});
+            }
+          } catch (e) {}
+        }
+        verrouiller();
+        document.addEventListener("visibilitychange", function () {
+          if (!document.hidden) verrouiller();
+        });
+      })();
+    </script>
+    <script>
       // Bug connu sur certaines tablettes Android (PWA installée en mode "standalone") :
       // après une rotation, la page reste affichée à l'échelle de l'ancienne orientation,
       // minuscule et collée en haut à gauche, tant qu'on ne force pas un vrai recalcul.

@@ -99,23 +99,42 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
 // (app installée en PWA "standalone") : la fenêtre s'ouvre minuscule au lieu du plein écran.
 // On affiche/imprime donc le HTML généré directement dans la page actuelle, via un iframe,
 // ce qui contourne complètement ce problème (pas de nouvelle fenêtre à gérer par l'OS).
+// Export réel en fichier : même mécanisme (Blob + <a download>) que le ZIP+PDF existant,
+// qui fonctionne déjà de façon fiable sur tablette — contrairement à window.open()/print().
+export function telechargerHtml(html,nomFichier){
+  var blob=new Blob([html],{type:"text/html"});
+  var a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=(nomFichier||"fiche")+".html";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){URL.revokeObjectURL(a.href);},10000);
+}
+
 var _apercuOverlay=null;
-export function afficherApercu(html){
+export function afficherApercu(html,nomFichier){
   // Ferme un aperçu déjà ouvert (ex: double-appel de l'effet React en StrictMode) au lieu d'empiler.
   if(_apercuOverlay&&_apercuOverlay.parentNode)document.body.removeChild(_apercuOverlay);
   var overlay=document.createElement("div");
   overlay.style.cssText="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;flex-direction:column;";
   var barre=document.createElement("div");
-  barre.style.cssText="background:#1B4F8A;color:#fff;padding:10px 14px;display:flex;justify-content:flex-end;flex-shrink:0;";
+  barre.style.cssText="background:#1B4F8A;color:#fff;padding:10px 14px;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;";
+  var boutonStyle="background:rgba(255,255,255,0.15);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;";
+  var dl=document.createElement("button");
+  dl.textContent="⬇ Télécharger";
+  dl.style.cssText=boutonStyle;
+  dl.onclick=function(){telechargerHtml(html,nomFichier);};
   var fermer=document.createElement("button");
   fermer.textContent="✕ Fermer";
-  fermer.style.cssText="background:rgba(255,255,255,0.15);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;";
+  fermer.style.cssText=boutonStyle;
   function fermerApercu(){
     if(overlay.parentNode)document.body.removeChild(overlay);
     document.body.style.overflow="";
     if(_apercuOverlay===overlay)_apercuOverlay=null;
   }
   fermer.onclick=fermerApercu;
+  barre.appendChild(dl);
   barre.appendChild(fermer);
   var iframe=document.createElement("iframe");
   iframe.title="Aperçu";
