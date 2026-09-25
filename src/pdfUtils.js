@@ -101,11 +101,26 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
 // ce qui contourne complètement ce problème (pas de nouvelle fenêtre à gérer par l'OS).
 // Export réel en fichier : même mécanisme (Blob + <a download>) que le ZIP+PDF existant,
 // qui fonctionne déjà de façon fiable sur tablette — contrairement à window.open()/print().
-export function telechargerHtml(html,nomFichier){
+export async function telechargerHtml(html,nomFichier){
+  var nom=(nomFichier||"fiche")+".html";
   var blob=new Blob([html],{type:"text/html"});
+  // Priorité au partage natif (Android/mobile) : ouvre le sélecteur "Partager" du système,
+  // qui propose Drive, Fichiers, etc. — choisi à chaque fois, sans toucher aux réglages
+  // globaux de téléchargement de Chrome (contrairement à "Demander où enregistrer").
+  if(navigator.share&&navigator.canShare){
+    try{
+      var file=new File([blob],nom,{type:"text/html"});
+      if(navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:nom});
+        return;
+      }
+    }catch(e){
+      if(e&&e.name==="AbortError")return; // partage annulé par l'utilisateur, on n'insiste pas
+    }
+  }
   var a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=(nomFichier||"fiche")+".html";
+  a.download=nom;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
