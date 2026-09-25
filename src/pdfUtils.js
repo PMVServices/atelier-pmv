@@ -95,11 +95,60 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
 }
 
 
+// window.open() en fenêtre séparée ne fonctionne pas correctement sur tablette Android
+// (app installée en PWA "standalone") : la fenêtre s'ouvre minuscule au lieu du plein écran.
+// On affiche/imprime donc le HTML généré directement dans la page actuelle, via un iframe,
+// ce qui contourne complètement ce problème (pas de nouvelle fenêtre à gérer par l'OS).
+var _apercuOverlay=null;
+export function afficherApercu(html){
+  // Ferme un aperçu déjà ouvert (ex: double-appel de l'effet React en StrictMode) au lieu d'empiler.
+  if(_apercuOverlay&&_apercuOverlay.parentNode)document.body.removeChild(_apercuOverlay);
+  var overlay=document.createElement("div");
+  overlay.style.cssText="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;flex-direction:column;";
+  var barre=document.createElement("div");
+  barre.style.cssText="background:#1B4F8A;color:#fff;padding:10px 14px;display:flex;justify-content:flex-end;flex-shrink:0;";
+  var fermer=document.createElement("button");
+  fermer.textContent="✕ Fermer";
+  fermer.style.cssText="background:rgba(255,255,255,0.15);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;";
+  function fermerApercu(){
+    if(overlay.parentNode)document.body.removeChild(overlay);
+    document.body.style.overflow="";
+    if(_apercuOverlay===overlay)_apercuOverlay=null;
+  }
+  fermer.onclick=fermerApercu;
+  barre.appendChild(fermer);
+  var iframe=document.createElement("iframe");
+  iframe.title="Aperçu";
+  iframe.style.cssText="flex:1;border:none;width:100%;background:#fff;";
+  overlay.appendChild(barre);
+  overlay.appendChild(iframe);
+  document.body.appendChild(overlay);
+  document.body.style.overflow="hidden";
+  iframe.srcdoc=html;
+  _apercuOverlay=overlay;
+  return fermerApercu;
+}
+
+export function lancerImpression(html){
+  var iframe=document.createElement("iframe");
+  iframe.style.cssText="position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden;";
+  document.body.appendChild(iframe);
+  function nettoyer(){if(iframe.parentNode)document.body.removeChild(iframe);}
+  iframe.onload=function(){
+    setTimeout(function(){
+      try{
+        iframe.contentWindow.focus();
+        iframe.contentWindow.onafterprint=nettoyer;
+        iframe.contentWindow.print();
+      }catch(e){}
+      setTimeout(nettoyer,60000);
+    },500);
+  };
+  iframe.srcdoc=html;
+}
+
 export function imprimerFiche(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
-  var w=window.open("","_blank");
-  w.document.write(genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData));
-  w.document.close();
-  setTimeout(function(){w.print();},800);
+  lancerImpression(genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData));
 }
 
 export async function telechargerZip(photos,valeurs,nomDossier){
@@ -111,23 +160,9 @@ export async function telechargerZip(photos,valeurs,nomDossier){
     await Promise.all(photos.map(async function(p){try{var r=await fetch(p.url);var blob=await r.blob();zip.file(p.nom_fichier||p.storage_path.split("/").pop(),blob);}catch(e){}}));
     // PDF via fenêtre d'impression
     if(valeurs&&Object.keys(valeurs).length>0){
-      var html=genHtml(valeurs,photos,"A_demonter","",[]); 
-      var pdfBlob=await new Promise(function(resolve){
-        var w=window.open("","_blank");
-        if(!w){resolve(null);return;}
-        w.document.write(html);
-        w.document.close();
-        // Donner le temps aux images de charger
-        setTimeout(function(){
-          w.focus();
-          w.print();
-          // Créer un blob HTML à mettre dans le ZIP
-          var b=new Blob([html],{type:"text/html"});
-          resolve(b);
-          setTimeout(function(){w.close();},2000);
-        },1000);
-      });
-      if(pdfBlob)zip.file(nomDossier+"_fiche.html",pdfBlob);
+      var html=genHtml(valeurs,photos,"A_demonter","",[]);
+      lancerImpression(html);
+      zip.file(nomDossier+"_fiche.html",new Blob([html],{type:"text/html"}));
     }
     var content=await zip.generateAsync({type:"blob"});
     var a=document.createElement("a");a.href=URL.createObjectURL(content);a.download=nomDossier+".zip";a.click();
@@ -375,16 +410,9 @@ export function genRapportHtml(v,data,photos){
 }
 
 export function apercuRapport(v,data,photos){
-  var w=window.open("","_blank");
-  if(!w){alert("La fenêtre d'aperçu a été bloquée par le navigateur. Autorisez les pop-up pour ce site puis réessayez.");return;}
-  w.document.write(genRapportHtml(v,data,photos));
-  w.document.close();
+  afficherApercu(genRapportHtml(v,data,photos));
 }
 
 export function imprimerRapport(v,data,photos){
-  var w=window.open("","_blank");
-  if(!w){alert("La fenêtre d'impression a été bloquée par le navigateur. Autorisez les pop-up pour ce site puis réessayez.");return;}
-  w.document.write(genRapportHtml(v,data,photos));
-  w.document.close();
-  setTimeout(function(){w.print();},800);
+  lancerImpression(genRapportHtml(v,data,photos));
 }
