@@ -33,5 +33,25 @@
   <body>
     <noscript>Vous devez activer JavaScript pour utiliser cette application.</noscript>
     <div id="root"></div>
+    <script>
+      // Certaines tablettes Android restent bloquées à la mauvaise échelle après une rotation
+      // (paysage -> portrait) : on force le navigateur à recalculer le viewport en modifiant
+      // brièvement son contenu.
+      (function () {
+        var vp = document.querySelector('meta[name="viewport"]');
+        if (!vp) return;
+        var original = vp.getAttribute('content');
+        function fixViewport() {
+          vp.setAttribute('content', original + ', shrink-to-fit=no');
+          requestAnimationFrame(function () {
+            vp.setAttribute('content', original);
+          });
+        }
+        window.addEventListener('orientationchange', fixViewport);
+        if (window.screen && window.screen.orientation) {
+          window.screen.orientation.addEventListener('change', fixViewport);
+        }
+      })();
+    </script>
   </body>
 </html>

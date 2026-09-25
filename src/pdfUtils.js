@@ -30,7 +30,7 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
 
   var css="*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:9.5pt;color:#1A1A2E;}.page{max-width:210mm;margin:0 auto;padding:12mm;}.hdr{background:#1B4F8A;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}.ht{font-size:15pt;font-weight:bold;}.hs{font-size:8pt;opacity:.75;margin-top:2px;}.hd{font-size:18pt;font-weight:bold;color:#E8720C;text-align:right;}.hdate{font-size:8pt;opacity:.75;text-align:right;}table{width:100%;border-collapse:collapse;margin-bottom:8px;}td{padding:5px 7px;border:.4px solid #DEE2E6;vertical-align:top;}tr:nth-child(even) td{background:#F8F9FA;}.lbl{font-weight:bold;font-size:9.5pt;width:22%;}.val{font-size:9.5pt;width:28%;}.sec td{background:#1B4F8A;color:#fff;font-weight:bold;padding:6px 8px;}.sn{margin-right:6px;}.st{float:right;font-size:8pt;opacity:.8;font-weight:normal;}.nr{background:#FFF8E1;color:#E8720C;font-style:italic;font-size:9pt;padding:4px 8px;}.sub td{background:#D6E4F7;color:#1B4F8A;font-weight:bold;padding:5px 8px;}.ft{border-top:.5px solid #DEE2E6;margin-top:10px;padding-top:5px;font-size:7pt;color:#6B7280;text-align:center;}.pg{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}.pi img{width:80px;height:80px;object-fit:cover;border-radius:4px;}.pi p{font-size:7pt;color:#6B7280;margin-top:2px;text-align:center;}.comment{background:#F8F9FA;border:.5px solid #DEE2E6;border-radius:4px;padding:8px;margin-top:6px;font-size:9pt;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}";
 
-  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><style>"+css+"</style></head><body><div class='page'>";
+  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><style>"+css+"</style></head><body><div class='page'>";
 
   // Header
   var statLabel=sc||"";
@@ -231,7 +231,7 @@ export function genRapportHtml(v,data,photos){
   ".photos.stack .photo img{height:auto;max-height:340px;object-fit:contain;background:#F8F9FA;}"+
   "@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}";
 
-  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Rapport d'entretien "+txt("de")+"</title><style>"+css+"</style></head><body>";
+  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Rapport d'entretien "+txt("de")+"</title><style>"+css+"</style></head><body>";
 
   // Couverture — présentation PMV Services
   html+="<div class='page'><div class='cover'>";

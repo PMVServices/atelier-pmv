@@ -1601,6 +1601,12 @@ function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer})
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 16px"}}>🏠 Tableau de bord</h2>
 
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:20}}>
+      {NAV_ITEMS.filter(n=>n.id!=="dashboard").map(n=>(
+        <button key={n.id} onClick={()=>onNaviguer(n.id)} style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:10,padding:"16px 10px",fontSize:13,fontWeight:600,cursor:"pointer",textAlign:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}>{n.label}</button>
+      ))}
+    </div>
+
     {rienASignaler&&<div style={{textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
 
     {fichesUrgentes.length>0&&section("🔴 Fiches urgentes ("+fichesUrgentes.length+")","#D73A49","#FFF5F5",
@@ -3957,6 +3963,16 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
   </div>);
 }
 
+const NAV_ITEMS=[
+  {id:"dashboard",label:"🏠 Tableau de bord"},
+  {id:"accueil",label:"📁 Fiche Atelier"},{id:"chantier",label:"🏗 Fiche Chantier"},
+  {id:"planning",label:"📋 Planning"},
+  {id:"rapport",label:"📧 Rapport"},
+  {id:"suivi",label:"🔧 Matériel"},
+  {id:"commandes",label:"📦 Commandes"},
+  {id:"stats",label:"📊 Stats"},
+];
+
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
   const [page,setPage]=useState(()=>loadDraft()?"fiche":"accueil");const [sessionTech,setSessionTech]=useState(()=>loadDraft()?.sessionTech||null);const [ficheOuverte,setFicheOuverte]=useState(()=>{const d=loadDraft();return d?{id:d.ficheId,de:d.v?.de,client:d.v?.client,materiel_lieu:d.v?.materiel_lieu,type_materiel:d.typeMateriel,statut_chantier:d.statutChantier,etape_active:d.actif,etapes_validees:d.validees}:null;});const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState(()=>loadDraft()?.typeMateriel||"Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);const [rapportFicheId,setRapportFicheId]=useState(null);const [seedValeurs,setSeedValeurs]=useState(null);
@@ -4004,15 +4020,7 @@ export default function App(){
   const [menuOuvert,setMenuOuvert]=useState(false);
   if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
 
-  const navItems=[
-    {id:"dashboard",label:"🏠 Tableau de bord"},
-    {id:"accueil",label:"📁 Fiche Atelier"},{id:"chantier",label:"🏗 Fiche Chantier"},
-    {id:"planning",label:"📋 Planning"},
-    {id:"rapport",label:"📧 Rapport"},
-    {id:"suivi",label:"🔧 Matériel"},
-    {id:"commandes",label:"📦 Commandes"},
-    {id:"stats",label:"📊 Stats"},
-  ];
+  const navItems=NAV_ITEMS;
 
   return(<div style={S.app}>
     {/* ── HEADER ── */}
