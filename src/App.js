@@ -36,12 +36,20 @@ const ETAPES=["Entrée","Infos électriques","Information rotation avant démont
 const STATUTS_CHANTIER=[
   {id:"A_demonter",label:"À démonter",color:"#D73A49",bg:"#FFF5F5"},
   {id:"Devis",label:"Devis",color:"#E8720C",bg:"#FFF8E1"},
-  {id:"Devis_envoye",label:"Devis envoyé",color:"#0891B2",bg:"#ECFEFF"},
   {id:"En_commande",label:"En commande",color:"#1B4F8A",bg:"#EEF4FF"},
   {id:"A_remonter",label:"À remonter",color:"#22863A",bg:"#F0FFF4"},
+  {id:"Peinture",label:"Peinture",color:"#0D9488",bg:"#F0FDFA"},
   {id:"Termine",label:"Terminé",color:"#6B7280",bg:"#F5F6F8"},
   {id:"Abandonne",label:"Abandonné",color:"#9B59B6",bg:"#F5EEF8"},
 ];
+// Étape dont la validation fait automatiquement passer une fiche de "À démonter" à "Devis" :
+// dès que tout le matériel nécessaire au démontage est identifié, le devis peut être préparé,
+// sans attendre le reste de la fiche (remontage, essais...).
+const ETAPE_DECLENCHE_DEVIS={
+  "Moteur":"Information matériel au démontage",
+  "Pompe":"Mécanique pompe au démontage",
+  "Moto-réducteur":"Mécanique réducteur au démontage",
+};
 const SUPA_URL_STORAGE="https://pupbzngvudprcweukuoi.supabase.co";
 const SUPA_KEY_STORAGE="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1cGJ6bmd2dWRwcmN3ZXVrdW9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxODY3NDAsImV4cCI6MjA5Nzc2Mjc0MH0.jn025v42M3qNpAKfvy49cdCySBdTqwRz99b1EfaKYoo";
 const STORAGE_LIMIT_GO=1;
@@ -947,7 +955,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   else if(c.type==="date")ctrl=<input type="date" value={val} onChange={e=>onChange(c.id,e.target.value)} style={S.inp}/>;
   else if(c.type==="number")ctrl=<div style={{display:"flex",alignItems:"center",gap:6}}><input type="number" value={val} onChange={e=>onChange(c.id,e.target.value)} style={{...S.inp,flex:1}} placeholder="—"/>{c.unite&&<span style={{fontSize:12,color:"#6B7280",whiteSpace:"nowrap"}}>{c.unite}</span>}</div>;
   else if(c.dictee)ctrl=<ChampTexteDictee champId={c.id} valeur={val} onChange={onChange} erreur={manque}/>;
-  else ctrl=<input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} style={manque?S.inpErr:S.inp} placeholder="—"/>;
+  else ctrl=<input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} onBlur={c.id==="de"?()=>{const t=val.trim();if(/^\d+$/.test(t))onChange(c.id,"DE"+t);}:undefined} style={manque?S.inpErr:S.inp} placeholder="—"/>;
   return <div style={{marginBottom:12}}>{lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>{manqueOr?"L'un des deux — "+c.label+" ou "+(c.orRequiredLabel||"l'autre champ")+" — est obligatoire":"Champ obligatoire"}</div>}</div>;
 }
 
@@ -1647,7 +1655,7 @@ function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer})
 
 // ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
 function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
-  const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);const [showDevisEnvoye,setShowDevisEnvoye]=useState(false);
+  const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);
   const [recherche,setRecherche]=useState("");
   const [dragId,setDragId]=useState(null);const [dragOver,setDragOver]=useState(null);
   const [delaisMap,setDelaisMap]=useState({});
@@ -1661,7 +1669,6 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
       setDelaisMap(m);
     }).catch(()=>{});
   },[fiches.map(f=>f.id).join(",")]);
-  const statuts=(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");if(!showDevisEnvoye)s=s.filter(x=>x.id!=="Devis_envoye");return s;})();
   const rq=recherche.trim().toLowerCase();
   const fichesFilt=fiches.filter(f=>{
     const matchTech=filtTech==="tous"||(f.tech_entree||"")==filtTech;
@@ -1670,6 +1677,11 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
   });
   const parStatut={};STATUTS_CHANTIER.forEach(s=>{parStatut[s.id]=[];});
   fichesFilt.forEach(f=>{const sid=f.statut_chantier||"A_demonter";if(parStatut[sid])parStatut[sid].push(f);});
+  // En recherche : on affiche toutes les colonnes qui ont un résultat, y compris Terminé/Abandonné
+  // même masqués, pour retrouver un N° de chantier n'importe où. Sans recherche, comportement normal.
+  const statuts=rq
+    ?STATUTS_CHANTIER.filter(s=>(parStatut[s.id]||[]).length>0)
+    :(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");return s;})();
   const devisCount=parStatut["Devis"]?.length||0;
   const techs=[...new Set(fiches.map(f=>f.tech_entree).filter(Boolean))];
 
@@ -1713,12 +1725,13 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
           <option value="tous">Tous</option>
           {techs.map(t=><option key={t} value={t}>{t}</option>)}
         </select>
-        <button onClick={()=>setShowDevisEnvoye(!showDevisEnvoye)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#0891B2",borderColor:"#0891B2"}}>{showDevisEnvoye?"Masquer Devis envoyé":"Afficher Devis envoyé"}</button>
         <button onClick={()=>setShowTermine(!showTermine)} style={{...S.p2,fontSize:12,padding:"5px 12px"}}>{showTermine?"Masquer Terminé":"Afficher Terminé"}</button>
         <button onClick={()=>setShowAbandonne(!showAbandonne)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#9B59B6",borderColor:"#9B59B6"}}>{showAbandonne?"Masquer Abandonné":"Afficher Abandonné"}</button>
       </div>
     </div>
-    <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px",textAlign:"right"}}>💡 Glissez les cartes entre les colonnes pour changer le statut</p>
+    {rq
+      ?<p style={{fontSize:11,color:"#1B4F8A",margin:"0 0 10px",textAlign:"right"}}>🔍 Résultats dans tous les statuts, y compris ceux normalement masqués</p>
+      :<p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px",textAlign:"right"}}>💡 Glissez les cartes entre les colonnes pour changer le statut</p>}
     <div style={{display:"grid",gridTemplateColumns:"repeat("+statuts.length+",1fr)",gap:10,overflowX:"auto"}}>
       {statuts.map(s=>(
         <div key={s.id}
@@ -2371,7 +2384,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
   async function save(idx){
     setSaving(true);setErreur(null);
     try{
-      let fid=ficheId;const newVal=[...new Set([...validees,idx])];const toutFini=newVal.length===etapesActives.length;const newSC=toutFini&&statutChantier==="A_demonter"?"Devis":statutChantier;
+      let fid=ficheId;const newVal=[...new Set([...validees,idx])];const toutFini=newVal.length===etapesActives.length;const declencheDevis=etapesActives[idx]===ETAPE_DECLENCHE_DEVIS[typeMateriel||"Moteur"];const newSC=declencheDevis&&statutChantier==="A_demonter"?"Devis":statutChantier;
       if(!fid){
         const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:idx+1,etapes_validees:newVal,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;if(!fid)throw new Error("Impossible de créer la fiche");setFicheId(fid);
