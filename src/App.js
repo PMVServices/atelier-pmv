@@ -212,6 +212,7 @@ const CHAMPS={
     {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_ar_apres"},
     {id:"skf_av_rem",label:"Screen SKF avant remontage",type:"photo_skf",categorie:"Screen SKF avant au remontage",required:false},{id:"skf_ar_rem",label:"Screen SKF arrière remontage",type:"photo_skf",categorie:"Screen SKF arrière au remontage",required:false},{id:"resserage_plaque",label:"Resserrage plaque à bornes",type:"text",required:false,dictee:true},{id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
     {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true,dictee:true},
+    {id:"controle_qualite",label:"Contrôle qualité fait",type:"oui_non",required:true},
   ],
 }
 
@@ -396,6 +397,7 @@ const CHAMPS_POMPE={
     {id:"vib_p_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_p_arriere_apres"},
     {id:"vib_p_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_p_arriere_apres"},
     {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true,dictee:true},
+    {id:"controle_qualite",label:"Contrôle qualité fait",type:"oui_non",required:true},
   ],
 };;
 
@@ -550,6 +552,7 @@ const CHAMPS_REDUCTEUR={
     {id:"vib_r_ar_mms_apres",label:"Vibration arrière réducteur — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_r_arriere_apres"},
     {id:"vib_r_ar_ge_apres",label:"Vibration arrière réducteur — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_r_arriere_apres"},
     {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true,dictee:true},
+    {id:"controle_qualite",label:"Contrôle qualité fait",type:"oui_non",required:true},
   ],
 };;
 
@@ -935,7 +938,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>{c.label}{(c.required||c.orRequiredWith)&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}{c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:10}}> — {c.note}</span>}</label>;
   let ctrl;
   if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={nv=>onChange(c.id,nv)} clients={clients} onAddClient={onAddClient}/>;
-  else if(c.type==="technicien")ctrl=<ChampTechnicien valeur={val} onChange={nv=>onChange(c.id,nv)} techs={techs}/>;
+  else if(c.type==="technicien")ctrl=<ChampTechniciensMultiples valeur={val} onChange={nv=>onChange(c.id,nv)} techs={techs}/>;
   else if(c.type==="roulement")ctrl=<ChampRoulement valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
   else if(c.type==="ohm")ctrl=<ChampOhm champId={c.id} valeur={val} onChange={onChange}/>;
   else if(c.type==="joints")ctrl=<ChampJoints champId={c.id} valeur={val} onChange={onChange}/>;
@@ -1561,10 +1564,11 @@ function PageSuivi(){
 // ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
 function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer}){
   const [delaisMap,setDelaisMap]=useState({});
+  const [exportBusy,setExportBusy]=useState(null);
   useEffect(()=>{
     if(!fiches.length){setDelaisMap({});return;}
     const ids=fiches.map(f=>f.id).join(",");
-    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite)").then(rows=>{
+    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite,__export_nas)").then(rows=>{
       if(!Array.isArray(rows))return;
       const m={};
       rows.forEach(r=>{if(!m[r.fiche_id])m[r.fiche_id]={};m[r.fiche_id][r.champ_id]=r.valeur;});
@@ -1589,7 +1593,24 @@ function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer})
   const listeDEReco=Object.values(parDEReco);
 
   const commandesAlerte=(commandesResume?.retard||0)+(commandesResume?.aCompleter||0);
-  const rienASignaler=devisEnAttente.length===0&&fichesUrgentes.length===0&&fichesRapides.length===0&&listeDEReco.length===0&&commandesAlerte===0;
+  const fichesAExporter=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Termine"&&delaisMap[f.id]?.__export_nas!=="fait");
+  const rienASignaler=devisEnAttente.length===0&&fichesUrgentes.length===0&&fichesRapides.length===0&&listeDEReco.length===0&&commandesAlerte===0&&fichesAExporter.length===0;
+
+  async function exporterFiche(f){
+    setExportBusy(f.id);
+    try{
+      const [valRows,photoRows]=await Promise.all([
+        db.get("fiche_valeurs","?fiche_id=eq."+f.id),
+        db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at"),
+      ]);
+      const valeurs={};(Array.isArray(valRows)?valRows:[]).forEach(r=>{valeurs[r.champ_id]=r.valeur;});
+      const photos=(Array.isArray(photoRows)?photoRows:[]).map(p=>({...p,url:db.photoUrl(p.storage_path)}));
+      await telechargerZip(photos,valeurs,(f.de||"fiche")+"_"+(f.client||""));
+      await db.upsert("fiche_valeurs",{fiche_id:f.id,champ_id:"__export_nas",valeur:"fait"},"fiche_id,champ_id");
+      setDelaisMap(p=>({...p,[f.id]:{...p[f.id],__export_nas:"fait"}}));
+    }catch(e){}
+    setExportBusy(null);
+  }
 
   const ligneFiche=(f,detail)=>(
     <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #F3D9A8",borderRadius:6,padding:"8px 10px",marginBottom:6}}>
@@ -1650,6 +1671,16 @@ function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer})
         </div>);
       })
     )}
+
+    {fichesAExporter.length>0&&section("📦 Fiches terminées à exporter ("+fichesAExporter.length+")","#0D9488","#F0FDFA",<>
+      <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>Téléchargez le ZIP puis déposez-le sur le NAS depuis l'ordinateur.</div>
+      {fichesAExporter.map(f=>(
+        <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #99F6E4",borderRadius:6,padding:"8px 10px",marginBottom:6}}>
+          <div style={{fontSize:12,minWidth:0}}><strong>{f.de}</strong> — {f.client||"—"}</div>
+          <button onClick={()=>exporterFiche(f)} disabled={exportBusy===f.id} style={{...S.p1,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap",opacity:exportBusy===f.id?0.6:1}}>{exportBusy===f.id?"⏳ …":"📦 Exporter en ZIP"}</button>
+        </div>
+      ))}
+    </>)}
   </div>);
 }
 
