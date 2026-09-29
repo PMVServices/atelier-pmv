@@ -958,7 +958,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   else if(c.type==="date")ctrl=<input type="date" value={val} onChange={e=>onChange(c.id,e.target.value)} style={S.inp}/>;
   else if(c.type==="number")ctrl=<div style={{display:"flex",alignItems:"center",gap:6}}><input type="number" value={val} onChange={e=>onChange(c.id,e.target.value)} style={{...S.inp,flex:1}} placeholder="—"/>{c.unite&&<span style={{fontSize:12,color:"#6B7280",whiteSpace:"nowrap"}}>{c.unite}</span>}</div>;
   else if(c.dictee)ctrl=<ChampTexteDictee champId={c.id} valeur={val} onChange={onChange} erreur={manque}/>;
-  else ctrl=<input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} onBlur={c.id==="de"?()=>{const t=val.trim();if(/^\d+$/.test(t))onChange(c.id,"DE"+t);}:undefined} style={manque?S.inpErr:S.inp} placeholder="—"/>;
+  else ctrl=<input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} onBlur={c.id==="de"?()=>{const t=val.trim();const m=t.match(/^(?:de)?(\d+)$/i);if(m&&t!=="DE"+m[1])onChange(c.id,"DE"+m[1]);}:undefined} style={manque?S.inpErr:S.inp} placeholder="—"/>;
   return <div style={{marginBottom:12}}>{lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>{manqueOr?"L'un des deux — "+c.label+" ou "+(c.orRequiredLabel||"l'autre champ")+" — est obligatoire":"Champ obligatoire"}</div>}</div>;
 }
 
