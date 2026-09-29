@@ -50,6 +50,25 @@ const ETAPE_DECLENCHE_DEVIS={
   "Pompe":"Mécanique pompe au démontage",
   "Moto-réducteur":"Mécanique réducteur au démontage",
 };
+// Étape de suivi devis/commande, insérée dynamiquement juste après l'étape ci-dessus
+// uniquement quand "Devis / bon de commande nécessaire avant remontage ?" = Oui.
+// Tant que les 3 cases ne sont pas toutes cochées, la fiche reste en "Devis" ;
+// dès qu'elles le sont, elle passe automatiquement en "À remonter".
+const ETAPE_SUIVI_DEVIS="Suivi devis et commande";
+const CHAMPS_SUIVI_DEVIS=[
+  {id:"devis_fait",label:"Devis fait",type:"oui_non",required:true},
+  {id:"bon_commande_recu",label:"Bon de commande reçu",type:"oui_non",required:true},
+  {id:"materiel_recu",label:"Matériel reçu",type:"oui_non",required:true},
+];
+function insererEtapeSuiviDevis(etapes,v,type){
+  if(v.devis_necessaire!=="Oui")return etapes;
+  const idx=etapes.indexOf(ETAPE_DECLENCHE_DEVIS[type]);
+  if(idx===-1)return etapes;
+  return [...etapes.slice(0,idx+1),ETAPE_SUIVI_DEVIS,...etapes.slice(idx+1)];
+}
+function suiviDevisComplet(v){
+  return v.devis_fait==="Oui"&&v.bon_commande_recu==="Oui"&&v.materiel_recu==="Oui";
+}
 const SUPA_URL_STORAGE="https://pupbzngvudprcweukuoi.supabase.co";
 const SUPA_KEY_STORAGE="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1cGJ6bmd2dWRwcmN3ZXVrdW9pIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIxODY3NDAsImV4cCI6MjA5Nzc2Mjc0MH0.jn025v42M3qNpAKfvy49cdCySBdTqwRz99b1EfaKYoo";
 const STORAGE_LIMIT_GO=1;
@@ -194,8 +213,10 @@ const CHAMPS={
     {id:"vitesse_moteur_neuf",label:"Vitesse du moteur",type:"text",unite:"tr/mn",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"type_moteur_neuf",label:"Type du moteur",type:"text",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"numero_serie_moteur_neuf",label:"N° de série",type:"text",required:false,condition:siNeuf},
+    {id:"devis_necessaire",label:"Devis / bon de commande nécessaire avant remontage ?",type:"oui_non",required:true},
     {id:"travaux_conseille",label:"Travaux conseillé/à effectuer",type:"text",required:true,dictee:true},
   ],
+  [ETAPE_SUIVI_DEVIS]:CHAMPS_SUIVI_DEVIS,
   "Information des essais après remontage":[
     {id:"tech_remontage",label:"Qui a remonté",type:"technicien",required:true},
     {id:"essai_vide_apres",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
@@ -366,8 +387,10 @@ const CHAMPS_POMPE={
     {id:"puissance_pompe_neuve",label:"Puissance",type:"text",unite:"kW",required:false,condition:siPompeNeuve,groupe:"pneuve_marque_puiss"},
     {id:"numero_serie_pompe_neuve",label:"N° de série",type:"text",required:false,condition:siPompeNeuve,groupe:"pneuve_serie_type"},
     {id:"type_pompe_neuve",label:"Type de pompe",type:"text",required:false,condition:siPompeNeuve,groupe:"pneuve_serie_type"},
+    {id:"devis_necessaire",label:"Devis / bon de commande nécessaire avant remontage ?",type:"oui_non",required:true},
     {id:"travaux_conseille",label:"Travaux conseillé/à effectuer",type:"text",required:true,dictee:true},
   ],
+  [ETAPE_SUIVI_DEVIS]:CHAMPS_SUIVI_DEVIS,
   "Essais après remontage":[
     {id:"tech_remontage",label:"Qui a remonté",type:"technicien",required:true},
     {id:"essai_vide_apres",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
@@ -530,8 +553,10 @@ const CHAMPS_REDUCTEUR={
     {id:"numero_serie_reducteur_neuf",label:"N° de série",type:"text",required:false,condition:siReducteurNeuf,groupe:"rneuve_serie_type"},
     {id:"type_reducteur_neuf",label:"Type de réducteur",type:"text",required:false,condition:siReducteurNeuf,groupe:"rneuve_serie_type"},
     {id:"autres_pieces_reducteur",label:"Autres pièces détachées",type:"text",required:false,dictee:true},
+    {id:"devis_necessaire",label:"Devis / bon de commande nécessaire avant remontage ?",type:"oui_non",required:true},
     {id:"travaux_conseille",label:"Travaux conseillé/à effectuer",type:"text",required:true,dictee:true},
   ],
+  [ETAPE_SUIVI_DEVIS]:CHAMPS_SUIVI_DEVIS,
   "Essais après remontage":[
     {id:"tech_remontage",label:"Qui a remonté",type:"technicien",required:true},
     {id:"essai_vide_apres",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true},
@@ -2334,7 +2359,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const champsActifs=isPompe?CHAMPS_POMPE:isReducteur?CHAMPS_REDUCTEUR:CHAMPS;
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
   const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {de:ficheInit?.de||"",date_entree:today(),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
-  const etapesActives=isPompe?ETAPES_POMPE:isReducteur?ETAPES_REDUCTEUR:etapesMoteurPour(v);
+  const etapesActives=insererEtapeSuiviDevis(isPompe?ETAPES_POMPE:isReducteur?ETAPES_REDUCTEUR:etapesMoteurPour(v),v,typeMateriel||"Moteur");
 
   useEffect(()=>{
     if(seedValeurs&&onSeedConsumed)onSeedConsumed();
@@ -2397,7 +2422,10 @@ const onChange=useCallback((id,val)=>setV(p=>{
         if(!fid)throw new Error("Impossible de créer la fiche");
         setFicheId(fid);
       }else{
-        await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:"En cours"});
+        const passeARemonter=suiviDevisComplet(v)&&statutChantier==="Devis";
+        const patchSC=passeARemonter?{statut_chantier:"A_remonter"}:{};
+        await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:"En cours",...patchSC});
+        if(passeARemonter){setStatutChantier("A_remonter");onFicheUpdated(fid,{statut_chantier:"A_remonter"});}
       }
       const champs=Object.keys(v).filter(k=>v[k]!==undefined&&v[k]!=="");
       if(champs.length>0){
@@ -2415,7 +2443,10 @@ const onChange=useCallback((id,val)=>setV(p=>{
   async function save(idx){
     setSaving(true);setErreur(null);
     try{
-      let fid=ficheId;const newVal=[...new Set([...validees,idx])];const toutFini=newVal.length===etapesActives.length;const declencheDevis=etapesActives[idx]===ETAPE_DECLENCHE_DEVIS[typeMateriel||"Moteur"];const newSC=declencheDevis&&statutChantier==="A_demonter"?"Devis":statutChantier;
+      let fid=ficheId;const newVal=[...new Set([...validees,idx])];const toutFini=newVal.length===etapesActives.length;const declencheDevis=etapesActives[idx]===ETAPE_DECLENCHE_DEVIS[typeMateriel||"Moteur"];
+      let newSC=statutChantier;
+      if(declencheDevis&&statutChantier==="A_demonter")newSC=v.devis_necessaire==="Non"?"A_remonter":"Devis";
+      if(suiviDevisComplet(v)&&statutChantier==="Devis")newSC="A_remonter";
       if(!fid){
         const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:idx+1,etapes_validees:newVal,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;if(!fid)throw new Error("Impossible de créer la fiche");setFicheId(fid);
