@@ -638,7 +638,7 @@ function analyserFeuille(XLSX,wb,nom){
   return {lignes,ignorees,colonnes:C,arretLigne,deuxStocks};
 }
 
-async function executerImport({lignes,existants,majQte,onEtat}){
+async function executerImport({lignes,existants,majQte,partirMax,onEtat}){
   const parRef={};lignes.forEach(l=>{parRef[cle(l.reference)]=l;});
   const catalogue=lignes.map(l=>({reference:l.reference,dimensions:l.dimensions,emplacement:l.emplacement,stock_mini:l.stock_mini,stock_maxi:l.stock_maxi,prix_unitaire:l.prix_unitaire,fournisseur1:l.fournisseur1,fournisseur2:l.fournisseur2,fournisseur3:l.fournisseur3}));
   let rows=[];
@@ -660,7 +660,8 @@ async function executerImport({lignes,existants,majQte,onEtat}){
   const mouvements=[];let initiaux=0,corriges=0;
   rows.forEach(a=>{
     const l=parRef[cle(a.reference)];
-    const cible=l&&l.stock!=null?l.stock:0;
+    // partirMax : le stock de départ est le stock maximum (aucune alerte "à renouveler" au début), sinon celui d'Excel
+    const cible=l?(partirMax&&l.stock_maxi!=null?l.stock_maxi:(l.stock!=null?l.stock:0)):0;
     const courant=a.quantite||0;
     if(!avec.has(a.id)){
       if(cible!==courant){mouvements.push({article_id:a.id,type:"initial",delta:cible-courant,commentaire:"Import Excel"});initiaux++;}
@@ -688,8 +689,10 @@ function ImportExcel({articles,onFermer,onTermine}){
   const reglagesPour=(nom,lect)=>{
     setPrefixe(/^rlmt$|roulement/.test(normEnt(nom))?"6":"");
     setLigneMax(lect&&lect.arretLigne?String(lect.arretLigne-1):"");
+    setPartirMax(!/^rlmt$|roulement/.test(normEnt(nom))); // hors roulements : on démarre au stock maximum
   };
   const [majQte,setMajQte]=useState(false);
+  const [partirMax,setPartirMax]=useState(false);
   const [lecture,setLecture]=useState(null);
   const [etat,setEtat]=useState("");
   const [bilan,setBilan]=useState(null);
@@ -733,7 +736,7 @@ function ImportExcel({articles,onFermer,onTermine}){
   async function importer(){
     setEtape("import");setErreur(null);
     try{
-      const b=await executerImport({lignes,existants,majQte,onEtat:setEtat});
+      const b=await executerImport({lignes,existants,majQte,partirMax,onEtat:setEtat});
       setBilan(b);setEtape("fini");
       onTermine();
     }catch(err){setErreur((err&&err.message)||"Import interrompu.");setEtape("apercu");}
@@ -759,7 +762,8 @@ function ImportExcel({articles,onFermer,onTermine}){
           {lignes.slice(0,6).map(l=><tr key={l.reference}><td>{l.reference}</td><td>{l.dimensions||""}</td><td>{l.emplacement||""}</td><td>{l.stock_mini==null?"":l.stock_mini}</td><td>{l.stock_maxi==null?"":l.stock_maxi}</td><td>{l.stock==null?"":l.stock}</td><td>{fmtEuro(l.prix_unitaire)}</td></tr>)}
         </tbody></table>{lignes.length>6&&<p className="stk-aide" style={{marginTop:6}}>… et {lignes.length-6} autre{lignes.length-6>1?"s":""}.</p>}</div>}
         {lecture.deuxStocks&&<p className="stk-aide">Feuille à deux stocks : le <strong>stock</strong> importé est « boîte + étagère » ; le <strong>mini</strong> est le « stock voulu boîte » ; le <strong>maxi</strong> est « voulu boîte + voulu étagère ».</p>}
-        <p className="stk-aide">Au premier import, le « Stock » d'Excel devient le stock de départ de chaque nouvelle référence.</p>
+        <label style={{display:"flex",alignItems:"flex-start",gap:10,fontSize:14}}><input type="checkbox" checked={partirMax} onChange={e=>setPartirMax(e.target.checked)} style={{width:22,height:22,minHeight:0,padding:0,flex:"none",marginTop:2}}/><span><strong>Démarrer au stock maximum</strong> : le stock de départ des nouvelles références est leur maximum (aucune alerte « à renouveler » au début) au lieu du « Stock » d'Excel.</span></label>
+        <p className="stk-aide">Sinon, au premier import, le « Stock » d'Excel devient le stock de départ de chaque nouvelle référence.</p>
         <label style={{display:"flex",alignItems:"flex-start",gap:10,fontSize:14}}><input type="checkbox" checked={majQte} onChange={e=>setMajQte(e.target.checked)} style={{width:22,height:22,minHeight:0,padding:0,flex:"none",marginTop:2}}/><span>Remettre aussi les quantités des références déjà suivies au « Stock » d'Excel (enregistré comme un inventaire dans l'historique). À éviter une fois l'appli utilisée.</span></label>
       </>}
       {erreur&&<div className="stk-alerte">{erreur}</div>}
@@ -1010,6 +1014,31 @@ function SessionScan({mode:modeInit,articles,techs,qui,setQui,onFermer,onChange,
   </div>);
 }
 
+// ─── Remise au stock maximum (démarrage : évite une longue liste "à renouveler" tant que les quantités ne sont pas fiables) ──
+function RemiseMax({liste,libelle,qui,onFermer,onFait}){
+  const aRemonter=liste.filter(a=>a.stock_maxi!=null&&(a.quantite||0)<a.stock_maxi);
+  const [envoi,setEnvoi]=useState({enCours:false,erreur:null});
+  async function valider(){
+    if(!qui||envoi.enCours||!aRemonter.length)return;
+    setEnvoi({enCours:true,erreur:null});
+    const corps=aRemonter.map(a=>({article_id:a.id,type:"inventaire",delta:a.stock_maxi-(a.quantite||0),utilisateur:qui,commentaire:"Remise au stock maximum"}));
+    for(let i=0;i<corps.length;i+=200){
+      const r=await appel("POST","stock_mouvements",corps.slice(i,i+200),"return=minimal");
+      if(!r.ok){setEnvoi({enCours:false,erreur:"L'enregistrement n'a pas abouti (connexion ?). Réessayez : les références déjà remises au maximum ne seront pas touchées une seconde fois."});await onFait();return;}
+    }
+    await onFait();
+    onFermer(corps.length);
+  }
+  return(<Feuille titre="📦 Remettre au stock maximum" onFermer={()=>onFermer(0)}>
+    <div className="stk-info">Périmètre : <strong>{libelle}</strong>. <strong>{aRemonter.length}</strong> référence{aRemonter.length>1?"s":""} sur {liste.length} {aRemonter.length>1?"sont":"est"} sous leur stock maximum.</div>
+    <p className="stk-aide">Leur stock est remonté jusqu'au maximum (aucune alerte « à renouveler » ensuite). Chaque remise est enregistrée dans l'historique comme un inventaire « Remise au stock maximum ». Les références déjà au maximum, ou au-dessus, ne changent pas.</p>
+    {!qui&&<div className="stk-alerte">Choisissez d'abord l'opérateur (en haut de la page Stock).</div>}
+    {envoi.erreur&&<div className="stk-alerte">{envoi.erreur}</div>}
+    <button type="button" className="stk-btn stk-btn--v" disabled={!qui||envoi.enCours||!aRemonter.length} onClick={valider}>{envoi.enCours?"Enregistrement…":"Remettre "+aRemonter.length+" référence"+(aRemonter.length>1?"s":"")+" au maximum"}</button>
+    <button type="button" className="stk-btn" onClick={()=>onFermer(0)}>Annuler</button>
+  </Feuille>);
+}
+
 // ─── Stock sur téléphone : lien du mode "Stock seul", QR code à scanner avec le téléphone ───────────
 function LienTelephone({onFermer}){
   const lien=window.location.origin+"/stock/";
@@ -1203,6 +1232,7 @@ export default function PageStock({techs,sessionTech}){
   const [session,setSession]=useState(null); // null | "sortie" | "entree"
   const [inv,setInv]=useState(false);
   const [tel,setTel]=useState(false);
+  const [remiseMax,setRemiseMax]=useState(false);
   const [brouillon,setBrouillon]=useState(()=>lireBrouillonInv());
   const [assoc,setAssoc]=useState(null); // article dont on associe un code fabricant
   const [importOuvert,setImportOuvert]=useState(false);
@@ -1346,6 +1376,7 @@ export default function PageStock({techs,sessionTech}){
         <button type="button" onClick={()=>setEtiquettes({ids:famille==="toutes"?[]:base.map(a=>a.id)})}>🏷 Étiquettes{famille==="toutes"?"":" ("+LIB_FAMILLE[famille]+")"}</button>
         <button type="button" onClick={()=>setImportOuvert(true)}>⬆ Importer Excel</button>
         <button type="button" onClick={exporter}>⬇ Exporter</button>
+        <button type="button" onClick={()=>setRemiseMax(true)}>📦 Remettre au maximum{famille==="toutes"?"":" ("+LIB_FAMILLE[famille]+")"}</button>
         {!(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search))&&<button type="button" onClick={()=>setTel(true)}>📱 Sur téléphone</button>}
       </div>
       {voirTout&&<>
@@ -1361,6 +1392,7 @@ export default function PageStock({techs,sessionTech}){
 
     {session&&<SessionScan mode={session} articles={articles} techs={techs} qui={qui} setQui={setQui} onFermer={()=>setSession(null)} onChange={apresMouvement} afficherToast={afficherToast}/>}
     {tel&&<LienTelephone onFermer={()=>setTel(false)}/>}
+    {remiseMax&&<RemiseMax liste={base} libelle={famille==="toutes"?"toutes les familles":LIB_FAMILLE[famille]} qui={qui} onFermer={n=>{setRemiseMax(false);if(n)afficherToast("✓ "+n+" référence"+(n>1?"s":"")+" remise"+(n>1?"s":"")+" au stock maximum");}} onFait={apresMouvement}/>}
     {inv&&<SessionInventaire articles={articles} techs={techs} qui={qui} setQui={setQui} recharger={recharger} afficherToast={afficherToast} onFini={apresMouvement} onFermer={()=>{setInv(false);setBrouillon(lireBrouillonInv());}}/>}
     {article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={qui} depuisScan={false} onFermer={()=>setFicheId(null)} onChange={apresMouvement} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setAssoc(a);}} onTermineScan={()=>{}}/>}
     {assoc&&<ScanneurCode titre={"Associer un code à "+assoc.reference} aide="Scannez le code imprimé sur la boîte du fabricant." onCode={traiterAssociation} onFermer={()=>setAssoc(null)}/>}
