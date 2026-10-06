@@ -1587,7 +1587,7 @@ function PageSuivi(){
 
 
 // ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
-function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer}){
+function PageDashboard({fiches,pieces,commandesResume,demandesMat,onDemandeMateriel,onVoirMateriel,onOuvrirFiche,onNaviguer}){
   const [delaisMap,setDelaisMap]=useState({});
   const [exportBusy,setExportBusy]=useState(null);
   useEffect(()=>{
@@ -1619,7 +1619,11 @@ function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer})
 
   const commandesAlerte=(commandesResume?.retard||0)+(commandesResume?.aCompleter||0);
   const fichesAExporter=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Termine"&&delaisMap[f.id]?.__export_nas!=="fait");
-  const rienASignaler=devisEnAttente.length===0&&fichesUrgentes.length===0&&fichesRapides.length===0&&listeDEReco.length===0&&commandesAlerte===0&&fichesAExporter.length===0;
+  const matDemandes=demandesMat?demandesMat.demandes:[];
+  const nbMat=matDemandes.length;
+  const nbMatRenouveler=matDemandes.filter(l=>l.type==="renouveler").length;
+  const matAffichees=matDemandes.slice(0,6);
+  const rienASignaler=devisEnAttente.length===0&&fichesUrgentes.length===0&&fichesRapides.length===0&&listeDEReco.length===0&&commandesAlerte===0&&fichesAExporter.length===0&&nbMat===0;
 
   async function exporterFiche(f){
     setExportBusy(f.id);
@@ -1657,6 +1661,14 @@ function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer})
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 16px"}}>🏠 Tableau de bord</h2>
 
+    {onDemandeMateriel&&demandesMat?.disponible!==false&&<button onClick={onDemandeMateriel} style={{width:"100%",display:"flex",alignItems:"center",gap:16,background:"#E8720C",color:"#fff",border:"none",borderRadius:14,padding:"18px 22px",minHeight:96,marginBottom:14,cursor:"pointer",boxShadow:"0 3px 10px rgba(232,114,12,0.35)",textAlign:"left"}}>
+      <span style={{fontSize:40,lineHeight:1}}>🛒</span>
+      <span style={{display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
+        <span style={{fontSize:21,fontWeight:700}}>Matériel à commander</span>
+        <span style={{fontSize:13,fontWeight:400,opacity:0.95}}>Roulements, garnitures, joints, paliers, condensateurs…</span>
+      </span>
+    </button>}
+
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:14,marginBottom:24}}>
       {NAV_ITEMS.filter(n=>n.id!=="dashboard").map(n=>{
         const sep=n.label.indexOf(" ");const icone=n.label.slice(0,sep);const texte=n.label.slice(sep+1);
@@ -1668,6 +1680,15 @@ function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer})
     </div>
 
     {rienASignaler&&<div style={{textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
+
+    {nbMat>0&&section("🛒 Matériel à commander ("+nbMat+")","#1B4F8A","#EEF4FF",<>
+      <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>{nbMat-nbMatRenouveler} à commander · {nbMatRenouveler} à renouveler</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+        {matAffichees.map(l=><LigneMateriel key={l.id} l={l} mode="dash"/>)}
+      </div>
+      {nbMat>matAffichees.length&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10}}>… et {nbMat-matAffichees.length} autre{nbMat-matAffichees.length>1?"s":""} ligne{nbMat-matAffichees.length>1?"s":""}</div>}
+      <button onClick={onVoirMateriel} style={{...S.p1,fontSize:12,padding:"6px 14px"}}>🛒 Voir et traiter dans Commandes →</button>
+    </>)}
 
     {fichesUrgentes.length>0&&section("🔴 Fiches urgentes ("+fichesUrgentes.length+")","#D73A49","#FFF5F5",
       fichesUrgentes.map(({f,urgence})=>ligneFiche(f,urgence.label+" — échéance le "+urgence.echeance))
@@ -3578,14 +3599,16 @@ function StatsCommandes({commandes}){
   </div>);
 }
 
-function PageCommandes({fiches,onOuvrirFiche,onResume}){
+function PageCommandes({fiches,onOuvrirFiche,onResume,demandesMat,vueInitiale,onVueConsommee,onDemandeMateriel}){
   const [commandes,setCommandes]=useState([]);
   const [modeles,setModeles]=useState({delaiDepasse:MODELE_DELAI_DEPASSE_DEFAUT,pasDeDelai:MODELE_PAS_DE_DELAI_DEFAUT});
   const [fournisseurs,setFournisseurs]=useState([]);
   const [chargement,setChargement]=useState(true);
   const [migrationDispo,setMigrationDispo]=useState(()=>migrationCommandesDisponible());
   const [migrationEnCours,setMigrationEnCours]=useState(false);
-  const [vue,setVue]=useState("actives"); // actives | recues | stats
+  const [vue,setVue]=useState(()=>vueInitiale||"actives"); // materiel | actives | recues | stats
+  useEffect(()=>{if(vueInitiale&&onVueConsommee)onVueConsommee();},[]);
+  const nbMateriel=demandesMat?demandesMat.demandes.length:0;
   const [recherche,setRecherche]=useState("");
   const [dragId,setDragId]=useState(null);
   const [dragOverType,setDragOverType]=useState(null);
@@ -3936,6 +3959,7 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <input ref={fileInputArRef} type="file" accept="application/pdf" style={{display:"none"}} onChange={onFichierArChoisi}/>
         <input ref={fileInputPieceRef} type="file" accept="application/pdf,image/*" style={{display:"none"}} onChange={onFichierPieceChoisi}/>
+        {onDemandeMateriel&&demandesMat?.disponible!==false&&<button onClick={onDemandeMateriel} style={{...S.p1,fontSize:12,padding:"7px 14px",background:"#E8720C"}}>🛒 Matériel à commander</button>}
         <button onClick={()=>fileInputArRef.current?.click()} disabled={chargementAr} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>{chargementAr?"Analyse en cours…":"📄 Importer un AR (PDF)"}</button>
         <button onClick={()=>setModalModeles(true)} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>⚙ Modèles de relance</button>
         <button onClick={()=>setModalCommande({})} style={{...S.p1,fontSize:12,padding:"7px 14px"}}>+ Nouvelle commande</button>
@@ -3947,7 +3971,8 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
       <button onClick={migrerVersCloud} disabled={migrationEnCours} style={{...S.p1,fontSize:12,padding:"7px 14px"}}>{migrationEnCours?"Migration en cours…":"☁ Migrer vers le cloud"}</button>
     </div>}
 
-    <div style={{display:"flex",gap:6,marginBottom:14,background:"#F1F3F5",borderRadius:8,padding:4,width:"fit-content"}}>
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14,background:"#F1F3F5",borderRadius:8,padding:4,width:"fit-content",maxWidth:"100%"}}>
+      <button onClick={()=>setVue("materiel")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="materiel"?"#1B4F8A":"transparent",color:vue==="materiel"?"#fff":"#6B7280"}}>🛒 À commander ({nbMateriel})</button>
       <button onClick={()=>setVue("actives")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="actives"?"#1B4F8A":"transparent",color:vue==="actives"?"#fff":"#6B7280"}}>📋 En cours</button>
       <button onClick={()=>setVue("recues")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="recues"?"#1B4F8A":"transparent",color:vue==="recues"?"#fff":"#6B7280"}}>✅ Reçues ({totalRecues})</button>
       <button onClick={()=>setVue("stats")} style={{border:"none",borderRadius:6,padding:"7px 16px",fontSize:12,fontWeight:600,cursor:"pointer",background:vue==="stats"?"#1B4F8A":"transparent",color:vue==="stats"?"#fff":"#6B7280"}}>📊 Statistiques</button>
@@ -3988,9 +4013,11 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
       </div>)}
     </div>}
 
-    <input value={recherche} onChange={e=>setRecherche(e.target.value)} placeholder="🔍 Rechercher (fournisseur, n° commande, chantier, fournitures)…" style={{...S.inp,marginBottom:14}}/>
+    {vue!=="materiel"&&<input value={recherche} onChange={e=>setRecherche(e.target.value)} placeholder="🔍 Rechercher (fournisseur, n° commande, chantier, fournitures)…" style={{...S.inp,marginBottom:14}}/>}
 
     {flash&&<div style={{...S.ok,marginBottom:12}}>{flash}</div>}
+
+    {vue==="materiel"&&<VueMaterielCommandes demandes={demandesMat?demandesMat.demandes:[]} disponible={demandesMat?demandesMat.disponible:null} recharger={demandesMat?demandesMat.recharger:async()=>{}} onDemandeMateriel={onDemandeMateriel}/>}
 
     {vue==="actives"&&<>
       <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px",textAlign:"right"}}>💡 Glissez les cartes entre les colonnes pour changer le type</p>
@@ -4041,6 +4068,649 @@ function PageCommandes({fiches,onOuvrirFiche,onResume}){
     {dernierSupprime&&<div style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",background:"#1A1A2E",color:"#fff",padding:"10px 18px",borderRadius:8,display:"flex",alignItems:"center",gap:14,zIndex:400,boxShadow:"0 4px 16px rgba(0,0,0,0.25)",fontSize:13}}>
       <span>🗑 Commande supprimée</span>
       <button onClick={annulerSuppression} style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"4px 12px",borderRadius:6,cursor:"pointer",fontWeight:600,fontSize:12}}>Annuler</button>
+    </div>}
+  </div>);
+}
+
+// ─── DEMANDE DE MATÉRIEL (techniciens sur chantier) ──────────────────────
+const MONO_MAT="ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace";
+const TYPES_DEMANDE={
+  commander:{label:"À commander",color:"#1B4F8A",bg:"#EAF1FB",bord:"#AFC6E6"},
+  renouveler:{label:"À renouveler",color:"#8A4B00",bg:"#FFF3DC",bord:"#F3D19A"},
+};
+const CATEGORIES_MATERIEL=[
+  {id:"roulements",nom:"Roulements"},
+  {id:"garniture",nom:"Garniture"},
+  {id:"levres",nom:"Joints à lèvres"},
+  {id:"vavs",nom:"Joints VA/VS"},
+  {id:"palier",nom:"Palier"},
+  {id:"condo",nom:"Condensateur"},
+  {id:"outils",nom:"Outils"},
+  {id:"autre",nom:"Autre"},
+];
+const nomCategorieMat=id=>(CATEGORIES_MATERIEL.find(c=>c.id===id)||{}).nom||"";
+const SERIES_ROULEMENTS=["63XX","62XX","60XX","NU","Autre"];
+function refsRoulements(serie){
+  return ROULEMENTS.filter(r=>r!=="Autre"&&(serie==="NU"?r.startsWith("NU"):r.startsWith(serie.slice(0,2))));
+}
+function decouperRef(r){
+  const p=r.split(" ");const n=p[0]==="NU"?2:1;
+  return [p.slice(0,n).join(" "),p.slice(n).join(" ")];
+}
+// Références recopiées telles qu'écrites dans la liste de l'atelier (espaces et casse compris).
+// Liste à compléter : la capture d'écran s'arrêtait à RALE30-XL-NPP-B puis reprenait à RCSMA30/65-XL-FA106.
+const PALIERS_FAMILLES=[
+  {nom:"FY",refs:["FY508"]},
+  {nom:"PASE",refs:["PASE30-XL-N","PASE40-XL-N","PASE50-XL-N"]},
+  {nom:"RABR",refs:["RABRA30/62-XL-FA106","RABRB20/52-XL-FA106","RABRB25/62-FA106","RABRB30/72-XL-FA106","RABRB35/80-XL-FA106","RABRB40/85-XL-FA106"]},
+  {nom:"RAE",refs:["RAE20-XL-NPP-B","RAE20-XL-NPP-FA106","RAE25-XL-NPP-B","RAE25-XL-NPP-FA106","RAE30-XL -NPP-B","RAE30-XL-NPP-FA106","RAE35 XL NPP B","RAE35-XL-NPP-FA106","RAE40-XL-NPP-FA106","RAE50 XL NPP FA106"]},
+  {nom:"RALE",refs:["RALE20-XL-NPP-B","RALE20-XL-NPP-FA106","RALE25-NPP-B","RALE25-NPP-FA106","RALE30-XL-NPP-B"]},
+  {nom:"RCSM",refs:["RCSMA30/65-XL-FA106","RCSMB20/65-XL-FA106","RCSMB25/65-XL-FA106"]},
+  {nom:"SY",refs:["SY512 M sans roulements","SY15 TF","SY20 TF","SY25 TF","SY30 TF","SY50 TF","SY506 M","SY512 M Complet"]},
+  {nom:"YAR / YAT / YET",refs:["YAR 206-2F","yar 212-2RF","YAT 203","Yet203 / Yar","Yet204","Yet205","Yet206","Yet207","Yet208","Yet209"]},
+];
+const CONDOS_UF=["1,5","2,5","3,5","4","5","6,3","7","8","10","12,5","14","15","16","20","25","30","35","40","45","50","60","70"];
+function cfgMaterielVide(type){
+  return {type:type||"commander",serie:null,sel:null,texte:"",qty:1,di:"",de:"",ep:"",levres:null,vv:null,vvDi:"",fil:null,gmType:null,gmRef:null,gmDiam:"",famille:null};
+}
+function nombrePositif(v){const n=parseFloat(String(v).replace(",","."));return isNaN(n)||n<=0?null:n;}
+const fmtNb=n=>String(n).replace(".",",");
+// Désignation générée pour chaque catégorie ; null tant que les choix sont incomplets.
+function designationMateriel(cat,c){
+  const t=s=>(s||"").trim();
+  switch(cat){
+    case "roulements":return c.serie==="Autre"?(t(c.texte)||null):(c.sel||null);
+    case "garniture":{
+      if(!c.gmType||!c.gmRef)return null;
+      const ref=c.gmRef==="__autre"?t(c.texte):c.gmRef;
+      const d=nombrePositif(c.gmDiam);
+      if(!ref||!d)return null;
+      return "GM "+c.gmType+" "+ref+" Ø"+fmtNb(d);
+    }
+    case "levres":{
+      const a=nombrePositif(c.di),b=nombrePositif(c.de),e=nombrePositif(c.ep);
+      if(!a||!b||!e||!c.levres)return null;
+      return fmtNb(a)+" × "+fmtNb(b)+" × "+fmtNb(e)+", "+(c.levres==="simple"?"simple":"double")+" lèvre";
+    }
+    case "vavs":{const d=nombrePositif(c.vvDi);return(!c.vv||!d)?null:c.vv+fmtNb(d);}
+    case "palier":return c.famille==="Autre"?(t(c.texte)||null):(c.sel||null);
+    case "condo":{
+      if(!c.fil)return null;
+      const v=c.sel==="__autre"?t(c.texte):c.sel;
+      if(!v)return null;
+      return "Condensateur "+(c.fil==="fil"?"filaire":"à cosses")+" "+(/[a-zµ]/i.test(v)?v:v+"mf");
+    }
+    default:return t(c.texte)||null;
+  }
+}
+function ilYa(iso){
+  const t=new Date(iso).getTime();if(isNaN(t))return "";
+  const m=Math.round((Date.now()-t)/60000);
+  if(m<1)return "à l'instant";
+  if(m<60)return "il y a "+m+" min";
+  const h=Math.round(m/60);
+  if(h<24)return "il y a "+h+" h";
+  const j=Math.round(h/24);
+  return j===1?"hier":"il y a "+j+" j";
+}
+
+// Lignes regroupées par demande (la plus récente d'abord), dans l'ordre de saisie à l'intérieur d'une demande.
+function ordonnerDemandes(rows){
+  const t=r=>new Date(r.created_at).getTime()||0;
+  const recente={};
+  rows.forEach(r=>{recente[r.demande_id]=Math.max(recente[r.demande_id]||0,t(r));});
+  return rows.slice().sort((a,b)=>{
+    if(a.demande_id!==b.demande_id)return (recente[b.demande_id]-recente[a.demande_id])||String(a.demande_id).localeCompare(String(b.demande_id));
+    return t(a)-t(b);
+  });
+}
+function regrouperDemandes(rows){
+  const groupes=[];const index={};
+  rows.forEach(r=>{if(index[r.demande_id]===undefined){index[r.demande_id]=groupes.length;groupes.push([]);}groupes[index[r.demande_id]].push(r);});
+  return groupes;
+}
+
+// Demandes en attente (partagées entre le tableau de bord et l'onglet Commandes).
+// disponible=false tant que la table n'existe pas : les accès à la fonctionnalité restent alors masqués.
+function useDemandesMateriel(){
+  const [etat,setEtat]=useState({demandes:[],disponible:null});
+  const recharger=useCallback(async()=>{
+    try{
+      // fetch direct (et non db.get) : db.get renvoie [] en cas de coupure réseau, ce qui viderait la liste à tort.
+      const r=await fetch(SUPA_URL+"/rest/v1/demandes_materiel?statut=eq.a_commander&order=created_at.desc&limit=500",{headers:H});
+      const rows=await r.json();
+      if(Array.isArray(rows))setEtat({demandes:ordonnerDemandes(rows),disponible:true});
+      else if(rows&&rows.code==="PGRST205")setEtat({demandes:[],disponible:false}); // table pas encore créée
+    }catch(e){/* hors ligne : on garde l'état précédent */}
+  },[]);
+  useEffect(()=>{
+    recharger();
+    const t=setInterval(recharger,30000);
+    window.addEventListener("focus",recharger);
+    return()=>{clearInterval(t);window.removeEventListener("focus",recharger);};
+  },[recharger]);
+  return {demandes:etat.demandes,disponible:etat.disponible,recharger};
+}
+
+// Alerte mail (EmailJS, réglée depuis l'appli dans la table parametres_app).
+async function chargerParamsApp(){
+  try{
+    const rows=await db.get("parametres_app","?select=cle,valeur");
+    const p={};if(Array.isArray(rows))rows.forEach(r=>{p[r.cle]=r.valeur;});
+    return p;
+  }catch(e){return {};}
+}
+function configMailDepuisParams(p){
+  return {actif:p.alerte_mail_actif==="1",adresse:p.alerte_mail_adresse||"",service:p.emailjs_service_id||"",template:p.emailjs_template_id||"",cle:p.emailjs_public_key||""};
+}
+async function envoyerViaEmailJS(cfg,params){
+  const r=await fetch("https://api.emailjs.com/api/v1.0/email/send",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({service_id:cfg.service,template_id:cfg.template,user_id:cfg.cle,template_params:params})});
+  const txt=await r.text();
+  return {ok:r.ok,detail:txt};
+}
+function messageMailDemande(d){
+  const lignes=d.lignes.map(x=>"• ["+TYPES_DEMANDE[x.type].label+"] "+x.cat+" : "+x.designation+" × "+x.qty).join("\n");
+  return "Demandé par "+d.tech+(d.chantier?" — chantier "+d.chantier:"")+"\n\n"+lignes+"\n"
+    +(d.commentaire?"\nCommentaire : "+d.commentaire+"\n":"")
+    +"\nÀ traiter dans l'appli : "+window.location.origin+" (Commandes > À commander)";
+}
+async function alerteMailDemande(d){
+  const cfg=configMailDepuisParams(await chargerParamsApp());
+  if(!cfg.actif)return {etat:"desactive"};
+  if(!cfg.adresse||!cfg.service||!cfg.template||!cfg.cle)return {etat:"non_configure"};
+  try{
+    const n=d.lignes.length;
+    const r=await envoyerViaEmailJS(cfg,{
+      to_email:cfg.adresse,
+      sujet:"Matériel à commander — "+n+" article"+(n>1?"s":"")+" ("+d.tech+(d.chantier?", "+d.chantier:"")+")",
+      message:messageMailDemande(d),demandeur:d.tech,chantier:d.chantier||"",
+    });
+    return r.ok?{etat:"envoye",adresse:cfg.adresse}:{etat:"echec",detail:r.detail};
+  }catch(e){return {etat:"echec",detail:String((e&&e.message)||e)};}
+}
+
+const CSS_MATERIEL=`
+.mat{max-width:820px;margin:0 auto;padding:18px 16px 48px;color:#1A1A2E;font-size:15px;line-height:1.45}
+.mat *{box-sizing:border-box}
+.mat-ecran{display:flex;flex-direction:column;gap:16px}
+.mat-h2{font-size:19px;line-height:1.25;margin:0;display:flex;align-items:center;gap:10px}
+.mat-h2 svg{color:#1B4F8A;flex:none}
+.mat-fil{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.mat-retour{border:1px solid #BFC8D4;background:#fff;border-radius:999px;min-height:44px;font-weight:600;cursor:pointer;padding:0 16px !important;color:#1A1A2E}
+.mat-puce{display:inline-flex;align-items:center;gap:8px;border-radius:999px;min-height:44px;font-weight:700;font-size:14px;border:1.5px solid transparent;cursor:pointer;padding:0 14px !important}
+.mat-puce small{font-weight:600;opacity:.75;font-size:12px}
+.mat-puce--commander{background:#EAF1FB;color:#1B4F8A;border-color:#AFC6E6}
+.mat-puce--renouveler{background:#FFF3DC;color:#8A4B00;border-color:#F3D19A}
+.mat-puce--cat{background:#fff;border-color:#BFC8D4;color:#454B5A;cursor:default}
+.mat-deux{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.mat-gros{min-height:112px;border-radius:16px;border:2px solid #BFC8D4;background:#fff;font-size:21px;font-weight:700;cursor:pointer;padding:16px !important;display:flex;align-items:center;justify-content:center;text-align:center;color:#1A1A2E}
+.mat-gros--commander{border-color:#1B4F8A;color:#1B4F8A;background:#EAF1FB}
+.mat-gros--renouveler{border-color:#E8720C;color:#8A4B00;background:#FFF3DC}
+.mat-gros--fin{border-color:#22863A;color:#22863A;background:#E9F6EC}
+.mat-cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
+.mat-cat{position:relative;min-height:116px;border-radius:14px;border:1.5px solid #DCE1E8;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;font-weight:700;font-size:15px;cursor:pointer;padding:12px 8px !important;text-align:center;color:#1A1A2E}
+.mat-cat svg{color:#1B4F8A}
+.mat-cat-n{position:absolute;top:8px;right:8px;background:#22863A;color:#fff;border-radius:999px;min-width:24px;height:24px;display:grid;place-items:center;font-size:12px;font-weight:700;padding:0 6px}
+.mat-groupe{display:flex;flex-direction:column;gap:8px}
+.mat-lib{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#667085}
+.mat-rang{display:flex;flex-wrap:wrap;gap:8px}
+.mat-choix{min-height:52px;border-radius:12px;border:1.5px solid #BFC8D4;background:#fff;font-weight:700;font-size:16px;cursor:pointer;padding:0 20px !important;color:#1A1A2E}
+.mat-choix--s{min-height:48px;padding:0 16px !important;font-size:15px}
+.mat-choix.on{border-color:#1B4F8A;background:#EAF1FB;color:#1B4F8A;box-shadow:inset 0 0 0 1px #1B4F8A}
+.mat-refs{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:8px}
+.mat-refs-l{grid-template-columns:repeat(auto-fill,minmax(168px,1fr))}
+.mat-ref-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:6px !important;min-height:58px;font-family:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;line-height:1.15}
+.mat-ref-btn b{font-size:17px}
+.mat-ref-btn small{font-size:11px;font-weight:600;color:#667085}
+.mat-ref-btn.on small{color:#1B4F8A}
+.mat-ref-long{font-family:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;font-size:14px;overflow-wrap:anywhere;padding:6px 8px !important;min-height:52px}
+.mat-champ{display:flex;flex-direction:column;gap:6px}
+.mat-champ input,.mat-champ textarea{min-height:52px;width:100%;border:1.5px solid #BFC8D4;border-radius:12px;padding:10px 14px !important;background:#fff;font-size:16px;font-family:inherit}
+.mat-trois{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:12px}
+.mat-ajout{display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px 18px;background:#fff;border:1px solid #DCE1E8;border-radius:14px;padding:14px}
+.mat-qte-bloc{display:flex;flex-direction:column;gap:6px}
+.mat-qte{display:inline-flex;align-items:center;border:1.5px solid #BFC8D4;border-radius:12px;overflow:hidden;background:#fff}
+.mat-qte button{width:56px;height:52px;border:0;background:#F5F6F8;font-size:24px;font-weight:700;cursor:pointer;padding:0 !important;display:flex;align-items:center;justify-content:center;color:#1A1A2E}
+.mat-qte output{min-width:60px;text-align:center;font-size:20px;font-weight:700;font-variant-numeric:tabular-nums}
+.mat-apercu{flex:1 1 200px;min-width:0;font-size:14px;color:#454B5A;overflow-wrap:anywhere}
+.mat-btn{min-height:52px;border-radius:12px;border:1.5px solid #BFC8D4;background:#fff;font-weight:700;font-size:16px;cursor:pointer;padding:0 20px !important;color:#1A1A2E}
+.mat-btn--p{background:#1B4F8A;border-color:#1B4F8A;color:#fff}
+.mat-btn--s{border-color:#1B4F8A;color:#1B4F8A}
+.mat-btn--d{border-color:#D73A49;color:#D73A49}
+.mat-btn[disabled]{opacity:.45;cursor:not-allowed}
+.mat-btn--large{width:100%}
+.mat-btn--petit{min-height:44px;padding:0 14px !important;font-size:14px}
+.mat-aide{font-size:13.5px;color:#667085;margin:0}
+.mat-alerte{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;background:#FFF1F2;border:1px solid #D73A49;color:#8A1F2B;border-radius:12px;padding:10px 14px;font-size:14px}
+.mat-liste{background:#fff;border:1px solid #DCE1E8;border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+.mat-liste-t{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#667085}
+.mat-ligne{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;min-height:46px;border-bottom:1px solid #EEF1F5;padding:4px 0}
+.mat-ligne:last-of-type{border-bottom:0}
+.mat-ligne .mat-ref{flex:1 1 140px;min-width:0;overflow-wrap:anywhere}
+.mat-ref{font-family:ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace;font-weight:600}
+.mat-x{font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mat-rm{width:44px;height:44px;border:0;background:transparent;color:#667085;font-size:18px;cursor:pointer;border-radius:10px;padding:0 !important;display:flex;align-items:center;justify-content:center}
+.mat-ok{background:#E9F6EC;border:1px solid #22863A;border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.mat-ok .mat-h2{color:#22863A}
+.mat-panier{background:#1B4F8A;color:#fff;border-radius:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px 10px 16px;flex-wrap:wrap}
+.mat-panier .mat-btn{background:#fff;color:#1B4F8A;border-color:#fff}
+.mat-badge-btn{min-height:40px;cursor:pointer;font:inherit;padding:0 14px !important;font-size:13px;font-weight:700}
+`;
+
+function IcoMat({nom,taille}){
+  const p={width:taille||36,height:taille||36,fill:"none",stroke:"currentColor",strokeWidth:1.8,strokeLinecap:"round",strokeLinejoin:"round","aria-hidden":"true"};
+  switch(nom){
+    case "roulements":return(<svg {...p} viewBox="0 0 32 32"><circle cx="16" cy="16" r="13"/><circle cx="16" cy="16" r="6"/><circle cx="25.5" cy="16" r="1.7"/><circle cx="20.75" cy="24.2" r="1.7"/><circle cx="11.25" cy="24.2" r="1.7"/><circle cx="6.5" cy="16" r="1.7"/><circle cx="11.25" cy="7.8" r="1.7"/><circle cx="20.75" cy="7.8" r="1.7"/></svg>);
+    case "garniture":return(<svg {...p} viewBox="0 0 32 32"><ellipse cx="16" cy="8" rx="11" ry="4.5"/><ellipse cx="16" cy="8" rx="5" ry="2"/><path d="M5 8v4c0 2.5 4.9 4.5 11 4.5s11-2 11-4.5V8"/><ellipse cx="16" cy="21" rx="11" ry="4.5"/><ellipse cx="16" cy="21" rx="5" ry="2"/><path d="M5 21v4c0 2.5 4.9 4.5 11 4.5s11-2 11-4.5v-4"/></svg>);
+    case "levres":return(<svg {...p} viewBox="0 0 32 32"><circle cx="16" cy="16" r="13"/><circle cx="16" cy="16" r="8"/><path d="M21.7 10.3l-1.8 1.8M10.3 10.3l1.8 1.8M10.3 21.7l1.8-1.8M21.7 21.7l-1.8-1.8"/></svg>);
+    case "vavs":return(<svg {...p} viewBox="0 0 32 32"><circle cx="16" cy="16" r="13"/><path d="M9.5 11.5L16 22l6.5-10.5"/></svg>);
+    case "palier":return(<svg {...p} viewBox="0 0 32 32"><rect x="4" y="21" width="24" height="6" rx="1.2"/><path d="M8 21v-5a8 8 0 0 1 16 0v5"/><circle cx="16" cy="15" r="3.4"/><circle cx="7.5" cy="24" r="1"/><circle cx="24.5" cy="24" r="1"/></svg>);
+    case "condo":return(<svg {...p} viewBox="0 0 32 32"><path d="M3 16h10M19 16h10M13 7v18M19 7v18"/></svg>);
+    case "outils":return(<svg {...p} viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>);
+    default:return(<svg {...p} viewBox="0 0 32 32"><rect x="4" y="4" width="24" height="24" rx="6"/><circle cx="10.5" cy="16" r="1.4" fill="currentColor"/><circle cx="16" cy="16" r="1.4" fill="currentColor"/><circle cx="21.5" cy="16" r="1.4" fill="currentColor"/></svg>);
+  }
+}
+function BoutonChoixMat({actif,onClick,className,children}){
+  return <button type="button" className={"mat-choix"+(className?" "+className:"")+(actif?" on":"")} aria-pressed={!!actif} onClick={onClick}>{children}</button>;
+}
+function ChampTexteMat({label,valeur,onChange,placeholder}){
+  return(<label className="mat-champ"><span className="mat-lib">{label}</span><input type="text" value={valeur} onChange={e=>onChange(e.target.value)} placeholder={placeholder} autoComplete="off"/></label>);
+}
+function ChampNombreMat({label,valeur,onChange}){
+  return(<label className="mat-champ"><span className="mat-lib">{label}</span><input type="number" inputMode="decimal" min="0" step="any" value={valeur} onChange={e=>onChange(e.target.value)} placeholder="mm"/></label>);
+}
+function BadgeTypeMat({type,onClick}){
+  const t=TYPES_DEMANDE[type]||TYPES_DEMANDE.commander;
+  const st={display:"inline-flex",alignItems:"center",borderRadius:999,padding:"3px 10px",fontSize:12,fontWeight:700,whiteSpace:"nowrap",background:t.bg,color:t.color,border:"1px solid "+t.bord};
+  return onClick
+    ?<button type="button" className="mat-badge-btn" onClick={onClick} style={st} title="Changer le type">{t.label}</button>
+    :<span style={st}>{t.label}</span>;
+}
+
+function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoyee}){
+  const listeTechs=(techs||[]).filter(t=>t!=="Autre");
+  const [etape,setEtape]=useState("type"); // type | cat | cfg | more | recap | sent
+  const [typeDefaut,setTypeDefaut]=useState("commander");
+  const [cat,setCat]=useState(null);
+  const [cfg,setCfg]=useState(()=>cfgMaterielVide("commander"));
+  const [lignesCat,setLignesCat]=useState([]);
+  const [panier,setPanier]=useState([]);
+  const [confirmQuit,setConfirmQuit]=useState(false);
+  const [derniere,setDerniere]=useState({nom:"",lignes:[]});
+  const [tech,setTech]=useState(()=>listeTechs.includes(sessionTech)?sessionTech:null);
+  const [chantier,setChantier]=useState("");
+  const [commentaire,setCommentaire]=useState("");
+  const [envoi,setEnvoi]=useState({enCours:false,erreur:null});
+  const [resultat,setResultat]=useState(null);
+  const idRef=useRef(1);
+  useEffect(()=>{window.scrollTo(0,0);},[etape]);
+
+  const maj=patch=>setCfg(c=>({...c,...patch}));
+  const designation=cat?designationMateriel(cat,cfg):null;
+
+  function choisirType(t){setTypeDefaut(t);setCfg(cfgMaterielVide(t));setEtape("cat");}
+  function ouvrirCat(id){setCat(id);setCfg(cfgMaterielVide(typeDefaut));setLignesCat([]);setConfirmQuit(false);setEtape("cfg");}
+  function retourCat(){if(lignesCat.length){setConfirmQuit(true);return;}setEtape("cat");}
+  function ajouter(){
+    if(!designation)return;
+    setLignesCat(a=>a.concat([{id:idRef.current++,cat:nomCategorieMat(cat),designation,qty:cfg.qty,type:cfg.type}]));
+    maj({sel:null,texte:"",qty:1,di:"",de:"",ep:"",vvDi:"",gmRef:null,gmDiam:""});
+  }
+  function validerCat(){
+    setDerniere({nom:nomCategorieMat(cat),lignes:lignesCat});
+    setPanier(p=>p.concat(lignesCat));setLignesCat([]);setEtape("more");
+  }
+  function basculerTypeLigne(id){setPanier(p=>p.map(l=>l.id===id?{...l,type:l.type==="commander"?"renouveler":"commander"}:l));}
+  function retirerLignePanier(id){
+    const n=panier.filter(l=>l.id!==id);
+    setPanier(n);if(!n.length)setEtape("cat");
+  }
+  function nouvelle(){
+    setEtape("type");setCat(null);setCfg(cfgMaterielVide(typeDefaut));setLignesCat([]);setPanier([]);
+    setChantier("");setCommentaire("");setResultat(null);setEnvoi({enCours:false,erreur:null});
+  }
+  async function envoyer(){
+    if(!tech||!panier.length||envoi.enCours)return;
+    setEnvoi({enCours:true,erreur:null});
+    const demandeId="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    const ch=chantier.trim(),com=commentaire.trim();
+    // created_at espacé d'1 ms par ligne : l'ordre de saisie est conservé à l'affichage.
+    const base=Date.now();
+    const rows=panier.map((l,i)=>({demande_id:demandeId,type:l.type,categorie:l.cat,designation:l.designation,quantite:l.qty,demandeur:tech,chantier:ch||null,commentaire:com||null,statut:"a_commander",created_at:new Date(base+i).toISOString()}));
+    let res=null;
+    try{res=await db.post("demandes_materiel",rows);}catch(e){}
+    if(!Array.isArray(res)||res.length!==rows.length){
+      const detail=res&&res.message?" ("+res.message+")":"";
+      setEnvoi({enCours:false,erreur:"L'envoi n'a pas abouti"+detail+". Votre demande est conservée : réessayez."});
+      return;
+    }
+    if(onEnvoyee)onEnvoyee();
+    const mail=await alerteMailDemande({tech,chantier:ch,commentaire:com,lignes:panier});
+    setResultat({nb:panier.length,tech,chantier:ch,mail,lignes:panier});
+    setPanier([]);setEnvoi({enCours:false,erreur:null});setEtape("sent");
+  }
+
+  function cfgChamps(){
+    switch(cat){
+      case "roulements":return(<>
+        <div className="mat-groupe"><span className="mat-lib">Série</span><div className="mat-rang">{SERIES_ROULEMENTS.map(s=><BoutonChoixMat key={s} actif={cfg.serie===s} onClick={()=>maj({serie:s,sel:null})}>{s}</BoutonChoixMat>)}</div></div>
+        {cfg.serie&&cfg.serie!=="Autre"&&<div className="mat-groupe"><span className="mat-lib">Référence {cfg.serie}</span><div className="mat-refs">{refsRoulements(cfg.serie).map(r=>{const [b,s]=decouperRef(r);return(<BoutonChoixMat key={r} className="mat-ref-btn" actif={cfg.sel===r} onClick={()=>maj({sel:r})}><b>{b}</b>{s&&<small>{s}</small>}</BoutonChoixMat>);})}</div></div>}
+        {cfg.serie==="Autre"&&<ChampTexteMat label="Référence du roulement" valeur={cfg.texte} onChange={v=>maj({texte:v})} placeholder="Texte libre"/>}
+      </>);
+      case "garniture":return(<>
+        <div className="mat-groupe"><span className="mat-lib">Garniture mobile</span><div className="mat-rang">{GM_MOBILE_OPTIONS.map(o=>{const v=o==="Autre"?"__autre":o;return(<BoutonChoixMat key={o} actif={cfg.gmType==="mobile"&&cfg.gmRef===v} onClick={()=>maj({gmType:"mobile",gmRef:v})}>{o}</BoutonChoixMat>);})}</div></div>
+        <div className="mat-groupe"><span className="mat-lib">Garniture fixe</span><div className="mat-rang">{GM_FIXE_OPTIONS.map(o=>{const v=o==="Autre"?"__autre":o;return(<BoutonChoixMat key={o} actif={cfg.gmType==="fixe"&&cfg.gmRef===v} onClick={()=>maj({gmType:"fixe",gmRef:v})}>{o}</BoutonChoixMat>);})}</div></div>
+        {cfg.gmRef==="__autre"&&<ChampTexteMat label="Référence précise" valeur={cfg.texte} onChange={v=>maj({texte:v})} placeholder="Texte libre"/>}
+        {cfg.gmRef&&<ChampNombreMat label="Diamètre arbre (mm)" valeur={cfg.gmDiam} onChange={v=>maj({gmDiam:v})}/>}
+      </>);
+      case "levres":return(<>
+        <div className="mat-trois"><ChampNombreMat label="Ø intérieur (mm)" valeur={cfg.di} onChange={v=>maj({di:v})}/><ChampNombreMat label="Ø extérieur (mm)" valeur={cfg.de} onChange={v=>maj({de:v})}/><ChampNombreMat label="Épaisseur (mm)" valeur={cfg.ep} onChange={v=>maj({ep:v})}/></div>
+        <div className="mat-groupe"><span className="mat-lib">Lèvres</span><div className="mat-rang">{[["simple","Simple lèvre"],["double","Double lèvre"]].map(([v,l])=><BoutonChoixMat key={v} actif={cfg.levres===v} onClick={()=>maj({levres:v})}>{l}</BoutonChoixMat>)}</div></div>
+      </>);
+      case "vavs":return(<>
+        <div className="mat-groupe"><span className="mat-lib">Type</span><div className="mat-rang">{["VA","VS"].map(v=><BoutonChoixMat key={v} actif={cfg.vv===v} onClick={()=>maj({vv:v})}>{v}</BoutonChoixMat>)}</div></div>
+        <ChampNombreMat label="Ø intérieur (mm)" valeur={cfg.vvDi} onChange={v=>maj({vvDi:v})}/>
+        <p className="mat-aide">VA puis 50 donne la référence VA50.</p>
+      </>);
+      case "palier":{
+        const fam=PALIERS_FAMILLES.find(f=>f.nom===cfg.famille);
+        return(<>
+          <div className="mat-groupe"><span className="mat-lib">Famille</span><div className="mat-rang">{PALIERS_FAMILLES.map(f=>f.nom).concat(["Autre"]).map(n=><BoutonChoixMat key={n} actif={cfg.famille===n} onClick={()=>maj({famille:n,sel:null})}>{n}</BoutonChoixMat>)}</div></div>
+          {fam&&<div className="mat-groupe"><span className="mat-lib">Référence {fam.nom}</span><div className="mat-refs mat-refs-l">{fam.refs.map(r=><BoutonChoixMat key={r} className="mat-ref-long" actif={cfg.sel===r} onClick={()=>maj({sel:r})}>{r}</BoutonChoixMat>)}</div></div>}
+          {cfg.famille==="Autre"&&<ChampTexteMat label="Référence du palier" valeur={cfg.texte} onChange={v=>maj({texte:v})} placeholder="Texte libre"/>}
+        </>);
+      }
+      case "condo":return(<>
+        <div className="mat-groupe"><span className="mat-lib">Raccordement</span><div className="mat-rang">{[["fil","Filaire"],["cosse","À cosses"]].map(([v,l])=><BoutonChoixMat key={v} actif={cfg.fil===v} onClick={()=>maj({fil:v})}>{l}</BoutonChoixMat>)}</div></div>
+        <div className="mat-groupe"><span className="mat-lib">Capacité</span><div className="mat-rang">{CONDOS_UF.map(u=><BoutonChoixMat key={u} actif={cfg.sel===u} onClick={()=>maj({sel:u})}>{u}</BoutonChoixMat>)}<BoutonChoixMat actif={cfg.sel==="__autre"} onClick={()=>maj({sel:"__autre"})}>Autre</BoutonChoixMat></div></div>
+        {cfg.sel==="__autre"&&<ChampTexteMat label="Capacité" valeur={cfg.texte} onChange={v=>maj({texte:v})} placeholder="Ex. 22"/>}
+      </>);
+      case "outils":return <ChampTexteMat label="Quel outil ?" valeur={cfg.texte} onChange={v=>maj({texte:v})} placeholder="Texte libre"/>;
+      default:return <ChampTexteMat label="Que faut-il commander ?" valeur={cfg.texte} onChange={v=>maj({texte:v})} placeholder="Texte libre"/>;
+    }
+  }
+
+  const ligneListe=(l,extra)=>(<div className="mat-ligne" key={l.id}>
+    <BadgeTypeMat type={l.type} onClick={extra&&extra.bascule?()=>basculerTypeLigne(l.id):undefined}/>
+    <span className="mat-ref">{l.designation}</span><span className="mat-x">× {l.qty}</span>
+    {extra&&extra.retirer&&<button type="button" className="mat-rm" onClick={()=>extra.retirer(l.id)} aria-label={"Retirer "+l.designation}>✕</button>}
+  </div>);
+
+  let corps=null;
+  if(etape==="type"){
+    corps=(<div className="mat-ecran">
+      <div className="mat-fil"><button type="button" className="mat-retour" onClick={onRetour}>‹ Retour</button></div>
+      <h2 className="mat-h2">Que voulez-vous faire ?</h2>
+      <div className="mat-deux">
+        <button type="button" className="mat-gros mat-gros--commander" onClick={()=>choisirType("commander")}>À commander</button>
+        <button type="button" className="mat-gros mat-gros--renouveler" onClick={()=>choisirType("renouveler")}>À renouveler</button>
+      </div>
+      <p className="mat-aide">Vous pourrez changer ce choix article par article.</p>
+    </div>);
+  }else if(etape==="cat"){
+    const n=panier.length;
+    corps=(<div className="mat-ecran">
+      <div className="mat-fil"><button type="button" className={"mat-puce mat-puce--"+typeDefaut} onClick={()=>setEtape("type")} aria-label="Changer le type par défaut">{TYPES_DEMANDE[typeDefaut].label} <small>changer</small></button></div>
+      <h2 className="mat-h2">Quelle catégorie ?</h2>
+      <div className="mat-cats">{CATEGORIES_MATERIEL.map(c=>{const k=panier.filter(l=>l.cat===c.nom).length;return(<button type="button" key={c.id} className="mat-cat" onClick={()=>ouvrirCat(c.id)}><IcoMat nom={c.id} taille={38}/><span>{c.nom}</span>{k>0&&<span className="mat-cat-n" aria-label={k+" dans la demande"}>{k}</span>}</button>);})}</div>
+      {n>0&&<div className="mat-panier"><span><strong>{n}</strong> article{n>1?"s":""} dans la demande</span><button type="button" className="mat-btn" onClick={()=>setEtape("recap")}>Voir et envoyer</button></div>}
+    </div>);
+  }else if(etape==="cfg"&&cat){
+    corps=(<div className="mat-ecran">
+      <div className="mat-fil"><button type="button" className="mat-retour" onClick={retourCat}>‹ Catégories</button></div>
+      {confirmQuit&&<div className="mat-alerte" role="alert"><span>{lignesCat.length} article{lignesCat.length>1?"s":""} pas encore validé{lignesCat.length>1?"s":""} seront perdus.</span><span style={{display:"flex",gap:8}}><button type="button" className="mat-btn mat-btn--petit" onClick={()=>setConfirmQuit(false)}>Rester</button><button type="button" className="mat-btn mat-btn--petit mat-btn--d" onClick={()=>{setLignesCat([]);setConfirmQuit(false);setEtape("cat");}}>Quitter</button></span></div>}
+      <h2 className="mat-h2"><IcoMat nom={cat} taille={26}/>{nomCategorieMat(cat)}</h2>
+      {cfgChamps()}
+      <div className="mat-ajout">
+        <div className="mat-qte-bloc"><span className="mat-lib">Quantité</span><div className="mat-qte"><button type="button" onClick={()=>maj({qty:Math.max(1,cfg.qty-1)})} aria-label="Diminuer">−</button><output>{cfg.qty}</output><button type="button" onClick={()=>maj({qty:Math.min(99,cfg.qty+1)})} aria-label="Augmenter">+</button></div></div>
+        <div className="mat-qte-bloc"><span className="mat-lib">Type</span><div className="mat-rang">{["commander","renouveler"].map(t=><BoutonChoixMat key={t} className="mat-choix--s" actif={cfg.type===t} onClick={()=>maj({type:t})}>{TYPES_DEMANDE[t].label}</BoutonChoixMat>)}</div></div>
+        <div className="mat-apercu">{designation?<>Sera ajouté : <span className="mat-ref">{designation}</span> × {cfg.qty}</>:"Complétez les choix pour pouvoir ajouter."}</div>
+        <button type="button" className="mat-btn mat-btn--s" disabled={!designation} onClick={ajouter}>Ajouter</button>
+      </div>
+      {lignesCat.length===0
+        ?<p className="mat-aide">Ajoutez un ou plusieurs articles, puis validez la catégorie.</p>
+        :<div className="mat-liste"><div className="mat-liste-t">Dans cette catégorie</div>
+          {lignesCat.map(l=>ligneListe(l,{retirer:id=>setLignesCat(a=>a.filter(x=>x.id!==id))}))}
+          <button type="button" className="mat-btn mat-btn--p mat-btn--large" onClick={validerCat}>Valider {nomCategorieMat(cat)}</button></div>}
+    </div>);
+  }else if(etape==="more"){
+    corps=(<div className="mat-ecran">
+      <div className="mat-ok"><h2 className="mat-h2">{derniere.nom} validé</h2>{derniere.lignes.map(l=>ligneListe(l))}</div>
+      <h2 className="mat-h2">Autre chose à ajouter ?</h2>
+      <div className="mat-deux"><button type="button" className="mat-gros" onClick={()=>setEtape("cat")}>Oui, une autre catégorie</button><button type="button" className="mat-gros mat-gros--fin" onClick={()=>setEtape("recap")}>Non, c'est tout</button></div>
+    </div>);
+  }else if(etape==="recap"){
+    const groupes=panier.reduce((g,l)=>{(g[l.cat]=g[l.cat]||[]).push(l);return g;},{});
+    const total=panier.reduce((a,l)=>a+l.qty,0);
+    const ok=!!tech&&panier.length>0&&!envoi.enCours;
+    corps=(<div className="mat-ecran">
+      <div className="mat-fil"><button type="button" className="mat-retour" onClick={()=>setEtape("cat")}>‹ Catégories</button></div>
+      <h2 className="mat-h2">Récapitulatif</h2>
+      {Object.keys(groupes).map(nom=><div className="mat-liste" key={nom}><div className="mat-liste-t">{nom}</div>{groupes[nom].map(l=>ligneListe(l,{bascule:true,retirer:retirerLignePanier}))}</div>)}
+      <p className="mat-aide">Touchez À commander / À renouveler sur une ligne pour changer son type.</p>
+      <div className="mat-groupe"><span className="mat-lib">Qui demande ?</span><div className="mat-rang">{listeTechs.map(t=><BoutonChoixMat key={t} className="mat-choix--s" actif={tech===t} onClick={()=>setTech(tech===t?null:t)}>{t}</BoutonChoixMat>)}</div></div>
+      <label className="mat-champ"><span className="mat-lib">N° de chantier — facultatif</span><input type="text" value={chantier} onChange={e=>setChantier(e.target.value)} onBlur={()=>{const m=chantier.trim().match(/^(?:de)?(\d+)$/i);if(m)setChantier("DE"+m[1]);}} placeholder="7945 devient DE7945" autoComplete="off"/></label>
+      <label className="mat-champ"><span className="mat-lib">Commentaire — facultatif</span><textarea rows={2} value={commentaire} onChange={e=>setCommentaire(e.target.value)} placeholder="Précisions pour la commande"/></label>
+      {envoi.erreur&&<div className="mat-alerte" role="alert">{envoi.erreur}</div>}
+      <button type="button" className="mat-btn mat-btn--p mat-btn--large" disabled={!ok} onClick={envoyer}>{envoi.enCours?"Envoi…":"Envoyer la demande ("+total+" pièce"+(total>1?"s":"")+")"}</button>
+      {!tech&&<p className="mat-aide">Choisissez qui demande pour pouvoir envoyer.</p>}
+    </div>);
+  }else if(etape==="sent"&&resultat){
+    const m=resultat.mail||{};
+    corps=(<div className="mat-ecran">
+      <div className="mat-ok"><h2 className="mat-h2">Demande envoyée</h2><p style={{margin:0}}>{resultat.nb} article{resultat.nb>1?"s":""} demandé{resultat.nb>1?"s":""} par {resultat.tech}{resultat.chantier?" pour "+resultat.chantier:""}.</p><p className="mat-aide">Elle apparaît dans Commandes, onglet À commander, et sur le tableau de bord.</p></div>
+      <div className="mat-liste">{resultat.lignes.map(l=>ligneListe(l))}</div>
+      {m.etat==="envoye"&&<p className="mat-aide">Alerte mail envoyée à {m.adresse}.</p>}
+      {m.etat==="echec"&&<p className="mat-aide" style={{color:"#B42318"}}>L'alerte mail n'a pas pu partir ({m.detail}). La demande, elle, est bien enregistrée.</p>}
+      {m.etat==="non_configure"&&<p className="mat-aide">Alerte mail activée mais pas encore configurée (Commandes, onglet À commander, Alerte mail).</p>}
+      <div className="mat-deux"><button type="button" className="mat-btn mat-btn--p" onClick={nouvelle}>Nouvelle demande</button><button type="button" className="mat-btn" onClick={onVoirCommandes}>Voir dans Commandes</button></div>
+    </div>);
+  }
+  return(<div className="mat"><style>{CSS_MATERIEL}</style>{corps}</div>);
+}
+
+// mode : "dash" (tableau de bord, lecture seule) | "groupe" (dans une demande, onglet Commandes) | "histo" (historique)
+function LigneMateriel({l,mode,occupe,onCommande,onRemettre,onSuppr}){
+  const groupe=mode==="groupe",histo=mode==="histo";
+  const meta=groupe?l.categorie:[l.categorie,l.demandeur||"—",l.chantier,histo?"commandé "+ilYa(l.date_commande):ilYa(l.created_at)].filter(Boolean).join(" · ");
+  const cadre=groupe
+    ?{padding:"10px 14px",borderTop:"1px solid #EEF1F5"}
+    :{background:"#fff",border:"1px solid #E2E6EA",borderRadius:10,padding:"12px 14px"};
+  return(<div style={{display:"grid",gridTemplateColumns:"1fr auto",gap:"4px 12px",alignItems:"center",...cadre}}>
+    <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:8,minWidth:0}}>
+      <BadgeTypeMat type={l.type}/>
+      <span style={{fontFamily:MONO_MAT,fontWeight:600,overflowWrap:"anywhere"}}>{l.designation}</span>
+      <span style={{fontWeight:700,whiteSpace:"nowrap"}}>× {l.quantite}</span>
+    </div>
+    {mode!=="dash"&&<div style={{display:"flex",gap:6,alignItems:"center",gridColumn:2,gridRow:"1 / span 2"}}>
+      {histo
+        ?<button onClick={()=>onRemettre(l)} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>↩ Remettre</button>
+        :<button onClick={()=>onCommande(l)} disabled={occupe===l.id} style={{...S.p1,fontSize:12,padding:"8px 14px",opacity:occupe===l.id?0.6:1}}>✓ Commandé</button>}
+      <button onClick={()=>onSuppr(l.id)} aria-label="Supprimer cette ligne" style={{...S.p2,fontSize:12,padding:"6px 10px",color:"#6B7280",borderColor:"#D1D5DB"}}>✕</button>
+    </div>}
+    <div style={{gridColumn:1,fontSize:12,color:"#6B7280"}}>
+      {meta}
+      {histo&&l.commentaire&&<div style={{marginTop:2,fontStyle:"italic"}}>« {l.commentaire} »</div>}
+    </div>
+  </div>);
+}
+
+function GroupeDemande({lignes,occupe,onCommande,onSuppr}){
+  const p=lignes[0];
+  return(<div style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:12,overflow:"hidden"}}>
+    <div style={{background:"#F8F9FA",padding:"10px 14px",display:"flex",flexWrap:"wrap",alignItems:"baseline",gap:"2px 12px"}}>
+      <span style={{fontWeight:700}}>👤 {p.demandeur||"—"}</span>
+      {p.chantier&&<span style={{fontWeight:700,color:"#1B4F8A"}}>{p.chantier}</span>}
+      <span style={{fontSize:12,color:"#6B7280"}}>{ilYa(p.created_at)}</span>
+      {p.commentaire&&<div style={{flexBasis:"100%",fontSize:12,fontStyle:"italic",color:"#4B5563"}}>« {p.commentaire} »</div>}
+    </div>
+    {lignes.map(l=><LigneMateriel key={l.id} l={l} mode="groupe" occupe={occupe} onCommande={onCommande} onSuppr={onSuppr}/>)}
+  </div>);
+}
+
+function PanneauAlerteMail(){
+  const [ouvert,setOuvert]=useState(false);
+  const [p,setP]=useState(null);
+  const [enregistre,setEnregistre]=useState(false);
+  const [test,setTest]=useState(null);
+  useEffect(()=>{let a=false;chargerParamsApp().then(x=>{if(!a)setP(configMailDepuisParams(x));});return()=>{a=true;};},[]);
+  if(!p)return null;
+  const configure=!!(p.adresse.trim()&&p.service.trim()&&p.template.trim()&&p.cle.trim());
+  const statut=!p.actif?"Alerte mail désactivée":configure?"Alerte mail activée → "+p.adresse:"Alerte mail activée, configuration EmailJS incomplète";
+  const maj=patch=>setP(x=>({...x,...patch}));
+  async function enregistrer(){
+    const rows=[["alerte_mail_actif",p.actif?"1":"0"],["alerte_mail_adresse",p.adresse.trim()],["emailjs_service_id",p.service.trim()],["emailjs_template_id",p.template.trim()],["emailjs_public_key",p.cle.trim()]].map(([cle,valeur])=>({cle,valeur}));
+    try{await db.upsert("parametres_app",rows,"cle");setEnregistre(true);setTimeout(()=>setEnregistre(false),2500);}
+    catch(e){setTest({ok:false,detail:"Enregistrement impossible : "+e.message});}
+  }
+  async function tester(){
+    setTest({enCours:true});
+    try{
+      const r=await envoyerViaEmailJS({service:p.service.trim(),template:p.template.trim(),cle:p.cle.trim()},{to_email:p.adresse.trim(),sujet:"Test — alerte matériel à commander",message:"Ceci est un message de test envoyé depuis l'appli Atelier PMV.\n\nSi vous le recevez, l'alerte mail fonctionne.",demandeur:"Test",chantier:""});
+      setTest({ok:r.ok,detail:r.ok?"Mail de test envoyé à "+p.adresse.trim():r.detail});
+    }catch(e){setTest({ok:false,detail:String((e&&e.message)||e)});}
+  }
+  return(<div style={{...S.card,padding:"10px 14px",marginBottom:14}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
+      <span style={{fontSize:13,fontWeight:600,color:p.actif&&configure?"#22863A":"#4B5563"}}>🔔 {statut}</span>
+      <button onClick={()=>setOuvert(!ouvert)} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>{ouvert?"Fermer":"Régler"}</button>
+    </div>
+    {ouvert&&<div style={{marginTop:12,display:"flex",flexDirection:"column",gap:10}}>
+      <label style={{display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,cursor:"pointer"}}><input type="checkbox" checked={p.actif} onChange={e=>maj({actif:e.target.checked})}/>Envoyer un mail à chaque nouvelle demande de matériel</label>
+      <div><label style={S.lbl}>Adresse qui reçoit l'alerte</label><input value={p.adresse} onChange={e=>maj({adresse:e.target.value})} style={S.inp} placeholder="commandes@pmvservices.fr"/></div>
+      <div style={{fontSize:12,color:"#6B7280",lineHeight:1.5}}>L'envoi passe par <strong>EmailJS</strong> (compte gratuit sur emailjs.com). Dans EmailJS, le modèle de mail doit avoir : destinataire <code>{"{{to_email}}"}</code>, objet <code>{"{{sujet}}"}</code>, contenu <code>{"<div style=\"white-space:pre-line\">{{message}}</div>"}</code>.</div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>
+        <div><label style={S.lbl}>Service ID</label><input value={p.service} onChange={e=>maj({service:e.target.value})} style={S.inp} placeholder="service_xxxxxxx"/></div>
+        <div><label style={S.lbl}>Template ID</label><input value={p.template} onChange={e=>maj({template:e.target.value})} style={S.inp} placeholder="template_xxxxxxx"/></div>
+        <div><label style={S.lbl}>Public Key</label><input value={p.cle} onChange={e=>maj({cle:e.target.value})} style={S.inp} placeholder="clé publique"/></div>
+      </div>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        <button onClick={enregistrer} style={S.p1}>Enregistrer</button>
+        <button onClick={tester} disabled={!configure||(test&&test.enCours)} style={{...S.p2,opacity:configure?1:0.5}}>{test&&test.enCours?"Envoi du test…":"Envoyer un mail de test"}</button>
+        {enregistre&&<span style={{fontSize:12,color:"#22863A",fontWeight:600}}>✓ Enregistré</span>}
+      </div>
+      {test&&!test.enCours&&<div style={{fontSize:12,color:test.ok?"#22863A":"#B42318",wordBreak:"break-word"}}>{test.ok?"✓ ":"✕ "}{test.detail}</div>}
+    </div>}
+  </div>);
+}
+
+const SQL_MATERIEL=`create table demandes_materiel (
+  id uuid primary key default gen_random_uuid(),
+  created_at timestamptz default now(),
+  demande_id text not null,
+  type text not null default 'commander',
+  categorie text,
+  designation text not null,
+  quantite integer not null default 1,
+  demandeur text,
+  chantier text,
+  commentaire text,
+  statut text not null default 'a_commander',
+  date_commande timestamptz
+);
+alter table demandes_materiel enable row level security;
+create policy "allow anon all" on demandes_materiel for all using (true) with check (true);
+
+create table parametres_app (
+  cle text primary key,
+  valeur text
+);
+alter table parametres_app enable row level security;
+create policy "allow anon all" on parametres_app for all using (true) with check (true);
+
+insert into parametres_app (cle, valeur) values
+  ('alerte_mail_adresse', 'commandes@pmvservices.fr'),
+  ('alerte_mail_actif', '0');`;
+
+function NoticeTablesMateriel(){
+  const [copie,setCopie]=useState(false);
+  async function copier(){
+    try{await navigator.clipboard.writeText(SQL_MATERIEL);setCopie(true);setTimeout(()=>setCopie(false),2500);}catch(e){}
+  }
+  return(<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:10,padding:"14px 16px",fontSize:13,lineHeight:1.5}}>
+    <div style={{fontWeight:700,color:"#8A4B00",marginBottom:6}}>⚙ Une dernière étape pour activer le matériel à commander</div>
+    <div style={{color:"#4B5563",marginBottom:10}}>Les tables de la base de données n'existent pas encore. Dans Supabase, ouvrez <strong>SQL Editor</strong> puis <strong>New query</strong>, collez le texte ci-dessous et cliquez sur <strong>Run</strong>. Rechargez ensuite l'appli.</div>
+    <button onClick={copier} style={{...S.p1,fontSize:12,padding:"7px 14px",marginBottom:10}}>{copie?"✓ Copié":"📋 Copier le SQL"}</button>
+    <pre style={{margin:0,background:"#fff",border:"1px solid #F3D9A8",borderRadius:8,padding:10,fontSize:11,overflowX:"auto",maxHeight:220}}>{SQL_MATERIEL}</pre>
+  </div>);
+}
+
+// Modifications d'une ligne : renvoient true seulement si le serveur a confirmé (pas de faux succès hors ligne).
+async function modifierLigneMateriel(id,corps){
+  try{
+    const r=await fetch(SUPA_URL+"/rest/v1/demandes_materiel?id=eq."+id,{method:"PATCH",headers:{...H,"Prefer":"return=representation"},body:JSON.stringify(corps)});
+    const data=await r.json().catch(()=>null);
+    return r.ok&&Array.isArray(data)&&data.length>0;
+  }catch(e){return false;}
+}
+async function supprimerLigneMateriel(id){
+  try{const r=await fetch(SUPA_URL+"/rest/v1/demandes_materiel?id=eq."+id,{method:"DELETE",headers:H});return r.ok;}
+  catch(e){return false;}
+}
+
+function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel}){
+  const [filtre,setFiltre]=useState("tous");
+  const [historique,setHistorique]=useState(null);
+  const [confirmSuppr,setConfirmSuppr]=useState(null);
+  const [occupe,setOccupe]=useState(null);
+  const [erreur,setErreur]=useState(null);
+  const ECHEC="L'action n'a pas abouti (connexion ?). Rien n'a été modifié : réessayez.";
+  const chargerHisto=useCallback(async()=>{
+    const rows=await db.get("demandes_materiel","?statut=eq.commande&order=date_commande.desc&limit=200");
+    setHistorique(Array.isArray(rows)?rows:[]);
+  },[]);
+  useEffect(()=>{if(filtre==="historique")chargerHisto();},[filtre,chargerHisto]);
+  async function commander(l){
+    setOccupe(l.id);setErreur(null);
+    const ok=await modifierLigneMateriel(l.id,{statut:"commande",date_commande:new Date().toISOString()});
+    if(!ok)setErreur(ECHEC);
+    await recharger();if(historique)await chargerHisto();
+    setOccupe(null);
+  }
+  async function remettre(l){
+    setErreur(null);
+    const ok=await modifierLigneMateriel(l.id,{statut:"a_commander",date_commande:null});
+    if(!ok)setErreur(ECHEC);
+    await chargerHisto();await recharger();
+  }
+  async function supprimer(id){
+    setErreur(null);
+    const ok=await supprimerLigneMateriel(id);
+    if(!ok)setErreur(ECHEC);
+    setConfirmSuppr(null);await recharger();if(filtre==="historique")await chargerHisto();
+  }
+  const nC=demandes.filter(l=>l.type==="commander").length,nR=demandes.length-nC;
+  const histo=filtre==="historique";
+  const liste=histo?(historique||[]):demandes.filter(l=>filtre==="tous"||l.type===filtre);
+  if(disponible===false)return <NoticeTablesMateriel/>;
+  return(<div>
+    <PanneauAlerteMail/>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+      {[["tous","Tout ("+demandes.length+")"],["commander","À commander ("+nC+")"],["renouveler","À renouveler ("+nR+")"],["historique","Historique"]].map(([id,lib])=>(
+        <button key={id} onClick={()=>setFiltre(id)} style={{border:"1.5px solid "+(filtre===id?"#1B4F8A":"#D1D5DB"),background:filtre===id?"#EEF4FF":"#fff",color:filtre===id?"#1B4F8A":"#4B5563",borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{lib}</button>
+      ))}
+    </div>
+    {erreur&&<div style={{...S.alert,marginBottom:12}}>{erreur}</div>}
+    {histo&&historique===null&&<div style={{textAlign:"center",padding:30,color:"#9CA3AF"}}>Chargement…</div>}
+    {liste.length===0&&!(histo&&historique===null)&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px dashed #D1D5DB"}}>
+      {histo?"Aucune ligne commandée pour le moment.":"Rien à commander pour le moment."}
+      {!histo&&onDemandeMateriel&&<div style={{marginTop:14,display:"flex",justifyContent:"center"}}><button onClick={onDemandeMateriel} style={{...S.p1,fontSize:13}}>🛒 Faire une demande de matériel</button></div>}
+    </div>}
+    {liste.length>0&&(histo
+      ?<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {liste.map(l=><LigneMateriel key={l.id} l={l} mode="histo" onRemettre={remettre} onSuppr={setConfirmSuppr}/>)}
+      </div>
+      :<div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {regrouperDemandes(liste).map(g=><GroupeDemande key={g[0].demande_id} lignes={g} occupe={occupe} onCommande={commander} onSuppr={setConfirmSuppr}/>)}
+      </div>)}
+    {confirmSuppr&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
+      <div style={{background:"#fff",borderRadius:12,padding:24,width:340}}>
+        <p style={{margin:"0 0 16px",fontWeight:600}}>Supprimer cette ligne ?</p>
+        <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
+          <button onClick={()=>setConfirmSuppr(null)} style={S.p2}>Annuler</button>
+          <button onClick={()=>supprimer(confirmSuppr)} style={{...S.p1,background:"#D73A49"}}>Supprimer</button>
+        </div>
+      </div>
     </div>}
   </div>);
 }
@@ -4097,6 +4767,14 @@ export default function App(){
   },[]);
   const commandesAlerte=commandesResume.retard+commandesResume.aCompleter;
 
+  // Matériel à commander (demandes des techniciens) : état partagé tableau de bord / onglet Commandes.
+  const demandesMat=useDemandesMateriel();
+  const [vueCommandesInit,setVueCommandesInit]=useState(null);
+  const [origineDemande,setOrigineDemande]=useState("dashboard");
+  const badgeCommandes=commandesAlerte+demandesMat.demandes.length;
+  function ouvrirDemande(depuis){setOrigineDemande(depuis);setPage("demande");}
+  function voirMaterielCommandes(){setVueCommandesInit("materiel");setPage("commandes");}
+
   const width=useWidth();
   const isMobile=width<900;
   const [menuOuvert,setMenuOuvert]=useState(false);
@@ -4116,7 +4794,7 @@ export default function App(){
           <button key={n.id} onClick={()=>setPage(n.id)} style={{background:page===n.id?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"none",padding:"6px 14px",borderRadius:6,fontSize:13,cursor:"pointer",fontWeight:page===n.id?700:400,position:"relative",whiteSpace:"nowrap"}}>
             {n.label}
             {n.id==="planning"&&devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{devisCount}</span>}
-            {n.id==="commandes"&&commandesAlerte>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#D73A49",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{commandesAlerte}</span>}
+            {n.id==="commandes"&&badgeCommandes>0&&<span style={{position:"absolute",top:-4,right:-4,background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeCommandes}</span>}
           </button>
         ))}
       </div>}
@@ -4141,7 +4819,7 @@ export default function App(){
         <button key={n.id} onClick={()=>{setPage(n.id);setMenuOuvert(false);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:page===n.id?"rgba(255,255,255,0.15)":"transparent",color:"#fff",border:"none",borderBottom:"1px solid rgba(255,255,255,0.1)",padding:"14px 20px",fontSize:15,fontWeight:page===n.id?700:400,cursor:"pointer",textAlign:"left"}}>
           <span>{n.label}</span>
           {n.id==="planning"&&devisCount>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{devisCount}</span>}
-          {n.id==="commandes"&&commandesAlerte>0&&<span style={{background:"#D73A49",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{commandesAlerte}</span>}
+          {n.id==="commandes"&&badgeCommandes>0&&<span style={{background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeCommandes}</span>}
         </button>
       ))}
       {sessionTech&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 20px",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
@@ -4151,7 +4829,7 @@ export default function App(){
     </div>}
 
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
-    {page==="dashboard"&&<PageDashboard fiches={fiches} pieces={pieces} commandesResume={commandesResume} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
+    {page==="dashboard"&&<PageDashboard fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={()=>setPage("commandes")} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
@@ -4161,7 +4839,8 @@ export default function App(){
     {page==="suivi"&&<PageSuivi/>}
     {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
-    {page==="commandes"&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume}/>}
+    {page==="commandes"&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume} demandesMat={demandesMat} vueInitiale={vueCommandesInit} onVueConsommee={()=>setVueCommandesInit(null)} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
+    {page==="demande"&&<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>}
     {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
   </div>);
 }
