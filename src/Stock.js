@@ -967,7 +967,7 @@ function SessionScan({mode:modeInit,articles,techs,qui,setQui,onFermer,onChange,
 
 // ─── Stock sur téléphone : lien du mode "Stock seul", QR code à scanner avec le téléphone ───────────
 function LienTelephone({onFermer}){
-  const lien=window.location.origin+"/?app=stock";
+  const lien=window.location.origin+"/stock/";
   const [qr,setQr]=useState("");
   const [copie,setCopie]=useState(false);
   useEffect(()=>{let a=false;codeSvg("qr",lien).then(x=>{if(!a)setQr(x);}).catch(()=>{});return()=>{a=true;};},[lien]);
@@ -1288,7 +1288,7 @@ export default function PageStock({techs,sessionTech}){
         <button type="button" onClick={()=>setEtiquettes({ids:[]})}>🏷 Étiquettes</button>
         <button type="button" onClick={()=>setImportOuvert(true)}>⬆ Importer Excel</button>
         <button type="button" onClick={exporter}>⬇ Exporter</button>
-        {!/[?&]app=stock(&|$)/.test(window.location.search)&&<button type="button" onClick={()=>setTel(true)}>📱 Sur téléphone</button>}
+        {!(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search))&&<button type="button" onClick={()=>setTel(true)}>📱 Sur téléphone</button>}
       </div>
       {voirTout&&<>
         <div className="stk-chips">

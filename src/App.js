@@ -4756,8 +4756,8 @@ const NAV_ITEMS=[
   {id:"stats",label:"📊 Stats"},
 ];
 
-// Mode "Stock seul" (lien /?app=stock, utilisé par l'icône PMV Stock du téléphone) : une seule page, sans menu.
-const MODE_STOCK=typeof window!=="undefined"&&/[?&]app=stock(&|$)/.test(window.location.search);
+// Mode "Stock seul" (adresse /stock/, utilisée par l'icône PMV Stock du téléphone) : une seule page, sans menu.
+const MODE_STOCK=typeof window!=="undefined"&&(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search));
 
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
@@ -4818,7 +4818,7 @@ export default function App(){
       <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
         <img src={LOGO_B64} alt="PMV" style={{height:30,objectFit:"contain",borderRadius:4,flexShrink:0}}/>
         <span style={{color:"#fff",fontWeight:700,fontSize:16,marginLeft:10}}>Stock</span>
-        <a href={window.location.pathname} style={{marginLeft:"auto",color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a>
+        <a href="/" style={{marginLeft:"auto",color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a>
       </div>
       <PageStock techs={techs} sessionTech={sessionTech}/>
     </div>);

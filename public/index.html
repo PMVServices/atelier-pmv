@@ -16,12 +16,16 @@
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>Atelier PMV — Fiches d'entretien</title>
     <script>
-      // Mode "Stock seul" (téléphone) : lien /?app=stock -> manifeste et nom dédiés, pour installer une icône
-      // "PMV Stock" qui ouvre directement la gestion de stock.
-      if (/[?&]app=stock(&|$)/.test(location.search)) {
+      // Mode "Stock seul" (téléphone) : adresse /stock/ -> manifeste, portée et nom dédiés, pour installer une icône
+      // "PMV Stock" distincte de l'appli complète et qui ouvre directement la gestion de stock.
+      if (/^\/stock(\/|$)/.test(location.pathname)) {
         document.querySelector('link[rel="manifest"]').setAttribute('href', '%PUBLIC_URL%/manifest-stock.json');
         document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute('content', 'PMV Stock');
         document.title = 'PMV Stock';
+        // iPhone / iPad : icône d'écran d'accueil "Stock" (logo + pastille colis)
+        Array.prototype.forEach.call(document.querySelectorAll('link[rel="apple-touch-icon"]'), function (l) {
+          l.setAttribute('href', '%PUBLIC_URL%/stock192.png');
+        });
       }
     </script>
     <style>
