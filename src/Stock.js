@@ -224,6 +224,51 @@ const CSS_STOCK=`
 .stk-scan-haut{position:absolute;top:0;left:0;right:0;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;background:linear-gradient(#000b,#0000);z-index:2}
 .stk-scan-bas{padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));background:#0B1220;display:flex;flex-direction:column;gap:10px}
 .stk-scan-bas .stk-champ{background:#fff}
+.stk-voile.haut{z-index:500}
+.stk-cam{position:relative;height:26vh;min-height:150px;max-height:260px;background:#000;border-radius:14px;overflow:hidden;flex:none}
+.stk-cam video{width:100%;height:100%;object-fit:cover;display:block}
+.stk-viseur-c{position:absolute;inset:12% 24%;border:3px solid rgba(255,255,255,.92);border-radius:14px;pointer-events:none;box-shadow:0 0 0 9999px rgba(0,0,0,.28)}
+.stk-cam-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:12px;color:#fff;font-size:14px;background:#111}
+.stk-session{position:fixed;inset:0;z-index:400;background:#F5F6F8;display:flex;flex-direction:column;color:#1A1A2E}
+.stk-session-tete{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#fff;border-bottom:1px solid #E2E6EA}
+.stk-session-tete .stk-mode{flex:1}
+.stk-mode{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stk-mode button{min-height:52px;border-radius:12px;border:2px solid #BFC8D4;background:#fff;font-weight:700;font-size:17px;cursor:pointer;padding:0 8px !important;color:#4B5563;font-family:inherit}
+.stk-mode button.on.sortie{border-color:#D73A49;background:#FFF1F2;color:#B42318}
+.stk-mode button.on.entree{border-color:#22863A;background:#E9F6EC;color:#1B6B2E}
+.stk-session-corps{flex:1;min-height:0;overflow-y:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.stk-session-pied{padding:10px 14px calc(10px + env(safe-area-inset-bottom,0px));background:#fff;border-top:1px solid #E2E6EA;display:flex;flex-direction:column;gap:8px}
+.stk-msg{border-radius:10px;padding:8px 12px;font-size:14px;font-weight:600}
+.stk-msg.ok{background:#E9F6EC;color:#1B6B2E}
+.stk-msg.err{background:#FFF1F2;color:#B42318;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.stk-lignes{display:flex;flex-direction:column;gap:8px}
+.stk-ligne{display:grid;grid-template-columns:1fr auto auto;gap:6px 10px;align-items:center;background:#fff;border:1px solid #E2E6EA;border-radius:12px;padding:10px 12px}
+.stk-ligne.flash{animation:stkflash 1s}
+@keyframes stkflash{0%{background:#C9EED3}100%{background:#fff}}
+.stk-ligne .stk-ref{font-size:17px}
+.stk-ligne.alerte{border-color:#F4B4BC;background:#FFF7F8}
+.stk-qs--s button{width:48px;height:48px;font-size:22px}
+.stk-qs--s input{width:56px;height:48px;font-size:20px !important}
+.stk-rm{width:40px;height:40px;border:0;background:transparent;color:#6B7280;font-size:18px;cursor:pointer;border-radius:10px;padding:0 !important}
+.stk-sugg{display:flex;flex-direction:column;gap:6px}
+.stk-select{min-height:46px;border:1.5px solid #BFC8D4;border-radius:10px;padding:6px 10px !important;font-size:15px !important;font-weight:700;background:#fff;font-family:inherit;color:#1A1A2E}
+.stk-duo{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 10px}
+.stk-grand{min-height:96px;border-radius:16px;border:2px solid;font-weight:700;font-size:20px;cursor:pointer;padding:10px 14px !important;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-family:inherit}
+.stk-grand small{font-size:12.5px;font-weight:600;opacity:.85}
+.stk-grand--s{border-color:#D73A49;background:#D73A49;color:#fff}
+.stk-grand--e{border-color:#22863A;background:#22863A;color:#fff}
+.stk-grand[disabled]{opacity:.45;cursor:not-allowed}
+.stk-barre{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.stk-outils{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:12px 0 4px}
+.stk-outils button{min-height:46px;border-radius:12px;border:1.5px solid #BFC8D4;background:#fff;font-weight:600;font-size:14px;cursor:pointer;padding:0 10px !important;color:#1A1A2E;font-family:inherit}
+.stk-outils button[disabled]{opacity:.5;cursor:not-allowed}
+.stk-titre{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:20px 0 8px}
+.stk-titre h3{font-size:16px;margin:0}
+.stk-reno{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;background:#fff;border:1px solid #F3D9A8;border-radius:12px;padding:10px 12px}
+.stk-reno.vide{border-color:#F4B4BC;background:#FFF7F8}
+.stk-reno .act{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.stk-ok-pill{display:inline-flex;align-items:center;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700;background:#E9F6EC;color:#1B6B2E}
+.stk-rien{background:#E9F6EC;border:1px solid #22863A;color:#1B6B2E;border-radius:12px;padding:14px;font-weight:600;text-align:center}
 .stk-liste-sel{border:1px solid #E2E6EA;border-radius:12px;max-height:260px;overflow-y:auto;padding:6px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 12px}
 .stk-liste-sel label{display:flex;align-items:center;gap:8px;min-height:40px;font-size:14px;font-family:${MONO}}
 .stk-liste-sel input{width:22px;height:22px;min-height:0 !important;padding:0 !important}
@@ -239,13 +284,13 @@ const CSS_STOCK=`
 `;
 
 // ─── Fenêtre (feuille) ───────────────────────────────────────────────────────────────────────────
-function Feuille({titre,onFermer,large,children}){
+function Feuille({titre,onFermer,large,haut,children}){
   useEffect(()=>{
     const prec=document.body.style.overflow;
     document.body.style.overflow="hidden";
     return()=>{document.body.style.overflow=prec;};
   },[]);
-  return(<div className="stk-voile" onClick={e=>{if(e.target===e.currentTarget)onFermer();}}>
+  return(<div className={"stk-voile"+(haut?" haut":"")} onClick={e=>{if(e.target===e.currentTarget)onFermer();}}>
     <div className={"stk-feuille"+(large?" stk-large":"")} role="dialog" aria-label={titre}>
       <div className="stk-feuille-tete"><h2>{titre}</h2><button type="button" className="stk-x" onClick={onFermer} aria-label="Fermer">✕</button></div>
       <div className="stk-corps">{children}</div>
@@ -256,7 +301,7 @@ function Feuille({titre,onFermer,large,children}){
 // ─── Scanner caméra ──────────────────────────────────────────────────────────────────────────────
 // Détecteur natif du navigateur (BarcodeDetector : tous formats, Chrome Android) ; à défaut jsQR (QR codes seulement).
 // Une douchette Bluetooth/USB "clavier" passe par le champ de saisie : elle tape le code puis Entrée.
-function ScanneurCode({titre,aide,onCode,onFermer}){
+function ScanneurCode({titre,aide,onCode,onFermer,continu,integre}){
   const videoRef=useRef(null);
   const codeRef=useRef(onCode);codeRef.current=onCode;
   const [etat,setEtat]=useState("demarrage"); // demarrage | actif | erreur
@@ -265,7 +310,7 @@ function ScanneurCode({titre,aide,onCode,onFermer}){
   const [texte,setTexte]=useState("");
   const [moteur,setMoteur]=useState("");
   useEffect(()=>{
-    let arrete=false,flux=null,minuterie=null,trouve=false;
+    let arrete=false,flux=null,minuterie=null,trouve=false,dernier="",dernierT=0;
     async function demarrer(){
       if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
         setErreur("La caméra n'est pas disponible ici (navigateur ou connexion non sécurisée).");setEtat("erreur");return;
@@ -310,7 +355,14 @@ function ScanneurCode({titre,aide,onCode,onFermer}){
         if(arrete)return;
         try{
           const code=await detecter();
-          if(code&&!trouve){
+          if(code&&continu){
+            // scans à la chaîne : le même code n'est pas repris avant 1,5 s
+            if(code!==dernier||Date.now()-dernierT>1500){
+              dernier=code;dernierT=Date.now();
+              if(navigator.vibrate)navigator.vibrate(60);
+              codeRef.current(code);
+            }
+          }else if(code&&!trouve){
             trouve=true;
             if(navigator.vibrate)navigator.vibrate(60);
             codeRef.current(code);
@@ -325,6 +377,13 @@ function ScanneurCode({titre,aide,onCode,onFermer}){
     return()=>{arrete=true;clearTimeout(minuterie);if(flux)flux.getTracks().forEach(t=>t.stop());};
   },[]);
   function validerSaisie(){const t=texte.trim();if(t)codeRef.current(t);}
+  if(integre){
+    return(<div className="stk-cam">
+      <video ref={videoRef} autoPlay playsInline muted/>
+      {etat==="actif"&&<div className="stk-viseur-c" aria-hidden="true"/>}
+      {etat!=="actif"&&<div className="stk-cam-msg">{etat==="erreur"?erreur:"Ouverture de la caméra…"}</div>}
+    </div>);
+  }
   return(<div className="stk-scan">
     <div className="stk-scan-haut">
       <strong style={{fontSize:16}}>{titre}</strong>
@@ -763,7 +822,7 @@ function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,on
   </Feuille>);
 }
 
-function CodeInconnu({code,articles,onFermer,onAssocie}){
+function CodeInconnu({code,articles,onFermer,onAssocie,haut}){
   const [q,setQ]=useState("");
   const [erreur,setErreur]=useState(null);
   const [occupe,setOccupe]=useState(false);
@@ -776,7 +835,7 @@ function CodeInconnu({code,articles,onFermer,onAssocie}){
     if(!r.ok){setErreur("L'association n'a pas abouti. Réessayez.");return;}
     onAssocie(a);
   }
-  return(<Feuille titre="Code inconnu" onFermer={onFermer}>
+  return(<Feuille titre="Code inconnu" haut={haut} onFermer={onFermer}>
     <div className="stk-info">Le code <strong style={{fontFamily:MONO}}>{code}</strong> n'est associé à aucun article.</div>
     <p className="stk-aide">Si c'est le code imprimé par le fabricant sur la boîte, associez-le à un article : la prochaine fois, il sera reconnu tout seul.</p>
     <input className="stk-champ" value={q} onChange={e=>setQ(e.target.value)} placeholder="Rechercher l'article (ex. 6205)" autoComplete="off"/>
@@ -785,62 +844,192 @@ function CodeInconnu({code,articles,onFermer,onAssocie}){
   </Feuille>);
 }
 
-// ─── Page Stock ──────────────────────────────────────────────────────────────────────────────────
+// ─── Session de scan : sortie ou entrée de plusieurs articles d'un coup ──────────────────────────
+function bip(){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+    const c=bip.c||(bip.c=new C());
+    const o=c.createOscillator(),g=c.createGain();
+    o.frequency.value=1040;g.gain.value=0.08;o.connect(g);g.connect(c.destination);
+    o.start();o.stop(c.currentTime+0.09);
+  }catch(e){/* son facultatif */}
+}
+
+// Un scan = une ligne (ou +1 si l'article est déjà dans la liste). Opérateur, mode et chantier sont réglés
+// une seule fois ; un seul bouton valide tous les mouvements d'un coup.
+function SessionScan({mode:modeInit,articles,techs,qui,setQui,onFermer,onChange,afficherToast}){
+  const liste=(techs||[]).filter(t=>t!=="Autre");
+  const [mode,setMode]=useState(modeInit);
+  const [lignes,setLignes]=useState([]); // [{article_id,qte,t}]
+  const [chantier,setChantier]=useState("");
+  const [saisie,setSaisie]=useState("");
+  const [inconnu,setInconnu]=useState(null);
+  const [message,setMessage]=useState(null);
+  const [envoi,setEnvoi]=useState({enCours:false,erreur:null});
+  const [quitter,setQuitter]=useState(false);
+  const articlesRef=useRef(articles);articlesRef.current=articles;
+  const ajouter=useCallback(a=>{
+    setLignes(ls=>{
+      const i=ls.findIndex(l=>l.article_id===a.id);
+      if(i>=0)return [{...ls[i],qte:ls[i].qte+1,t:Date.now()}].concat(ls.filter((_,k)=>k!==i));
+      return [{article_id:a.id,qte:1,t:Date.now()}].concat(ls);
+    });
+    setMessage({texte:"✓ "+a.reference,type:"ok"});
+    setEnvoi(e=>e.erreur?{enCours:false,erreur:null}:e);
+    bip();
+  },[]);
+  const traiter=useCallback(async brut=>{
+    const code=String(brut||"").trim();
+    if(!code)return;
+    let a=articlesRef.current.find(x=>cle(x.reference)===cle(code));
+    if(!a){
+      const r=await appel("GET","stock_codes?code=eq."+encodeURIComponent(code)+"&select=article_id");
+      if(r.ok&&Array.isArray(r.data)&&r.data[0])a=articlesRef.current.find(x=>x.id===r.data[0].article_id);
+    }
+    if(a)ajouter(a);
+    else{setInconnu(code);setMessage({texte:"Code inconnu : "+code,type:"err",code});}
+  },[ajouter]);
+  const qc=cle(saisie);
+  const sugg=qc?articles.filter(a=>cle(a.reference).includes(qc)||cle(a.dimensions).includes(qc)).slice(0,5):[];
+  function entrerSaisie(){
+    const exact=articles.find(a=>cle(a.reference)===qc);
+    if(exact){ajouter(exact);setSaisie("");}
+    else if(sugg.length===1){ajouter(sugg[0]);setSaisie("");}
+    else if(qc)traiter(saisie);
+  }
+  const majQte=(id,d)=>setLignes(ls=>ls.map(l=>l.article_id===id?{...l,qte:Math.max(1,l.qte+d)}:l));
+  const retirer=id=>setLignes(ls=>ls.filter(l=>l.article_id!==id));
+  const nbPieces=lignes.reduce((s,l)=>s+l.qte,0);
+  const parId=id=>articles.find(a=>a.id===id);
+  async function valider(){
+    if(!lignes.length||!qui||envoi.enCours)return;
+    setEnvoi({enCours:true,erreur:null});
+    const ch=mode==="sortie"?(normChantier(chantier)||null):null;
+    const corps=lignes.map(l=>({article_id:l.article_id,type:mode,delta:mode==="sortie"?-l.qte:l.qte,chantier:ch,utilisateur:qui}));
+    const r=await appel("POST","stock_mouvements",corps,"return=minimal");
+    if(!r.ok){setEnvoi({enCours:false,erreur:"L'enregistrement n'a pas abouti (connexion ?). Rien n'a été modifié : réessayez."});return;}
+    await onChange();
+    afficherToast("✓ "+(mode==="sortie"?"Sortie":"Entrée")+" enregistrée : "+lignes.length+" référence"+(lignes.length>1?"s":"")+", "+nbPieces+" pièce"+(nbPieces>1?"s":""));
+    setLignes([]);setChantier("");setMessage(null);setEnvoi({enCours:false,erreur:null});
+  }
+  function fermer(){if(lignes.length&&!quitter){setQuitter(true);return;}onFermer();}
+  return(<div className="stk-session">
+    <div className="stk-session-tete">
+      <div className="stk-mode" role="group" aria-label="Type de mouvement">
+        {[["sortie","📤 Sortie"],["entree","📥 Entrée"]].map(([m,l])=><button type="button" key={m} className={mode===m?"on "+m:""} aria-pressed={mode===m} onClick={()=>setMode(m)}>{l}</button>)}
+      </div>
+      <button type="button" className="stk-x" onClick={fermer} aria-label="Fermer">✕</button>
+    </div>
+    <div className="stk-session-corps">
+      {quitter&&<div className="stk-alerte" style={{display:"flex",gap:10,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}><span>{lignes.length} ligne{lignes.length>1?"s":""} pas encore validée{lignes.length>1?"s":""} seront perdues.</span><span style={{display:"flex",gap:8}}><button type="button" className="stk-btn stk-btn--s" onClick={()=>setQuitter(false)}>Continuer</button><button type="button" className="stk-btn stk-btn--s stk-btn--r" onClick={onFermer}>Abandonner</button></span></div>}
+      <ScanneurCode integre continu onCode={traiter}/>
+      {message&&<div className={"stk-msg "+message.type}><span>{message.texte}</span>{message.type==="err"&&<button type="button" className="stk-btn stk-btn--s" onClick={()=>setInconnu(message.code)}>Associer ce code</button>}</div>}
+      <div>
+        <input className="stk-champ" value={saisie} onChange={e=>setSaisie(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")entrerSaisie();}} placeholder="⌨ Ajouter à la main : référence (ou douchette)" autoComplete="off"/>
+        {sugg.length>0&&<div className="stk-sugg" style={{marginTop:6}}>{sugg.map(a=><button type="button" key={a.id} className="stk-carte" onClick={()=>{ajouter(a);setSaisie("");}}><div><div className="stk-ref">{a.reference}</div><div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div></div><div className="stk-sub">Ajouter</div></button>)}</div>}
+      </div>
+      {mode==="sortie"&&<input className="stk-champ" value={chantier} onChange={e=>setChantier(e.target.value)} onBlur={()=>setChantier(c=>normChantier(c))} placeholder="N° de chantier — facultatif (7945 devient DE7945)" autoComplete="off"/>}
+      {lignes.length===0
+        ?<p className="stk-aide" style={{textAlign:"center",padding:"14px 0"}}>Scannez une étiquette : chaque scan ajoute l'article à la liste (un 2e scan ajoute 1 pièce). Réglez les quantités puis validez.</p>
+        :<div className="stk-lignes">{lignes.map(l=>{
+          const a=parId(l.article_id);if(!a)return null;
+          const st=a.quantite||0,apres=mode==="sortie"?st-l.qte:st+l.qte;
+          return(<div key={l.article_id+"_"+l.t} className={"stk-ligne flash"+(mode==="sortie"&&apres<0?" alerte":"")}>
+            <div style={{minWidth:0}}>
+              <div className="stk-ref">{a.reference}</div>
+              <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
+              <div className="stk-sub" style={apres<0?{color:"#B42318",fontWeight:700}:undefined}>Stock {st} → <b>{apres}</b>{apres<0?" (insuffisant)":""}</div>
+            </div>
+            <div className="stk-qs stk-qs--s"><button type="button" onClick={()=>majQte(a.id,-1)} aria-label="Diminuer">−</button><input type="text" inputMode="numeric" value={l.qte} onChange={e=>{const n=parseInt(e.target.value.replace(/\D/g,""),10);setLignes(ls=>ls.map(x=>x.article_id===a.id?{...x,qte:isNaN(n)||n<1?1:n}:x));}} aria-label={"Quantité "+a.reference}/><button type="button" onClick={()=>majQte(a.id,1)} aria-label="Augmenter">+</button></div>
+            <button type="button" className="stk-rm" onClick={()=>retirer(a.id)} aria-label={"Retirer "+a.reference}>✕</button>
+          </div>);
+        })}</div>}
+    </div>
+    <div className="stk-session-pied">
+      {envoi.erreur&&<div className="stk-alerte">{envoi.erreur}</div>}
+      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        <select className="stk-select" value={qui||""} onChange={e=>setQui(e.target.value||null)} aria-label="Opérateur"><option value="">Qui ?</option>{liste.map(t=><option key={t} value={t}>{t}</option>)}</select>
+        <button type="button" className={"stk-btn "+(mode==="sortie"?"stk-btn--r":"stk-btn--v")} style={{flex:1}} disabled={!lignes.length||!qui||envoi.enCours} onClick={valider}>
+          {envoi.enCours?"Enregistrement…":lignes.length?"Valider la "+(mode==="sortie"?"sortie":"entrée")+" — "+nbPieces+" pièce"+(nbPieces>1?"s":""):"Rien à valider"}
+        </button>
+      </div>
+      {lignes.length>0&&!qui&&<p className="stk-aide">Choisissez l'opérateur pour pouvoir valider.</p>}
+    </div>
+    {inconnu&&<CodeInconnu haut code={inconnu} articles={articles} onFermer={()=>setInconnu(null)} onAssocie={a=>{setInconnu(null);ajouter(a);}}/>}
+  </div>);
+}
+
+// ─── Page Stock : tout part du scan ; l'écran d'accueil montre ce qui est à renouveler ───────────
 export default function PageStock({techs,sessionTech}){
   const {articles,disponible,recharger}=useStock();
+  const liste=(techs||[]).filter(t=>t!=="Autre");
+  const [qui,setQuiEtat]=useState(()=>{
+    let v=null;try{v=localStorage.getItem("pmv_stock_qui");}catch(e){}
+    return v&&liste.includes(v)?v:(liste.includes(sessionTech)?sessionTech:null);
+  });
+  const setQui=v=>{setQuiEtat(v);try{if(v)localStorage.setItem("pmv_stock_qui",v);else localStorage.removeItem("pmv_stock_qui");}catch(e){}};
   const [recherche,setRecherche]=useState("");
+  const [voirTout,setVoirTout]=useState(false);
   const [serie,setSerie]=useState("toutes");
-  const [filtre,setFiltre]=useState("tous");
   const [ficheId,setFicheId]=useState(null);
-  const [depuisScan,setDepuisScan]=useState(false);
-  const [scan,setScan]=useState(null); // null | {mode:"mouvement"} | {mode:"associer",article}
-  const [inconnu,setInconnu]=useState(null);
+  const [session,setSession]=useState(null); // null | "sortie" | "entree"
+  const [assoc,setAssoc]=useState(null); // article dont on associe un code fabricant
   const [importOuvert,setImportOuvert]=useState(false);
-  const [etiquettes,setEtiquettes]=useState(null); // null | {ids:[...]}
+  const [etiquettes,setEtiquettes]=useState(null);
+  const [recents,setRecents]=useState([]);
+  const [demandes,setDemandes]=useState(()=>new Set());
+  const [cmdEnCours,setCmdEnCours]=useState(false);
   const [toast,setToast]=useState(null);
   const toastRef=useRef(null);
   const afficherToast=useCallback(t=>{setToast(t);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(null),4200);},[]);
   useEffect(()=>()=>clearTimeout(toastRef.current),[]);
+  const chargerRecents=useCallback(async()=>{
+    const r=await appel("GET","stock_mouvements?select=*&order=created_at.desc&limit=12");
+    if(r.ok&&Array.isArray(r.data))setRecents(r.data);
+  },[]);
+  const chargerDemandes=useCallback(async()=>{
+    const r=await appel("GET","demandes_materiel?statut=eq.a_commander&select=designation&limit=1000");
+    if(r.ok&&Array.isArray(r.data))setDemandes(new Set(r.data.map(d=>cle(d.designation))));
+  },[]);
+  useEffect(()=>{if(disponible){chargerRecents();chargerDemandes();}},[disponible,chargerRecents,chargerDemandes]);
+  const apresMouvement=useCallback(async()=>{await recharger();chargerRecents();},[recharger,chargerRecents]);
 
   const article=ficheId?articles.find(a=>a.id===ficheId):null;
+  const parId=id=>articles.find(a=>a.id===id);
   const series=[...new Set(articles.map(a=>serieDe(a.reference)))].sort();
   const q=cle(recherche);
-  const visibles=articles.filter(a=>
-    (serie==="toutes"||serieDe(a.reference)===serie)
-    &&(filtre==="tous"||(filtre==="reco"&&aRecommander(a))||(filtre==="rupture"&&(a.quantite||0)<=0))
-    &&(!q||cle(a.reference).includes(q)||cle(a.dimensions).includes(q)||cle(a.emplacement).includes(q)));
-  const nbReco=articles.filter(aRecommander).length;
+  const trouves=q?articles.filter(a=>cle(a.reference).includes(q)||cle(a.dimensions).includes(q)||cle(a.emplacement).includes(q)).slice(0,20):[];
+  const catalogue=articles.filter(a=>serie==="toutes"||serieDe(a.reference)===serie);
+  const reco=articles.filter(aRecommander).sort((a,b)=>{
+    const va=(a.quantite||0)<=0?0:1,vb=(b.quantite||0)<=0?0:1;
+    return va-vb||((a.quantite||0)/(a.stock_mini||1))-((b.quantite||0)/(b.stock_mini||1))||triRef(a,b);
+  });
+  const aDemander=reco.filter(a=>!demandes.has(cle(a.reference)));
   const nbRupture=articles.filter(a=>(a.quantite||0)<=0).length;
   const valeur=articles.reduce((s,a)=>s+Math.max(0,a.quantite||0)*(a.prix_unitaire||0),0);
 
-  async function traiterCode(brut){
+  async function envoyerDemandes(arts){
+    if(!arts.length||cmdEnCours)return;
+    if(!qui){afficherToast("Choisissez d'abord l'opérateur (en haut de la page)");return;}
+    setCmdEnCours(true);
+    const id="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    const base=Date.now();
+    const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:"Roulements",designation:a.reference,quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+(a.quantite||0)+" / mini "+(a.stock_mini==null?0:a.stock_mini)+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
+    const r=await appel("POST","demandes_materiel",rows,"return=minimal");
+    setCmdEnCours(false);
+    if(!r.ok){afficherToast("La demande n'a pas abouti (connexion, ou « Matériel à commander » pas encore activé)");return;}
+    setDemandes(prev=>{const n=new Set(prev);arts.forEach(a=>n.add(cle(a.reference)));return n;});
+    afficherToast("✓ "+arts.length+" référence"+(arts.length>1?"s":"")+" ajoutée"+(arts.length>1?"s":"")+" à Matériel à commander (à renouveler)");
+  }
+  async function traiterAssociation(brut){
     const code=String(brut||"").trim();
-    if(!code)return;
-    const mode=scan&&scan.mode;
-    const cible=scan&&scan.article;
-    // 1. référence exacte (étiquettes de l'appli)  2. code fabricant déjà associé
-    let a=articles.find(x=>cle(x.reference)===cle(code));
-    if(!a){
-      const r=await appel("GET","stock_codes?code=eq."+encodeURIComponent(code)+"&select=article_id");
-      if(r.ok&&Array.isArray(r.data)&&r.data[0])a=articles.find(x=>x.id===r.data[0].article_id);
-    }
-    if(mode==="associer"&&cible){
-      setScan(null);
-      const r=await appel("POST","stock_codes?on_conflict=code",{code,article_id:cible.id},"resolution=merge-duplicates,return=representation");
-      afficherToast(r.ok?"✓ Code "+code+" associé à "+cible.reference:"L'association n'a pas abouti");
-      setFicheId(cible.id);setDepuisScan(false);
-      return;
-    }
-    setScan(null);
-    if(a){setDepuisScan(true);setFicheId(a.id);}
-    else setInconnu(code);
+    const cible=assoc;
+    setAssoc(null);
+    if(!code||!cible)return;
+    const r=await appel("POST","stock_codes?on_conflict=code",{code,article_id:cible.id},"resolution=merge-duplicates,return=representation");
+    afficherToast(r.ok?"✓ Code "+code+" associé à "+cible.reference:"L'association n'a pas abouti");
+    setFicheId(cible.id);
   }
-  function terminerScan(message){
-    setFicheId(null);setDepuisScan(false);
-    afficherToast(message);
-    setScan({mode:"mouvement"}); // enchaîne : on peut scanner l'article suivant
-  }
-  function ouvrirFiche(a){setDepuisScan(false);setFicheId(a.id);}
   async function exporter(){
     try{
       const XLSX=await import("xlsx");
@@ -853,6 +1042,16 @@ export default function PageStock({techs,sessionTech}){
       telechargerFichier(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),"stock_"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+".xlsx");
     }catch(e){afficherToast("Export impossible");}
   }
+  const carte=a=>{
+    const st=a.quantite||0,r=aRecommander(a),etat=st<=0?"vide":r?"bas":"";
+    return(<button type="button" key={a.id} className={"stk-carte "+etat} onClick={()=>{setRecherche("");setFicheId(a.id);}}>
+      <div style={{minWidth:0}}>
+        <div><span className="stk-ref">{a.reference}</span>{r&&st>0&&<span className="stk-badge">À renouveler</span>}{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
+        <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
+      </div>
+      <div className={"stk-qte "+etat}>{st}<small>{a.stock_mini!=null?"mini "+a.stock_mini+(a.stock_maxi!=null?" · maxi "+a.stock_maxi:""):"en stock"}</small></div>
+    </button>);
+  };
 
   if(disponible===false){
     return(<div className="stk"><style>{CSS_STOCK}</style>
@@ -861,46 +1060,63 @@ export default function PageStock({techs,sessionTech}){
     </div>);
   }
   return(<div className="stk"><style>{CSS_STOCK}</style>
-    <div className="stk-tete"><h2>🗃 Stock — roulements</h2><p className="stk-sous">Le catalogue vient d'Excel ; les quantités se suivent ici.</p></div>
-    <div className="stk-actions">
-      <button type="button" className="stk-big stk-big--p" onClick={()=>setScan({mode:"mouvement"})} disabled={!articles.length}>📷 Scanner</button>
-      <button type="button" className="stk-big" onClick={()=>setEtiquettes({ids:[]})} disabled={!articles.length}>🏷 Étiquettes</button>
-      <button type="button" className="stk-big" onClick={()=>setImportOuvert(true)}>⬆ Importer Excel</button>
-      <button type="button" className="stk-big" onClick={exporter} disabled={!articles.length}>⬇ Exporter</button>
+    <div className="stk-barre">
+      <div className="stk-tete"><h2>🗃 Stock — roulements</h2><p className="stk-sous">Scannez, le reste suit. Le catalogue vient d'Excel.</p></div>
+      <select className="stk-select" value={qui||""} onChange={e=>setQui(e.target.value||null)} aria-label="Opérateur"><option value="">Opérateur ?</option>{liste.map(t=><option key={t} value={t}>{t}</option>)}</select>
     </div>
     {disponible===null&&<p className="stk-aide">Chargement…</p>}
+    <div className="stk-duo">
+      <button type="button" className="stk-grand stk-grand--s" disabled={!articles.length} onClick={()=>setSession("sortie")}>📤 Sortie<small>scanner ce qu'on prend</small></button>
+      <button type="button" className="stk-grand stk-grand--e" disabled={!articles.length} onClick={()=>setSession("entree")}>📥 Entrée<small>scanner ce qui arrive</small></button>
+    </div>
     {disponible===true&&articles.length===0&&<div className="stk-vide">
       <div><strong>Aucun article pour le moment.</strong><br/>Importez la feuille des roulements de votre fichier Excel pour démarrer.</div>
       <button type="button" className="stk-btn stk-btn--p" onClick={()=>setImportOuvert(true)}>⬆ Importer depuis Excel</button>
     </div>}
     {articles.length>0&&<>
-      <p className="stk-resume"><span><b>{articles.length}</b> références</span><span><b>{nbReco}</b> à recommander</span><span><b>{nbRupture}</b> en rupture</span><span>Valeur du stock <b>{fmtEuro(valeur)}</b></span></p>
-      <input className="stk-champ" value={recherche} onChange={e=>setRecherche(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){const a=articles.find(x=>cle(x.reference)===cle(recherche));if(a){setRecherche("");ouvrirFiche(a);}}}} placeholder="🔍 Référence, dimensions, emplacement (ou scanner avec une douchette)" autoComplete="off"/>
-      <div className="stk-chips">
-        <button type="button" className={"stk-chip"+(serie==="toutes"?" on":"")} onClick={()=>setSerie("toutes")}>Toutes</button>
-        {series.map(s=><button type="button" key={s} className={"stk-chip"+(serie===s?" on":"")} onClick={()=>setSerie(s)}>{s}</button>)}
-        <span style={{width:8}}/>
-        {[["tous","Tous"],["reco","À recommander ("+nbReco+")"],["rupture","Rupture ("+nbRupture+")"]].map(([id,l])=><button type="button" key={id} className={"stk-chip"+(filtre===id?" on":"")} onClick={()=>setFiltre(id)}>{l}</button>)}
+      <input className="stk-champ" value={recherche} onChange={e=>setRecherche(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){const a=articles.find(x=>cle(x.reference)===cle(recherche))||(trouves.length===1?trouves[0]:null);if(a){setRecherche("");setFicheId(a.id);}}}} placeholder="🔍 Chercher une référence, des dimensions…" autoComplete="off"/>
+      {q&&<div className="stk-liste">{trouves.length===0?<div className="stk-vide">Aucune référence ne correspond.</div>:trouves.map(carte)}</div>}
+      <p className="stk-resume" style={{marginTop:12}}><span><b>{articles.length}</b> références</span><span><b>{nbRupture}</b> en rupture</span><span>Valeur du stock <b>{fmtEuro(valeur)}</b></span></p>
+
+      <div className="stk-titre"><h3>🔔 À renouveler ({reco.length})</h3>
+        {aDemander.length>0&&<button type="button" className="stk-btn stk-btn--s stk-btn--p" disabled={cmdEnCours} onClick={()=>envoyerDemandes(aDemander)}>{cmdEnCours?"Envoi…":"Tout demander ("+aDemander.length+")"}</button>}
       </div>
-      <div className="stk-liste">
-        {visibles.length===0&&<div className="stk-vide">Aucune référence ne correspond.</div>}
-        {visibles.map(a=>{
-          const st=a.quantite||0,reco=aRecommander(a),etat=st<=0?"vide":reco?"bas":"";
-          return(<button type="button" key={a.id} className={"stk-carte "+etat} onClick={()=>ouvrirFiche(a)}>
-            <div style={{minWidth:0}}>
-              <div><span className="stk-ref">{a.reference}</span>{reco&&st>0&&<span className="stk-badge">À recommander</span>}{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
+      {reco.length===0?<div className="stk-rien">✓ Rien à renouveler : tous les stocks sont au-dessus du minimum.</div>
+        :<div className="stk-liste" style={{marginTop:0}}>{reco.map(a=>{
+          const st=a.quantite||0,dem=demandes.has(cle(a.reference));
+          return(<div key={a.id} className={"stk-reno"+(st<=0?" vide":"")}>
+            <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>setFicheId(a.id)}>
+              <div><span className="stk-ref">{a.reference}</span>{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
               <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
+              <div className="stk-sub">Stock <b>{st}</b> · mini {a.stock_mini==null?"—":a.stock_mini}{a.stock_maxi!=null?" · maxi "+a.stock_maxi:""} · à commander <b>{qteARecommander(a)}</b></div>
             </div>
-            <div className={"stk-qte "+etat}>{st}<small>{a.stock_mini!=null?"mini "+a.stock_mini+(a.stock_maxi!=null?" · maxi "+a.stock_maxi:""):"en stock"}</small></div>
-          </button>);
-        })}
+            <div className="act">{dem?<span className="stk-ok-pill">✓ Demandé</span>:<button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} onClick={()=>envoyerDemandes([a])}>Demander</button>}</div>
+          </div>);
+        })}</div>}
+
+      <div className="stk-titre"><h3>🕘 Derniers mouvements</h3></div>
+      {recents.length===0?<p className="stk-aide">Aucun mouvement pour le moment.</p>
+        :<div className="stk-histo" style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:12,padding:"2px 12px"}}>{recents.map(m=>{const a=parId(m.article_id);return(<div key={m.id}><span className="d">{fmtDate(m.created_at)}</span><span className={"q "+(m.delta<0?"neg":"pos")}>{m.delta>0?"+":""}{m.delta}</span><span><b style={{fontFamily:MONO}}>{a?a.reference:"?"}</b> · {TYPES_MVT[m.type]||m.type}{m.chantier?" · "+m.chantier:""}{m.utilisateur?" · "+m.utilisateur:""}</span></div>);})}</div>}
+
+      <div className="stk-outils">
+        <button type="button" onClick={()=>setVoirTout(v=>!v)}>{voirTout?"▲ Masquer le catalogue":"📋 Catalogue ("+articles.length+")"}</button>
+        <button type="button" onClick={()=>setEtiquettes({ids:[]})}>🏷 Étiquettes</button>
+        <button type="button" onClick={()=>setImportOuvert(true)}>⬆ Importer Excel</button>
+        <button type="button" onClick={exporter}>⬇ Exporter</button>
       </div>
+      {voirTout&&<>
+        <div className="stk-chips">
+          <button type="button" className={"stk-chip"+(serie==="toutes"?" on":"")} onClick={()=>setSerie("toutes")}>Toutes</button>
+          {series.map(s=><button type="button" key={s} className={"stk-chip"+(serie===s?" on":"")} onClick={()=>setSerie(s)}>{s}</button>)}
+        </div>
+        <div className="stk-liste">{catalogue.map(carte)}</div>
+      </>}
     </>}
 
-    {article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={sessionTech} depuisScan={depuisScan} onFermer={()=>{setFicheId(null);setDepuisScan(false);}} onChange={recharger} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setScan({mode:"associer",article:a});}} onTermineScan={terminerScan}/>}
-    {scan&&<ScanneurCode titre={scan.mode==="associer"?"Associer un code à "+scan.article.reference:"Scanner une étiquette"} aide={scan.mode==="associer"?"Scannez le code imprimé sur la boîte du fabricant.":undefined} onCode={traiterCode} onFermer={()=>setScan(null)}/>}
-    {inconnu&&<CodeInconnu code={inconnu} articles={articles} onFermer={()=>setInconnu(null)} onAssocie={a=>{setInconnu(null);afficherToast("✓ Code associé à "+a.reference);ouvrirFiche(a);}}/>}
-    {importOuvert&&<ImportExcel articles={articles} onFermer={()=>setImportOuvert(false)} onTermine={recharger}/>}
+    {session&&<SessionScan mode={session} articles={articles} techs={techs} qui={qui} setQui={setQui} onFermer={()=>setSession(null)} onChange={apresMouvement} afficherToast={afficherToast}/>}
+    {article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={qui} depuisScan={false} onFermer={()=>setFicheId(null)} onChange={apresMouvement} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setAssoc(a);}} onTermineScan={()=>{}}/>}
+    {assoc&&<ScanneurCode titre={"Associer un code à "+assoc.reference} aide="Scannez le code imprimé sur la boîte du fabricant." onCode={traiterAssociation} onFermer={()=>setAssoc(null)}/>}
+    {importOuvert&&<ImportExcel articles={articles} onFermer={()=>setImportOuvert(false)} onTermine={apresMouvement}/>}
     {etiquettes&&<Etiquettes articles={articles} idsInitiaux={etiquettes.ids} onFermer={()=>setEtiquettes(null)}/>}
     {toast&&<div className="stk-toast" role="status">{toast}</div>}
   </div>);
