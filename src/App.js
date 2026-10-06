@@ -1657,10 +1657,14 @@ function PageDashboard({fiches,pieces,commandesResume,onOuvrirFiche,onNaviguer})
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 16px"}}>🏠 Tableau de bord</h2>
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(130px,1fr))",gap:10,marginBottom:20}}>
-      {NAV_ITEMS.filter(n=>n.id!=="dashboard").map(n=>(
-        <button key={n.id} onClick={()=>onNaviguer(n.id)} style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:10,padding:"16px 10px",fontSize:13,fontWeight:600,cursor:"pointer",textAlign:"center",boxShadow:"0 1px 2px rgba(0,0,0,0.04)"}}>{n.label}</button>
-      ))}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:14,marginBottom:24}}>
+      {NAV_ITEMS.filter(n=>n.id!=="dashboard").map(n=>{
+        const sep=n.label.indexOf(" ");const icone=n.label.slice(0,sep);const texte=n.label.slice(sep+1);
+        return(<button key={n.id} onClick={()=>onNaviguer(n.id)} style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:14,padding:"24px 12px",minHeight:118,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",boxShadow:"0 2px 6px rgba(0,0,0,0.06)"}}>
+          <span style={{fontSize:38,lineHeight:1}}>{icone}</span>
+          <span style={{fontSize:16,fontWeight:700,color:"#1A1A2E"}}>{texte}</span>
+        </button>);
+      })}
     </div>
 
     {rienASignaler&&<div style={{textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
@@ -4053,7 +4057,7 @@ const NAV_ITEMS=[
 
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
-  const [page,setPage]=useState(()=>loadDraft()?"fiche":"accueil");const [sessionTech,setSessionTech]=useState(()=>loadDraft()?.sessionTech||null);const [ficheOuverte,setFicheOuverte]=useState(()=>{const d=loadDraft();return d?{id:d.ficheId,de:d.v?.de,client:d.v?.client,materiel_lieu:d.v?.materiel_lieu,type_materiel:d.typeMateriel,statut_chantier:d.statutChantier,etape_active:d.actif,etapes_validees:d.validees}:null;});const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState(()=>loadDraft()?.typeMateriel||"Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);const [rapportFicheId,setRapportFicheId]=useState(null);const [seedValeurs,setSeedValeurs]=useState(null);
+  const [page,setPage]=useState(()=>loadDraft()?"fiche":"dashboard");const [sessionTech,setSessionTech]=useState(()=>loadDraft()?.sessionTech||null);const [ficheOuverte,setFicheOuverte]=useState(()=>{const d=loadDraft();return d?{id:d.ficheId,de:d.v?.de,client:d.v?.client,materiel_lieu:d.v?.materiel_lieu,type_materiel:d.typeMateriel,statut_chantier:d.statutChantier,etape_active:d.actif,etapes_validees:d.validees}:null;});const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState(()=>loadDraft()?.typeMateriel||"Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);const [rapportFicheId,setRapportFicheId]=useState(null);const [seedValeurs,setSeedValeurs]=useState(null);
 
   useEffect(()=>{
     db.get("techniciens","?actif=eq.true&order=initiales").then(d=>{if(Array.isArray(d)&&d.length>0)setTechs(d.map(t=>t.initiales));}).catch(()=>{});
@@ -4104,7 +4108,7 @@ export default function App(){
     {/* ── HEADER ── */}
     <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
       {/* Logo */}
-      <img src={LOGO_B64} alt="PMV" style={{height:isMobile?30:40,objectFit:"contain",borderRadius:4,cursor:"pointer",flexShrink:0}} onClick={()=>{setPage("accueil");setMenuOuvert(false);}}/>
+      <img src={LOGO_B64} alt="PMV" style={{height:isMobile?30:40,objectFit:"contain",borderRadius:4,cursor:"pointer",flexShrink:0}} onClick={()=>{setPage("dashboard");setMenuOuvert(false);}}/>
 
       {/* Onglets — masqués sur mobile */}
       {!isMobile&&<div style={{display:"flex",alignItems:"center",gap:4,flex:1,justifyContent:"center"}}>
