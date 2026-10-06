@@ -90,6 +90,8 @@ const serieDe=ref=>{
 const familleDe=ref=>/^\d/.test(String(ref||"").trim())?"Roulements":"Garniture";
 // Libellé utilisé dans Matériel à commander (même style que l'assistant : "GM CNK 12")
 const designationDemande=a=>familleDe(a.reference)==="Garniture"?"GM "+a.reference:a.reference;
+// Seuils lisibles : "stock voulu 4" quand mini = maxi (garniture), sinon "mini 2 · maxi 4"
+const libSeuils=a=>a.stock_mini==null?(a.stock_maxi!=null?"maxi "+a.stock_maxi:""):(a.stock_mini===a.stock_maxi?"stock voulu "+a.stock_mini:"mini "+a.stock_mini+(a.stock_maxi!=null?" · maxi "+a.stock_maxi:""));
 const FAMILLES=["Roulements","Garniture"];
 const LIB_FAMILLE={Roulements:"Roulements",Garniture:"Garniture mécanique"};
 // [[famille, articles], …] dans l'ordre des familles, sans les familles vides
@@ -615,7 +617,8 @@ function analyserFeuille(XLSX,wb,nom){
   const col=p=>ent.findIndex(p);
   const C={ref:col(h=>h==="reference"),mini:col(h=>h.startsWith("stock min")||h.startsWith("stock voulu boite")),maxi:col(h=>h.startsWith("stock max")),voulE:col(h=>h.startsWith("stock voulu etag")),reelB:col(h=>h.startsWith("stock boite")),reelE:col(h=>h.startsWith("stock reel")),empl:col(h=>h.startsWith("emplacement")),dim:col(h=>h.startsWith("dimension")||h.startsWith("diametre")),stock:col(h=>h==="stock"),prix:col(h=>h==="prix unitaire"),f1:col(h=>h==="fournisseur 1"),f2:col(h=>h==="fournisseur 2"),f3:col(h=>h==="fournisseur 3")};
   const cell=(r,i)=>i>=0?r[i]:null;
-  // Feuille à deux stocks (garniture mécanique) : stock = boîte + étagère ; mini = stock voulu boîte ; maxi = voulu boîte + voulu étagère.
+  // Feuille à deux stocks (garniture mécanique) : stock = boîte + étagère ; pas de mini : le "stock voulu" (boîte + étagère) est
+  // le stock à avoir, donc mini = maxi = voulu (la référence est "à renouveler" dès qu'elle passe en dessous).
   const deuxStocks=C.voulE>=0||C.reelB>=0||C.reelE>=0;
   const lignes=[];let ignorees=0,arretLigne=null;
   for(let i=hi+1;i<rows.length;i++){
@@ -628,7 +631,8 @@ function analyserFeuille(XLSX,wb,nom){
     if(deuxStocks){
       const rb=entier(cell(r,C.reelB)),re=entier(cell(r,C.reelE)),ve=entier(cell(r,C.voulE));
       stock=(rb==null&&re==null)?null:(rb||0)+(re||0);
-      maxi=(mini==null&&ve==null)?null:(mini||0)+(ve||0);
+      const voulu=(mini==null&&ve==null)?null:(mini||0)+(ve||0);
+      mini=voulu;maxi=voulu;
     }
     const l={ligne:numLigne,reference,dimensions:dimNorm(cell(r,C.dim))||null,emplacement:txt(cell(r,C.empl))||null,stock_mini:mini,stock_maxi:maxi,prix_unitaire:nombre(cell(r,C.prix)),fournisseur1:txt(cell(r,C.f1))||null,fournisseur2:txt(cell(r,C.f2))||null,fournisseur3:txt(cell(r,C.f3))||null,stock};
     const autres=[l.dimensions,l.emplacement,l.stock_mini,l.stock_maxi,l.prix_unitaire,l.stock].some(v=>v!=null&&v!=="");
@@ -761,7 +765,7 @@ function ImportExcel({articles,onFermer,onTermine}){
         {lignes.length>0&&<div style={{overflowX:"auto"}}><table className="stk-table"><thead><tr><th>Référence</th><th>Dimensions</th><th>Empl.</th><th>Mini</th><th>Maxi</th><th>Stock Excel</th><th>Prix</th></tr></thead><tbody>
           {lignes.slice(0,6).map(l=><tr key={l.reference}><td>{l.reference}</td><td>{l.dimensions||""}</td><td>{l.emplacement||""}</td><td>{l.stock_mini==null?"":l.stock_mini}</td><td>{l.stock_maxi==null?"":l.stock_maxi}</td><td>{l.stock==null?"":l.stock}</td><td>{fmtEuro(l.prix_unitaire)}</td></tr>)}
         </tbody></table>{lignes.length>6&&<p className="stk-aide" style={{marginTop:6}}>… et {lignes.length-6} autre{lignes.length-6>1?"s":""}.</p>}</div>}
-        {lecture.deuxStocks&&<p className="stk-aide">Feuille à deux stocks : le <strong>stock</strong> importé est « boîte + étagère » ; le <strong>mini</strong> est le « stock voulu boîte » ; le <strong>maxi</strong> est « voulu boîte + voulu étagère ».</p>}
+        {lecture.deuxStocks&&<p className="stk-aide">Feuille à deux stocks : le <strong>stock</strong> importé est « boîte + étagère » ; le <strong>stock voulu</strong> (voulu boîte + voulu étagère) est le stock à avoir : une référence est « à renouveler » dès qu'elle passe en dessous.</p>}
         <label style={{display:"flex",alignItems:"flex-start",gap:10,fontSize:14}}><input type="checkbox" checked={partirMax} onChange={e=>setPartirMax(e.target.checked)} style={{width:22,height:22,minHeight:0,padding:0,flex:"none",marginTop:2}}/><span><strong>Démarrer au stock maximum</strong> : le stock de départ des nouvelles références est leur maximum (aucune alerte « à renouveler » au début) au lieu du « Stock » d'Excel.</span></label>
         <p className="stk-aide">Sinon, au premier import, le « Stock » d'Excel devient le stock de départ de chaque nouvelle référence.</p>
         <label style={{display:"flex",alignItems:"flex-start",gap:10,fontSize:14}}><input type="checkbox" checked={majQte} onChange={e=>setMajQte(e.target.checked)} style={{width:22,height:22,minHeight:0,padding:0,flex:"none",marginTop:2}}/><span>Remettre aussi les quantités des références déjà suivies au « Stock » d'Excel (enregistré comme un inventaire dans l'historique). À éviter une fois l'appli utilisée.</span></label>
@@ -826,7 +830,7 @@ function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,on
   return(<Feuille titre={article.reference} onFermer={onFermer}>
     <div className="stk-stock">
       <div><span className="stk-lib" style={{marginBottom:2}}>En stock</span><span className={"stk-stock-n "+etatStock}>{stock}</span>{reco&&<span className="stk-badge">À recommander : {qteARecommander(article)}</span>}{stock<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
-      <div style={{fontSize:13,color:"#6B7280",textAlign:"right"}}>{article.stock_mini!=null&&<div>mini {article.stock_mini}{article.stock_maxi!=null?" · maxi "+article.stock_maxi:""}</div>}{article.prix_unitaire!=null&&<div>{fmtEuro(article.prix_unitaire)} / pièce · valeur {fmtEuro(stock*article.prix_unitaire)}</div>}</div>
+      <div style={{fontSize:13,color:"#6B7280",textAlign:"right"}}>{libSeuils(article)&&<div>{libSeuils(article)}</div>}{article.prix_unitaire!=null&&<div>{fmtEuro(article.prix_unitaire)} / pièce · valeur {fmtEuro(stock*article.prix_unitaire)}</div>}</div>
     </div>
     <div className="stk-infos">
       {article.dimensions&&<div><b>Dimensions</b>{article.dimensions}</div>}
@@ -1277,7 +1281,7 @@ export default function PageStock({techs,sessionTech}){
     setCmdEnCours(true);
     const id="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     const base=Date.now();
-    const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:familleDe(a.reference),designation:designationDemande(a),quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+(a.quantite||0)+" / mini "+(a.stock_mini==null?0:a.stock_mini)+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
+    const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:familleDe(a.reference),designation:designationDemande(a),quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+(a.quantite||0)+" / "+(libSeuils(a)||"seuil ?")+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
     const r=await appel("POST","demandes_materiel",rows,"return=minimal");
     setCmdEnCours(false);
     if(!r.ok){afficherToast("La demande n'a pas abouti (connexion, ou « Matériel à commander » pas encore activé)");return;}
@@ -1312,7 +1316,7 @@ export default function PageStock({techs,sessionTech}){
         <div><span className="stk-ref">{a.reference}</span>{r&&st>0&&<span className="stk-badge">À renouveler</span>}{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
         <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
       </div>
-      <div className={"stk-qte "+etat}>{st}<small>{a.stock_mini!=null?"mini "+a.stock_mini+(a.stock_maxi!=null?" · maxi "+a.stock_maxi:""):"en stock"}</small></div>
+      <div className={"stk-qte "+etat}>{st}<small>{libSeuils(a)||"en stock"}</small></div>
     </button>);
   };
 
@@ -1322,7 +1326,7 @@ export default function PageStock({techs,sessionTech}){
       <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>setFicheId(a.id)}>
         <div><span className="stk-ref">{a.reference}</span>{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
         <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
-        <div className="stk-sub">Stock <b>{st}</b> · mini {a.stock_mini==null?"—":a.stock_mini}{a.stock_maxi!=null?" · maxi "+a.stock_maxi:""} · à commander <b>{qteARecommander(a)}</b></div>
+        <div className="stk-sub">Stock <b>{st}</b> · {libSeuils(a)||"seuil ?"} · à commander <b>{qteARecommander(a)}</b></div>
       </div>
       <div className="act">{dem?<span className="stk-ok-pill">✓ Demandé</span>:<button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} onClick={()=>envoyerDemandes([a])}>Demander</button>}</div>
     </div>);
