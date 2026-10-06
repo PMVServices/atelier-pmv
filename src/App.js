@@ -1661,11 +1661,11 @@ function PageDashboard({fiches,pieces,commandesResume,demandesMat,onDemandeMater
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 16px"}}>🏠 Tableau de bord</h2>
 
-    {onDemandeMateriel&&demandesMat?.disponible!==false&&<button onClick={onDemandeMateriel} style={{width:"100%",display:"flex",alignItems:"center",gap:16,background:"#E8720C",color:"#fff",border:"none",borderRadius:14,padding:"18px 22px",minHeight:96,marginBottom:14,cursor:"pointer",boxShadow:"0 3px 10px rgba(232,114,12,0.35)",textAlign:"left"}}>
+    {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{width:"100%",display:"flex",alignItems:"center",gap:16,background:"#E8720C",color:"#fff",border:"none",borderRadius:14,padding:"18px 22px",minHeight:96,marginBottom:14,cursor:"pointer",boxShadow:"0 3px 10px rgba(232,114,12,0.35)",textAlign:"left"}}>
       <span style={{fontSize:40,lineHeight:1}}>🛒</span>
       <span style={{display:"flex",flexDirection:"column",gap:4,minWidth:0}}>
         <span style={{fontSize:21,fontWeight:700}}>Matériel à commander</span>
-        <span style={{fontSize:13,fontWeight:400,opacity:0.95}}>Roulements, garnitures, joints, paliers, condensateurs…</span>
+        <span style={{fontSize:13,fontWeight:400,opacity:0.95}}>{demandesMat?.disponible===false?"⚙ Pas encore activé : touchez ici pour terminer l'installation":"Roulements, garnitures, joints, paliers, condensateurs…"}</span>
       </span>
     </button>}
 
@@ -3959,7 +3959,7 @@ function PageCommandes({fiches,onOuvrirFiche,onResume,demandesMat,vueInitiale,on
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <input ref={fileInputArRef} type="file" accept="application/pdf" style={{display:"none"}} onChange={onFichierArChoisi}/>
         <input ref={fileInputPieceRef} type="file" accept="application/pdf,image/*" style={{display:"none"}} onChange={onFichierPieceChoisi}/>
-        {onDemandeMateriel&&demandesMat?.disponible!==false&&<button onClick={onDemandeMateriel} style={{...S.p1,fontSize:12,padding:"7px 14px",background:"#E8720C"}}>🛒 Matériel à commander</button>}
+        {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{...S.p1,fontSize:12,padding:"7px 14px",background:"#E8720C"}}>🛒 Matériel à commander</button>}
         <button onClick={()=>fileInputArRef.current?.click()} disabled={chargementAr} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>{chargementAr?"Analyse en cours…":"📄 Importer un AR (PDF)"}</button>
         <button onClick={()=>setModalModeles(true)} style={{...S.p2,fontSize:12,padding:"7px 14px"}}>⚙ Modèles de relance</button>
         <button onClick={()=>setModalCommande({})} style={{...S.p1,fontSize:12,padding:"7px 14px"}}>+ Nouvelle commande</button>
@@ -4171,7 +4171,7 @@ function regrouperDemandes(rows){
 }
 
 // Demandes en attente (partagées entre le tableau de bord et l'onglet Commandes).
-// disponible=false tant que la table n'existe pas : les accès à la fonctionnalité restent alors masqués.
+// disponible=false tant que la table n'existe pas : les boutons restent visibles mais mènent à l'écran d'activation.
 function useDemandesMateriel(){
   const [etat,setEtat]=useState({demandes:[],disponible:null});
   const recharger=useCallback(async()=>{
@@ -4179,15 +4179,18 @@ function useDemandesMateriel(){
       // fetch direct (et non db.get) : db.get renvoie [] en cas de coupure réseau, ce qui viderait la liste à tort.
       const r=await fetch(SUPA_URL+"/rest/v1/demandes_materiel?statut=eq.a_commander&order=created_at.desc&limit=500",{headers:H});
       const rows=await r.json();
-      if(Array.isArray(rows))setEtat({demandes:ordonnerDemandes(rows),disponible:true});
-      else if(rows&&rows.code==="PGRST205")setEtat({demandes:[],disponible:false}); // table pas encore créée
+      if(Array.isArray(rows)){setEtat({demandes:ordonnerDemandes(rows),disponible:true});return true;}
+      if(rows&&rows.code==="PGRST205"){setEtat({demandes:[],disponible:false});return false;} // table pas encore créée
     }catch(e){/* hors ligne : on garde l'état précédent */}
+    return null; // renvoie : true = table présente, false = table absente, null = indéterminé (réseau)
   },[]);
   useEffect(()=>{
     recharger();
     const t=setInterval(recharger,30000);
+    const auRetour=()=>{if(!document.hidden)recharger();};
     window.addEventListener("focus",recharger);
-    return()=>{clearInterval(t);window.removeEventListener("focus",recharger);};
+    document.addEventListener("visibilitychange",auRetour);
+    return()=>{clearInterval(t);window.removeEventListener("focus",recharger);document.removeEventListener("visibilitychange",auRetour);};
   },[recharger]);
   return {demandes:etat.demandes,disponible:etat.disponible,recharger};
 }
@@ -4620,18 +4623,49 @@ create policy "allow anon all" on parametres_app for all using (true) with check
 
 insert into parametres_app (cle, valeur) values
   ('alerte_mail_adresse', 'commandes@pmvservices.fr'),
-  ('alerte_mail_actif', '0');`;
+  ('alerte_mail_actif', '0');
 
-function NoticeTablesMateriel(){
+notify pgrst, 'reload schema';`;
+
+// Écran d'activation : tant que les tables n'existent pas, les boutons "Matériel à commander" mènent ici.
+// onVerifier doit renvoyer true (tables présentes), false (absentes) ou null (réseau).
+function NoticeTablesMateriel({onVerifier}){
   const [copie,setCopie]=useState(false);
+  const [verif,setVerif]=useState(null); // null | "en_cours" | "absente" | "reseau"
+  const lienSupabase="https://supabase.com/dashboard/project/"+SUPA_URL.replace("https://","").split(".")[0]+"/sql/new";
   async function copier(){
     try{await navigator.clipboard.writeText(SQL_MATERIEL);setCopie(true);setTimeout(()=>setCopie(false),2500);}catch(e){}
   }
-  return(<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:10,padding:"14px 16px",fontSize:13,lineHeight:1.5}}>
-    <div style={{fontWeight:700,color:"#8A4B00",marginBottom:6}}>⚙ Une dernière étape pour activer le matériel à commander</div>
-    <div style={{color:"#4B5563",marginBottom:10}}>Les tables de la base de données n'existent pas encore. Dans Supabase, ouvrez <strong>SQL Editor</strong> puis <strong>New query</strong>, collez le texte ci-dessous et cliquez sur <strong>Run</strong>. Rechargez ensuite l'appli.</div>
-    <button onClick={copier} style={{...S.p1,fontSize:12,padding:"7px 14px",marginBottom:10}}>{copie?"✓ Copié":"📋 Copier le SQL"}</button>
-    <pre style={{margin:0,background:"#fff",border:"1px solid #F3D9A8",borderRadius:8,padding:10,fontSize:11,overflowX:"auto",maxHeight:220}}>{SQL_MATERIEL}</pre>
+  async function verifier(){
+    if(!onVerifier)return;
+    setVerif("en_cours");
+    const ok=await onVerifier();
+    setVerif(ok===true?null:ok===false?"absente":"reseau");
+  }
+  const num={flex:"none",width:28,height:28,borderRadius:"50%",background:"#E8720C",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:14};
+  const ligne={display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"};
+  return(<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:12,padding:"16px 18px",fontSize:14,lineHeight:1.5}}>
+    <div style={{fontWeight:700,color:"#8A4B00",fontSize:16,marginBottom:6}}>⚙ Une étape reste à faire pour activer le matériel à commander</div>
+    <div style={{color:"#4B5563",marginBottom:16}}>La base de données doit recevoir deux petites tables. C'est à faire une seule fois, par le responsable (compte Supabase).</div>
+    <div style={{display:"flex",flexDirection:"column",gap:14,marginBottom:14}}>
+      <div style={ligne}><span style={num}>1</span><span style={{flex:"1 1 180px"}}>Copiez le texte SQL.</span><button onClick={copier} style={{...S.p1,fontSize:13}}>{copie?"✓ Copié":"📋 Copier le SQL"}</button></div>
+      <div style={ligne}><span style={num}>2</span><span style={{flex:"1 1 180px"}}>Ouvrez l'éditeur SQL de Supabase, collez le texte (appui long, Coller), puis appuyez sur <strong>Run</strong>.</span><a href={lienSupabase} target="_blank" rel="noopener noreferrer" onClick={copier} style={{...S.p2,display:"inline-flex",alignItems:"center",minHeight:44,textDecoration:"none",boxSizing:"border-box"}}>Ouvrir Supabase ↗</a></div>
+      <div style={ligne}><span style={num}>3</span><span style={{flex:"1 1 180px"}}>Revenez ici : la fonction s'active toute seule, ou touchez Vérifier.</span><button onClick={verifier} disabled={verif==="en_cours"} style={{...S.p2,opacity:verif==="en_cours"?0.6:1}}>{verif==="en_cours"?"Vérification…":"🔄 Vérifier"}</button></div>
+    </div>
+    {verif==="absente"&&<div style={{...S.alert,marginBottom:12,fontSize:13}}>Les tables ne sont pas encore détectées. Vérifiez que Supabase a affiché « Success », patientez quelques secondes et touchez Vérifier de nouveau.</div>}
+    {verif==="reseau"&&<div style={{...S.alert,marginBottom:12,fontSize:13}}>Pas de connexion pour le moment. Réessayez dans un instant.</div>}
+    <details>
+      <summary style={{cursor:"pointer",color:"#8A4B00",fontWeight:600,fontSize:13}}>Voir le texte SQL</summary>
+      <pre style={{margin:"10px 0 0",background:"#fff",border:"1px solid #F3D9A8",borderRadius:8,padding:10,fontSize:11,overflowX:"auto",maxHeight:240}}>{SQL_MATERIEL}</pre>
+    </details>
+  </div>);
+}
+
+function PageActivationMateriel({onRetour,onVerifier}){
+  return(<div style={{maxWidth:820,margin:"0 auto",padding:"18px 16px 48px"}}>
+    <button onClick={onRetour} style={{...S.p2,marginBottom:14}}>‹ Retour</button>
+    <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 14px"}}>🛒 Matériel à commander</h2>
+    <NoticeTablesMateriel onVerifier={onVerifier}/>
   </div>);
 }
 
@@ -4682,7 +4716,7 @@ function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel})
   const nC=demandes.filter(l=>l.type==="commander").length,nR=demandes.length-nC;
   const histo=filtre==="historique";
   const liste=histo?(historique||[]):demandes.filter(l=>filtre==="tous"||l.type===filtre);
-  if(disponible===false)return <NoticeTablesMateriel/>;
+  if(disponible===false)return <NoticeTablesMateriel onVerifier={recharger}/>;
   return(<div>
     <PanneauAlerteMail/>
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
@@ -4840,7 +4874,9 @@ export default function App(){
     {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
     {page==="commandes"&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume} demandesMat={demandesMat} vueInitiale={vueCommandesInit} onVueConsommee={()=>setVueCommandesInit(null)} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
-    {page==="demande"&&<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>}
+    {page==="demande"&&(demandesMat.disponible===false
+      ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
+      :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
     {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
   </div>);
 }
