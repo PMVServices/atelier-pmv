@@ -90,6 +90,10 @@ const serieDe=ref=>{
 const familleDe=ref=>/^\d/.test(String(ref||"").trim())?"Roulements":"Garniture";
 // Libellé utilisé dans Matériel à commander (même style que l'assistant : "GM CNK 12")
 const designationDemande=a=>familleDe(a.reference)==="Garniture"?"GM "+a.reference:a.reference;
+const FAMILLES=["Roulements","Garniture"];
+const LIB_FAMILLE={Roulements:"Roulements",Garniture:"Garniture mécanique"};
+// [[famille, articles], …] dans l'ordre des familles, sans les familles vides
+const grouperParFamille=liste=>FAMILLES.map(f=>[f,liste.filter(a=>familleDe(a.reference)===f)]).filter(([,l])=>l.length);
 function triRef(a,b){
   const na=parseInt(a.reference,10),nb=parseInt(b.reference,10);
   const va=isNaN(na)?Infinity:na,vb=isNaN(nb)?Infinity:nb;
@@ -286,6 +290,9 @@ const CSS_STOCK=`
 .stk-rien{background:#E9F6EC;border:1px solid #22863A;color:#1B6B2E;border-radius:12px;padding:14px;font-weight:600;text-align:center}
 .stk-liste-sel{border:1px solid #E2E6EA;border-radius:12px;max-height:260px;overflow-y:auto;padding:6px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 12px}
 .stk-liste-sel label{display:flex;align-items:center;gap:8px;min-height:40px;font-size:14px;font-family:${MONO}}
+.stk-liste-titre{grid-column:1/-1;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#667085;padding:8px 0 2px}
+.stk-fams button{font-size:14px;min-height:46px}
+.stk-mode button.on.fam{border-color:#1B4F8A;background:#EEF4FF;color:#1B4F8A}
 .stk-liste-sel input{width:22px;height:22px;min-height:0 !important;padding:0 !important}
 .stk-champs{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
 .stk-champs label span{display:block;font-size:11.5px;font-weight:700;color:#667085;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em}
@@ -467,10 +474,14 @@ async function genererPlanche({articles,type,P,exemplaires,depart,bordure}){
   const svgs={};
   for(const a of articles){if(!svgs[a.id])svgs[a.id]=await codeSvg(type,a.reference);}
   const lenMax=Math.max(8,...articles.map(a=>String(a.reference).length));
-  const cases=Array(Math.max(0,depart-1)).fill(null).concat(liste);
   const parPage=P.cols*P.rows;
   const pages=[];
-  for(let i=0;i<Math.max(cases.length,1);i+=parPage)pages.push(cases.slice(i,i+parPage));
+  // chaque famille commence sur une nouvelle feuille ; "depart" ne s'applique qu'à la première
+  grouperParFamille(liste).forEach(([f,items],gi)=>{
+    const slots=(gi===0?Array(Math.max(0,depart-1)).fill(null):[]).concat(items);
+    for(let i=0;i<slots.length;i+=parPage)pages.push(slots.slice(i,i+parPage));
+  });
+  if(!pages.length)pages.push([]);
   let corps="";
   pages.forEach(page=>{
     corps+='<div class="page">';
@@ -534,7 +545,8 @@ function Etiquettes({articles,idsInitiaux,onFermer}){
   const majPerso=(c,v)=>setPerso(p=>({...p,[c]:v}));
   const nbEt=choisis.length*Math.max(1,exemplaires|0);
   const parPage=Math.max(1,(+P.cols|0)*(+P.rows|0));
-  const nbPages=Math.max(1,Math.ceil((nbEt+Math.max(0,(depart|0)-1))/parPage));
+  const famillesPresentes=grouperParFamille(articles);
+  const nbPages=Math.max(1,grouperParFamille(choisis.flatMap(a=>Array(Math.max(1,exemplaires|0)).fill(a))).reduce((n,[,l],gi)=>n+Math.ceil((l.length+(gi===0?Math.max(0,(depart|0)-1):0))/parPage),0));
   return(<Feuille titre="🏷 Étiquettes code-barres" large onFermer={onFermer}>
     <p className="stk-aide">L'étiquette contient la référence de l'article : en la scannant, l'appli ouvre directement la fiche. À coller sur le casier ou la boîte.</p>
     <div>
@@ -542,9 +554,11 @@ function Etiquettes({articles,idsInitiaux,onFermer}){
       <div className="stk-chips" style={{marginTop:0,marginBottom:8}}>
         <button type="button" className="stk-chip" onClick={()=>setIds(new Set(articles.map(a=>a.id)))}>Tout</button>
         <button type="button" className="stk-chip" onClick={()=>setIds(new Set())}>Aucun</button>
+        {famillesPresentes.length>1&&famillesPresentes.map(([f,l])=><button type="button" key={f} className="stk-chip" style={{fontWeight:700}} onClick={()=>setIds(new Set(l.map(a=>a.id)))}>Seulement : {LIB_FAMILLE[f]} ({l.length})</button>)}
         {series.map(s=><button type="button" key={s} className="stk-chip" onClick={()=>setIds(new Set(articles.filter(a=>serieDe(a.reference)===s).map(a=>a.id)))}>{s}</button>)}
       </div>
-      <div className="stk-liste-sel">{articles.map(a=><label key={a.id}><input type="checkbox" checked={ids.has(a.id)} onChange={()=>basculer(a.id)}/>{a.reference}</label>)}</div>
+      <div className="stk-liste-sel">{famillesPresentes.map(([f,l])=><React.Fragment key={f}>{famillesPresentes.length>1&&<div className="stk-liste-titre">{LIB_FAMILLE[f]} ({l.length})</div>}{l.map(a=><label key={a.id}><input type="checkbox" checked={ids.has(a.id)} onChange={()=>basculer(a.id)}/>{a.reference}</label>)}</React.Fragment>)}</div>
+      {famillesPresentes.length>1&&<p className="stk-aide" style={{marginTop:6}}>Roulements et garnitures ne sont jamais mélangés sur une même feuille : chaque famille commence sur une nouvelle feuille.</p>}
     </div>
     <div className="stk-champs">
       <label><span>Type de code</span><select value={type} onChange={e=>setType(e.target.value)}><option value="qr">QR code (caméra de la tablette)</option><option value="code128">Code 128 (douchette classique)</option></select></label>
@@ -1183,6 +1197,8 @@ export default function PageStock({techs,sessionTech}){
   const [recherche,setRecherche]=useState("");
   const [voirTout,setVoirTout]=useState(false);
   const [serie,setSerie]=useState("toutes");
+  const [famille,setFamilleEtat]=useState(()=>{try{const v=localStorage.getItem("pmv_stock_famille");return FAMILLES.includes(v)?v:"toutes";}catch(e){return "toutes";}});
+  const setFamille=f=>{setFamilleEtat(f);setSerie("toutes");try{localStorage.setItem("pmv_stock_famille",f);}catch(e){/* mémorisation facultative */}};
   const [ficheId,setFicheId]=useState(null);
   const [session,setSession]=useState(null); // null | "sortie" | "entree"
   const [inv,setInv]=useState(false);
@@ -1211,17 +1227,19 @@ export default function PageStock({techs,sessionTech}){
 
   const article=ficheId?articles.find(a=>a.id===ficheId):null;
   const parId=id=>articles.find(a=>a.id===id);
-  const series=[...new Set(articles.map(a=>serieDe(a.reference)))].sort();
+  const fams=grouperParFamille(articles);
+  const base=articles.filter(a=>famille==="toutes"||familleDe(a.reference)===famille); // ce qui est affiché selon la famille choisie
+  const series=[...new Set(base.map(a=>serieDe(a.reference)))].sort();
   const q=cle(recherche);
-  const trouves=q?articles.filter(a=>cle(a.reference).includes(q)||cle(a.dimensions).includes(q)||cle(a.emplacement).includes(q)).slice(0,20):[];
-  const catalogue=articles.filter(a=>serie==="toutes"||serieDe(a.reference)===serie);
-  const reco=articles.filter(aRecommander).sort((a,b)=>{
+  const trouves=q?base.filter(a=>cle(a.reference).includes(q)||cle(a.dimensions).includes(q)||cle(a.emplacement).includes(q)).slice(0,20):[];
+  const catalogue=base.filter(a=>serie==="toutes"||serieDe(a.reference)===serie);
+  const reco=base.filter(aRecommander).sort((a,b)=>{
     const va=(a.quantite||0)<=0?0:1,vb=(b.quantite||0)<=0?0:1;
     return va-vb||((a.quantite||0)/(a.stock_mini||1))-((b.quantite||0)/(b.stock_mini||1))||triRef(a,b);
   });
   const aDemander=reco.filter(a=>!demandes.has(cle(designationDemande(a))));
-  const nbRupture=articles.filter(a=>(a.quantite||0)<=0).length;
-  const valeur=articles.reduce((s,a)=>s+Math.max(0,a.quantite||0)*(a.prix_unitaire||0),0);
+  const nbRupture=base.filter(a=>(a.quantite||0)<=0).length;
+  const valeur=base.reduce((s,a)=>s+Math.max(0,a.quantite||0)*(a.prix_unitaire||0),0);
 
   async function envoyerDemandes(arts){
     if(!arts.length||cmdEnCours)return;
@@ -1248,13 +1266,13 @@ export default function PageStock({techs,sessionTech}){
   async function exporter(){
     try{
       const XLSX=await import("xlsx");
-      const lignes=articles.map(a=>({"Référence":a.reference,"Dimensions":a.dimensions||"","Emplacement":a.emplacement||"","Stock minimum":a.stock_mini,"Stock maximum":a.stock_maxi,"Stock":a.quantite||0,"Prix unitaire":a.prix_unitaire,"Valeur du stock":(a.quantite||0)*(a.prix_unitaire||0),"À recommander":aRecommander(a)?"Oui":"Non","Quantité à recommander":aRecommander(a)?qteARecommander(a):0,"Fournisseur 1":a.fournisseur1||"","Fournisseur 2":a.fournisseur2||"","Fournisseur 3":a.fournisseur3||""}));
+      const lignes=base.map(a=>({"Famille":LIB_FAMILLE[familleDe(a.reference)],"Référence":a.reference,"Dimensions":a.dimensions||"","Emplacement":a.emplacement||"","Stock minimum":a.stock_mini,"Stock maximum":a.stock_maxi,"Stock":a.quantite||0,"Prix unitaire":a.prix_unitaire,"Valeur du stock":(a.quantite||0)*(a.prix_unitaire||0),"À recommander":aRecommander(a)?"Oui":"Non","Quantité à recommander":aRecommander(a)?qteARecommander(a):0,"Fournisseur 1":a.fournisseur1||"","Fournisseur 2":a.fournisseur2||"","Fournisseur 3":a.fournisseur3||""}));
       const ws=XLSX.utils.json_to_sheet(lignes);
-      ws["!cols"]=[{wch:16},{wch:14},{wch:12},{wch:8},{wch:8},{wch:8},{wch:10},{wch:12},{wch:12},{wch:10},{wch:14},{wch:14},{wch:14}];
+      ws["!cols"]=[{wch:18},{wch:16},{wch:14},{wch:12},{wch:8},{wch:8},{wch:8},{wch:10},{wch:12},{wch:12},{wch:10},{wch:14},{wch:14},{wch:14}];
       const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Stock");
       const buf=XLSX.write(wb,{type:"array",bookType:"xlsx"});
       const d=new Date();const p=n=>String(n).padStart(2,"0");
-      telechargerFichier(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),"stock_"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+".xlsx");
+      telechargerFichier(new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),"stock"+(famille==="toutes"?"":"_"+famille.toLowerCase())+"_"+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+".xlsx");
     }catch(e){afficherToast("Export impossible");}
   }
   const carte=a=>{
@@ -1267,6 +1285,20 @@ export default function PageStock({techs,sessionTech}){
       <div className={"stk-qte "+etat}>{st}<small>{a.stock_mini!=null?"mini "+a.stock_mini+(a.stock_maxi!=null?" · maxi "+a.stock_maxi:""):"en stock"}</small></div>
     </button>);
   };
+
+  const ligneReno=a=>{
+    const st=a.quantite||0,dem=demandes.has(cle(designationDemande(a)));
+    return(<div key={a.id} className={"stk-reno"+(st<=0?" vide":"")}>
+      <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>setFicheId(a.id)}>
+        <div><span className="stk-ref">{a.reference}</span>{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
+        <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
+        <div className="stk-sub">Stock <b>{st}</b> · mini {a.stock_mini==null?"—":a.stock_mini}{a.stock_maxi!=null?" · maxi "+a.stock_maxi:""} · à commander <b>{qteARecommander(a)}</b></div>
+      </div>
+      <div className="act">{dem?<span className="stk-ok-pill">✓ Demandé</span>:<button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} onClick={()=>envoyerDemandes([a])}>Demander</button>}</div>
+    </div>);
+  };
+  const boutonToutDemander=liste=>{const a=liste.filter(x=>!demandes.has(cle(designationDemande(x))));return a.length>0&&<button type="button" className="stk-btn stk-btn--s stk-btn--p" disabled={cmdEnCours} onClick={()=>envoyerDemandes(a)}>{cmdEnCours?"Envoi…":"Tout demander ("+a.length+")"}</button>;};
+  const sousTitre=(f,l,bouton)=><div className="stk-titre" style={{margin:"16px 0 6px"}}><h3 style={{fontSize:15}}>{LIB_FAMILLE[f]} ({l.length})</h3>{bouton}</div>;
 
   if(disponible===false){
     return(<div className="stk"><style>{CSS_STOCK}</style>
@@ -1290,33 +1322,28 @@ export default function PageStock({techs,sessionTech}){
       <button type="button" className="stk-btn stk-btn--p" onClick={()=>setImportOuvert(true)}>⬆ Importer depuis Excel</button>
     </div>}
     {articles.length>0&&<>
+      {fams.length>1&&<div className="stk-mode stk-fams" style={{gridTemplateColumns:"repeat("+(fams.length+1)+",1fr)",marginBottom:10}} role="group" aria-label="Famille">
+        {[["toutes","Tout ("+articles.length+")"]].concat(fams.map(([f,l])=>[f,LIB_FAMILLE[f]+" ("+l.length+")"])).map(([f,l])=><button type="button" key={f} className={famille===f?"on fam":""} aria-pressed={famille===f} onClick={()=>setFamille(f)}>{l}</button>)}
+      </div>}
       <input className="stk-champ" value={recherche} onChange={e=>setRecherche(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){const a=articles.find(x=>cle(x.reference)===cle(recherche))||(trouves.length===1?trouves[0]:null);if(a){setRecherche("");setFicheId(a.id);}}}} placeholder="🔍 Chercher une référence, des dimensions…" autoComplete="off"/>
       {q&&<div className="stk-liste">{trouves.length===0?<div className="stk-vide">Aucune référence ne correspond.</div>:trouves.map(carte)}</div>}
-      <p className="stk-resume" style={{marginTop:12}}><span><b>{articles.length}</b> références</span><span><b>{nbRupture}</b> en rupture</span><span>Valeur du stock <b>{fmtEuro(valeur)}</b></span></p>
+      <p className="stk-resume" style={{marginTop:12}}><span><b>{base.length}</b> références</span><span><b>{nbRupture}</b> en rupture</span><span>Valeur du stock <b>{fmtEuro(valeur)}</b></span></p>
 
       <div className="stk-titre"><h3>🔔 À renouveler ({reco.length})</h3>
-        {aDemander.length>0&&<button type="button" className="stk-btn stk-btn--s stk-btn--p" disabled={cmdEnCours} onClick={()=>envoyerDemandes(aDemander)}>{cmdEnCours?"Envoi…":"Tout demander ("+aDemander.length+")"}</button>}
+        {famille!=="toutes"&&boutonToutDemander(reco)}
       </div>
       {reco.length===0?<div className="stk-rien">✓ Rien à renouveler : tous les stocks sont au-dessus du minimum.</div>
-        :<div className="stk-liste" style={{marginTop:0}}>{reco.map(a=>{
-          const st=a.quantite||0,dem=demandes.has(cle(designationDemande(a)));
-          return(<div key={a.id} className={"stk-reno"+(st<=0?" vide":"")}>
-            <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>setFicheId(a.id)}>
-              <div><span className="stk-ref">{a.reference}</span>{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
-              <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
-              <div className="stk-sub">Stock <b>{st}</b> · mini {a.stock_mini==null?"—":a.stock_mini}{a.stock_maxi!=null?" · maxi "+a.stock_maxi:""} · à commander <b>{qteARecommander(a)}</b></div>
-            </div>
-            <div className="act">{dem?<span className="stk-ok-pill">✓ Demandé</span>:<button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} onClick={()=>envoyerDemandes([a])}>Demander</button>}</div>
-          </div>);
-        })}</div>}
+        :famille==="toutes"
+          ?grouperParFamille(reco).map(([f,l])=><div key={f}>{sousTitre(f,l,boutonToutDemander(l))}<div className="stk-liste" style={{marginTop:0}}>{l.map(ligneReno)}</div></div>)
+          :<div className="stk-liste" style={{marginTop:0}}>{reco.map(ligneReno)}</div>}
 
       <div className="stk-titre"><h3>🕘 Derniers mouvements</h3></div>
       {recents.length===0?<p className="stk-aide">Aucun mouvement pour le moment.</p>
         :<div className="stk-histo" style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:12,padding:"2px 12px"}}>{recents.map(m=>{const a=parId(m.article_id);return(<div key={m.id}><span className="d">{fmtDate(m.created_at)}</span><span className={"q "+(m.delta<0?"neg":"pos")}>{m.delta>0?"+":""}{m.delta}</span><span><b style={{fontFamily:MONO}}>{a?a.reference:"?"}</b> · {TYPES_MVT[m.type]||m.type}{m.chantier?" · "+m.chantier:""}{m.utilisateur?" · "+m.utilisateur:""}</span></div>);})}</div>}
 
       <div className="stk-outils">
-        <button type="button" onClick={()=>setVoirTout(v=>!v)}>{voirTout?"▲ Masquer le catalogue":"📋 Catalogue ("+articles.length+")"}</button>
-        <button type="button" onClick={()=>setEtiquettes({ids:[]})}>🏷 Étiquettes</button>
+        <button type="button" onClick={()=>setVoirTout(v=>!v)}>{voirTout?"▲ Masquer le catalogue":"📋 Catalogue ("+base.length+")"}</button>
+        <button type="button" onClick={()=>setEtiquettes({ids:famille==="toutes"?[]:base.map(a=>a.id)})}>🏷 Étiquettes{famille==="toutes"?"":" ("+LIB_FAMILLE[famille]+")"}</button>
         <button type="button" onClick={()=>setImportOuvert(true)}>⬆ Importer Excel</button>
         <button type="button" onClick={exporter}>⬇ Exporter</button>
         {!(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search))&&<button type="button" onClick={()=>setTel(true)}>📱 Sur téléphone</button>}
@@ -1326,7 +1353,9 @@ export default function PageStock({techs,sessionTech}){
           <button type="button" className={"stk-chip"+(serie==="toutes"?" on":"")} onClick={()=>setSerie("toutes")}>Toutes</button>
           {series.map(s=><button type="button" key={s} className={"stk-chip"+(serie===s?" on":"")} onClick={()=>setSerie(s)}>{s}</button>)}
         </div>
-        <div className="stk-liste">{catalogue.map(carte)}</div>
+        {famille==="toutes"
+          ?grouperParFamille(catalogue).map(([f,l])=><div key={f}>{sousTitre(f,l,null)}<div className="stk-liste" style={{marginTop:0}}>{l.map(carte)}</div></div>)
+          :<div className="stk-liste">{catalogue.map(carte)}</div>}
       </>}
     </>}
 
