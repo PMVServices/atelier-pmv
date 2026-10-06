@@ -268,6 +268,12 @@ const CSS_STOCK=`
 .stk-reno.vide{border-color:#F4B4BC;background:#FFF7F8}
 .stk-reno .act{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
 .stk-ok-pill{display:inline-flex;align-items:center;border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:700;background:#E9F6EC;color:#1B6B2E}
+.stk-ecart{display:inline-flex;align-items:center;justify-content:center;min-width:48px;border-radius:999px;padding:4px 10px;font-size:14px;font-weight:700}
+.stk-ecart.ok{background:#E9F6EC;color:#1B6B2E}
+.stk-ecart.pos{background:#FFF3DC;color:#8A4B00}
+.stk-ecart.neg{background:#FFF1F2;color:#B42318}
+.stk-gros-input{width:100%;max-width:260px;min-height:84px;border:2px solid #1B4F8A;border-radius:16px;text-align:center;font-size:44px !important;font-weight:700;padding:0 !important;font-variant-numeric:tabular-nums;font-family:inherit;background:#fff;color:#1A1A2E}
+.stk-grand--i{border-color:#1B4F8A;background:#1B4F8A;color:#fff;min-height:72px;flex-direction:row;gap:10px;margin-bottom:10px;width:100%}
 .stk-rien{background:#E9F6EC;border:1px solid #22863A;color:#1B6B2E;border-radius:12px;padding:14px;font-weight:600;text-align:center}
 .stk-liste-sel{border:1px solid #E2E6EA;border-radius:12px;max-height:260px;overflow-y:auto;padding:6px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 12px}
 .stk-liste-sel label{display:flex;align-items:center;gap:8px;min-height:40px;font-size:14px;font-family:${MONO}}
@@ -959,6 +965,153 @@ function SessionScan({mode:modeInit,articles,techs,qui,setQui,onFermer,onChange,
   </div>);
 }
 
+// ─── Inventaire : scanner, saisir la quantité comptée, passer au suivant, tout enregistrer à la fin ──
+// Comptage "à l'aveugle" (le stock théorique n'est pas montré pendant la saisie, pour ne pas fausser le comptage).
+// Le brouillon est gardé sur la tablette : si l'appli se ferme en cours de route, on reprend où on en était.
+const CLE_INV="pmv_stock_inventaire";
+const lireBrouillonInv=()=>{try{const v=JSON.parse(localStorage.getItem(CLE_INV)||"null");return v&&v.comptes&&Object.keys(v.comptes).length?v:null;}catch(e){return null;}};
+const ecrireBrouillonInv=c=>{try{if(c&&Object.keys(c).length)localStorage.setItem(CLE_INV,JSON.stringify({comptes:c,maj:Date.now()}));else localStorage.removeItem(CLE_INV);}catch(e){/* brouillon facultatif */}};
+
+function SessionInventaire({articles,techs,qui,setQui,onFermer,onFini,recharger,afficherToast}){
+  const liste=(techs||[]).filter(t=>t!=="Autre");
+  const [comptes,setComptes]=useState(()=>{const b=lireBrouillonInv();return b?b.comptes:{};}); // {id:{n,t}}
+  const [courant,setCourant]=useState(null);
+  const [saisie,setSaisie]=useState("");
+  const [message,setMessage]=useState(null);
+  const [manuel,setManuel]=useState("");
+  const [inconnu,setInconnu]=useState(null);
+  const [fin,setFin]=useState(false);
+  const [restant,setRestant]=useState(false);
+  const [quitter,setQuitter]=useState(false);
+  const [envoi,setEnvoi]=useState({enCours:false,erreur:null});
+  const articlesRef=useRef(articles);articlesRef.current=articles;
+  const courantRef=useRef(null);courantRef.current=courant;
+  const comptesRef=useRef(comptes);comptesRef.current=comptes;
+  useEffect(()=>{ecrireBrouillonInv(comptes);},[comptes]);
+  const parId=id=>articles.find(a=>a.id===id);
+  const ouvrir=useCallback(a=>{
+    const deja=comptesRef.current[a.id];
+    setCourant(a.id);setSaisie(deja?String(deja.n):"");
+    bip();
+  },[]);
+  const traiter=useCallback(async brut=>{
+    if(courantRef.current)return; // un comptage est en cours de saisie : on ignore les scans
+    const code=String(brut||"").trim();
+    if(!code)return;
+    let a=articlesRef.current.find(x=>cle(x.reference)===cle(code));
+    if(!a){
+      const r=await appel("GET","stock_codes?code=eq."+encodeURIComponent(code)+"&select=article_id");
+      if(r.ok&&Array.isArray(r.data)&&r.data[0])a=articlesRef.current.find(x=>x.id===r.data[0].article_id);
+    }
+    if(a)ouvrir(a);
+    else{setInconnu(code);setMessage({texte:"Code inconnu : "+code,type:"err",code});}
+  },[ouvrir]);
+  const qm=cle(manuel);
+  const sugg=qm?articles.filter(a=>cle(a.reference).includes(qm)||cle(a.dimensions).includes(qm)).slice(0,5):[];
+  function entrerManuel(){
+    const exact=articles.find(a=>cle(a.reference)===qm);
+    const a=exact||(sugg.length===1?sugg[0]:null);
+    if(a){ouvrir(a);setManuel("");}
+    else if(qm)traiter(manuel);
+  }
+  const n=parseInt(saisie,10);
+  const saisieOk=saisie!==""&&!isNaN(n)&&n>=0;
+  function validerComptage(){
+    if(!saisieOk||!courant)return;
+    const a=parId(courant);
+    setComptes(c=>({...c,[courant]:{n,t:Date.now()}}));
+    setMessage({texte:"✓ "+(a?a.reference:"")+" : "+n+" compté"+(n>1?"s":""),type:"ok"});
+    setCourant(null);setSaisie("");
+  }
+  const retirer=id=>setComptes(c=>{const x={...c};delete x[id];return x;});
+  const ids=Object.keys(comptes).filter(id=>parId(id));
+  const lignes=ids.sort((a,b)=>comptes[b].t-comptes[a].t);
+  const restants=articles.filter(a=>!comptes[a.id]);
+  const ecarts=lignes.filter(id=>comptes[id].n!==(parId(id).quantite||0));
+  const art=courant?parId(courant):null;
+  async function enregistrer(){
+    if(!qui||envoi.enCours||!lignes.length)return;
+    setEnvoi({enCours:true,erreur:null});
+    // quantités fraîches au moment d'enregistrer (des mouvements ont pu avoir lieu pendant le comptage)
+    const r=await appel("GET","stock_articles?select=id,quantite&limit=5000");
+    if(!r.ok||!Array.isArray(r.data)){setEnvoi({enCours:false,erreur:"Impossible de lire le stock actuel (connexion ?). Rien n'a été modifié : réessayez."});return;}
+    const frais={};r.data.forEach(x=>{frais[x.id]=x.quantite||0;});
+    const date=new Date().toLocaleDateString("fr-FR");
+    const corps=lignes.filter(id=>frais[id]!==undefined).map(id=>{
+      const d=comptes[id].n-frais[id];
+      return {article_id:id,type:"inventaire",delta:d,utilisateur:qui,commentaire:d===0?"Inventaire du "+date+" : conforme":"Inventaire du "+date+" : compté "+comptes[id].n};
+    });
+    const w=await appel("POST","stock_mouvements",corps,"return=minimal");
+    if(!w.ok){setEnvoi({enCours:false,erreur:"L'enregistrement n'a pas abouti (connexion ?). Rien n'a été modifié : réessayez."});return;}
+    ecrireBrouillonInv(null);
+    await onFini();
+    const corriges=corps.filter(m=>m.delta!==0).length;
+    afficherToast("✓ Inventaire enregistré : "+corps.length+" référence"+(corps.length>1?"s":"")+" comptée"+(corps.length>1?"s":"")+", "+corriges+" corrigée"+(corriges>1?"s":""));
+    onFermer(true);
+  }
+  function fermer(){if(lignes.length&&!quitter){setQuitter(true);return;}onFermer(false);}
+  const infoArt=a=>[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ");
+  return(<div className="stk-session">
+    <div className="stk-session-tete">
+      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:17}}>📋 Inventaire</div><div className="stk-sub">{lignes.length} comptée{lignes.length>1?"s":""} sur {articles.length}</div></div>
+      <button type="button" className="stk-x" onClick={fermer} aria-label="Fermer">✕</button>
+    </div>
+    <div className="stk-session-corps">
+      {quitter&&<div className="stk-alerte" style={{display:"flex",gap:10,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}><span>Le comptage ({lignes.length} référence{lignes.length>1?"s":""}) est gardé sur cette tablette : vous pourrez le reprendre.</span><span style={{display:"flex",gap:8}}><button type="button" className="stk-btn stk-btn--s" onClick={()=>setQuitter(false)}>Continuer</button><button type="button" className="stk-btn stk-btn--s" onClick={()=>onFermer(false)}>Quitter</button><button type="button" className="stk-btn stk-btn--s stk-btn--r" onClick={()=>{ecrireBrouillonInv(null);onFermer(true);}}>Tout effacer</button></span></div>}
+      <ScanneurCode integre continu onCode={traiter}/>
+      {message&&<div className={"stk-msg "+message.type}><span>{message.texte}</span>{message.type==="err"&&<button type="button" className="stk-btn stk-btn--s" onClick={()=>setInconnu(message.code)}>Associer ce code</button>}</div>}
+      <div>
+        <input className="stk-champ" value={manuel} onChange={e=>setManuel(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")entrerManuel();}} placeholder="⌨ Compter à la main : référence (ou douchette)" autoComplete="off"/>
+        {sugg.length>0&&<div className="stk-sugg" style={{marginTop:6}}>{sugg.map(a=><button type="button" key={a.id} className="stk-carte" onClick={()=>{ouvrir(a);setManuel("");}}><div><div className="stk-ref">{a.reference}</div><div className="stk-sub">{infoArt(a)}</div></div><div className="stk-sub">Compter</div></button>)}</div>}
+      </div>
+      {lignes.length===0
+        ?<p className="stk-aide" style={{textAlign:"center",padding:"14px 0"}}>Scannez l'étiquette d'une référence, saisissez la quantité comptée, puis passez à la suivante. À la fin, touchez « Terminer l'inventaire ».</p>
+        :<div className="stk-lignes">{lignes.map(id=>{
+          const a=parId(id),c=comptes[id],th=a.quantite||0,ec=c.n-th;
+          return(<div key={id} className="stk-ligne" style={{gridTemplateColumns:"1fr auto auto"}}>
+            <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>ouvrir(a)}>
+              <div className="stk-ref">{a.reference}</div>
+              <div className="stk-sub">{infoArt(a)}</div>
+              <div className="stk-sub">Théorique {th} → compté <b>{c.n}</b></div>
+            </div>
+            <span className={"stk-ecart "+(ec===0?"ok":ec>0?"pos":"neg")}>{ec===0?"OK":(ec>0?"+":"")+ec}</span>
+            <button type="button" className="stk-rm" onClick={()=>retirer(id)} aria-label={"Retirer "+a.reference}>✕</button>
+          </div>);
+        })}</div>}
+      <button type="button" className="stk-btn stk-btn--s" onClick={()=>setRestant(r=>!r)}>{restant?"▲ Masquer":"▼ Pas encore comptées ("+restants.length+")"}</button>
+      {restant&&<div className="stk-sugg">{restants.map(a=><button type="button" key={a.id} className="stk-carte" onClick={()=>ouvrir(a)}><div><div className="stk-ref">{a.reference}</div><div className="stk-sub">{infoArt(a)}</div></div><div className="stk-sub">Compter</div></button>)}</div>}
+    </div>
+    <div className="stk-session-pied">
+      <div style={{display:"flex",gap:10,alignItems:"center"}}>
+        <select className="stk-select" value={qui||""} onChange={e=>setQui(e.target.value||null)} aria-label="Opérateur"><option value="">Qui ?</option>{liste.map(t=><option key={t} value={t}>{t}</option>)}</select>
+        <button type="button" className="stk-btn stk-btn--p" style={{flex:1}} disabled={!lignes.length} onClick={()=>{setEnvoi({enCours:false,erreur:null});setFin(true);recharger();}}>Terminer l'inventaire ({lignes.length})</button>
+      </div>
+    </div>
+
+    {art&&<div className="stk-voile haut" onClick={e=>{if(e.target===e.currentTarget){setCourant(null);setSaisie("");}}}>
+      <div className="stk-feuille" role="dialog" aria-label={"Comptage "+art.reference}>
+        <div className="stk-feuille-tete"><h2>Combien en stock ?</h2><button type="button" className="stk-x" onClick={()=>{setCourant(null);setSaisie("");}} aria-label="Annuler">✕</button></div>
+        <div className="stk-corps" style={{alignItems:"center",textAlign:"center"}}>
+          <div><div className="stk-ref" style={{fontSize:24}}>{art.reference}</div><div className="stk-sub" style={{fontSize:14}}>{infoArt(art)}</div></div>
+          <input className="stk-gros-input" type="text" inputMode="numeric" value={saisie} onChange={e=>setSaisie(e.target.value.replace(/\D/g,""))} onKeyDown={e=>{if(e.key==="Enter")validerComptage();}} placeholder="0" autoFocus aria-label="Quantité comptée"/>
+          <button type="button" className="stk-btn stk-btn--p" style={{width:"100%"}} disabled={!saisieOk} onClick={validerComptage}>Suivant ▶</button>
+          <p className="stk-aide">Comptez ce qu'il y a réellement en rayon. Tapez 0 s'il n'y en a plus.</p>
+        </div>
+      </div>
+    </div>}
+
+    {fin&&<Feuille titre="Terminer l'inventaire" haut onFermer={()=>setFin(false)}>
+      <div className="stk-info"><strong>{lignes.length}</strong> référence{lignes.length>1?"s":""} comptée{lignes.length>1?"s":""}, dont <strong>{ecarts.length}</strong> avec un écart.{restants.length>0&&<> {restants.length} non comptée{restants.length>1?"s":""} : leur stock reste inchangé.</>}</div>
+      {ecarts.length>0&&<div className="stk-histo">{ecarts.map(id=>{const a=parId(id),th=a.quantite||0,ec=comptes[id].n-th;return(<div key={id}><span className="q" style={{minWidth:90}}><b style={{fontFamily:MONO}}>{a.reference}</b></span><span>{th} → <b>{comptes[id].n}</b></span><span className={"stk-ecart "+(ec>0?"pos":"neg")}>{ec>0?"+":""}{ec}</span></div>);})}</div>}
+      {!qui&&<div className="stk-alerte">Choisissez l'opérateur (« Qui ? » en bas de l'écran d'inventaire) pour enregistrer.</div>}
+      {envoi.erreur&&<div className="stk-alerte">{envoi.erreur}</div>}
+      <button type="button" className="stk-btn stk-btn--v" disabled={!qui||envoi.enCours} onClick={enregistrer}>{envoi.enCours?"Enregistrement…":"Enregistrer dans la base"}</button>
+      <button type="button" className="stk-btn" onClick={()=>setFin(false)}>Continuer à compter</button>
+    </Feuille>}
+    {inconnu&&<CodeInconnu haut code={inconnu} articles={articles} onFermer={()=>setInconnu(null)} onAssocie={a=>{setInconnu(null);ouvrir(a);}}/>}
+  </div>);
+}
+
 // ─── Page Stock : tout part du scan ; l'écran d'accueil montre ce qui est à renouveler ───────────
 export default function PageStock({techs,sessionTech}){
   const {articles,disponible,recharger}=useStock();
@@ -973,6 +1126,8 @@ export default function PageStock({techs,sessionTech}){
   const [serie,setSerie]=useState("toutes");
   const [ficheId,setFicheId]=useState(null);
   const [session,setSession]=useState(null); // null | "sortie" | "entree"
+  const [inv,setInv]=useState(false);
+  const [brouillon,setBrouillon]=useState(()=>lireBrouillonInv());
   const [assoc,setAssoc]=useState(null); // article dont on associe un code fabricant
   const [importOuvert,setImportOuvert]=useState(false);
   const [etiquettes,setEtiquettes]=useState(null);
@@ -984,8 +1139,8 @@ export default function PageStock({techs,sessionTech}){
   const afficherToast=useCallback(t=>{setToast(t);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(null),4200);},[]);
   useEffect(()=>()=>clearTimeout(toastRef.current),[]);
   const chargerRecents=useCallback(async()=>{
-    const r=await appel("GET","stock_mouvements?select=*&order=created_at.desc&limit=12");
-    if(r.ok&&Array.isArray(r.data))setRecents(r.data);
+    const r=await appel("GET","stock_mouvements?select=*&order=created_at.desc&limit=40");
+    if(r.ok&&Array.isArray(r.data))setRecents(r.data.filter(m=>!(m.type==="inventaire"&&m.delta===0)).slice(0,12));
   },[]);
   const chargerDemandes=useCallback(async()=>{
     const r=await appel("GET","demandes_materiel?statut=eq.a_commander&select=designation&limit=1000");
@@ -1069,6 +1224,7 @@ export default function PageStock({techs,sessionTech}){
       <button type="button" className="stk-grand stk-grand--s" disabled={!articles.length} onClick={()=>setSession("sortie")}>📤 Sortie<small>scanner ce qu'on prend</small></button>
       <button type="button" className="stk-grand stk-grand--e" disabled={!articles.length} onClick={()=>setSession("entree")}>📥 Entrée<small>scanner ce qui arrive</small></button>
     </div>
+    {articles.length>0&&<button type="button" className="stk-grand stk-grand--i" onClick={()=>setInv(true)}>📋 {brouillon?"Reprendre l'inventaire ("+Object.keys(brouillon.comptes).length+" comptées)":"Inventaire"}<small>{brouillon?"comptage en cours sur cette tablette":"scanner, compter, terminer"}</small></button>}
     {disponible===true&&articles.length===0&&<div className="stk-vide">
       <div><strong>Aucun article pour le moment.</strong><br/>Importez la feuille des roulements de votre fichier Excel pour démarrer.</div>
       <button type="button" className="stk-btn stk-btn--p" onClick={()=>setImportOuvert(true)}>⬆ Importer depuis Excel</button>
@@ -1114,6 +1270,7 @@ export default function PageStock({techs,sessionTech}){
     </>}
 
     {session&&<SessionScan mode={session} articles={articles} techs={techs} qui={qui} setQui={setQui} onFermer={()=>setSession(null)} onChange={apresMouvement} afficherToast={afficherToast}/>}
+    {inv&&<SessionInventaire articles={articles} techs={techs} qui={qui} setQui={setQui} recharger={recharger} afficherToast={afficherToast} onFini={apresMouvement} onFermer={()=>{setInv(false);setBrouillon(lireBrouillonInv());}}/>}
     {article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={qui} depuisScan={false} onFermer={()=>setFicheId(null)} onChange={apresMouvement} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setAssoc(a);}} onTermineScan={()=>{}}/>}
     {assoc&&<ScanneurCode titre={"Associer un code à "+assoc.reference} aide="Scannez le code imprimé sur la boîte du fabricant." onCode={traiterAssociation} onFermer={()=>setAssoc(null)}/>}
     {importOuvert&&<ImportExcel articles={articles} onFermer={()=>setImportOuvert(false)} onTermine={apresMouvement}/>}
