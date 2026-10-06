@@ -80,7 +80,16 @@ const MONO="ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace";
 
 // ─── Petits outils ───────────────────────────────────────────────────────────────────────────────
 const cle=s=>String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/×/g,"X").replace(/\s+/g," ").trim().toUpperCase();
-const serieDe=ref=>{const m=/^(\d{2})/.exec(String(ref||"").trim());return m?m[1]+"XX":"Autre";};
+const serieDe=ref=>{
+  const t=String(ref||"").trim();
+  const m=/^(\d{2})/.exec(t);
+  if(m)return m[1]+"XX";
+  const l=/^([A-Za-zÀ-ÿ]+)/.exec(t);
+  return l?l[1].toUpperCase():"Autre";
+};
+const familleDe=ref=>/^\d/.test(String(ref||"").trim())?"Roulements":"Garniture";
+// Libellé utilisé dans Matériel à commander (même style que l'assistant : "GM CNK 12")
+const designationDemande=a=>familleDe(a.reference)==="Garniture"?"GM "+a.reference:a.reference;
 function triRef(a,b){
   const na=parseInt(a.reference,10),nb=parseInt(b.reference,10);
   const va=isNaN(na)?Infinity:na,vb=isNaN(nb)?Infinity:nb;
@@ -581,7 +590,8 @@ const dimNorm=s=>txt(s).replace(/\s*[xX×]\s*/g,"×");
 function analyserFeuille(XLSX,wb,nom){
   const ws=wb.Sheets[nom];
   if(!ws)return {erreur:"Feuille introuvable."};
-  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,blankrows:false});
+  const r0=ws["!ref"]?XLSX.utils.decode_range(ws["!ref"]).s.r:0; // pour retrouver le vrai numéro de ligne Excel
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,blankrows:true});
   let hi=-1;
   for(let i=0;i<Math.min(rows.length,15);i++){
     if((rows[i]||[]).some(c=>normEnt(c)==="reference")){hi=i;break;}
@@ -589,19 +599,29 @@ function analyserFeuille(XLSX,wb,nom){
   if(hi<0)return {erreur:"Colonne « Référence » introuvable dans les 15 premières lignes de cette feuille."};
   const ent=rows[hi].map(normEnt);
   const col=p=>ent.findIndex(p);
-  const C={ref:col(h=>h==="reference"),mini:col(h=>h.startsWith("stock min")),maxi:col(h=>h.startsWith("stock max")),empl:col(h=>h.startsWith("emplacement")),dim:col(h=>h.startsWith("dimension")),stock:col(h=>h==="stock"),prix:col(h=>h==="prix unitaire"),f1:col(h=>h==="fournisseur 1"),f2:col(h=>h==="fournisseur 2"),f3:col(h=>h==="fournisseur 3")};
+  const C={ref:col(h=>h==="reference"),mini:col(h=>h.startsWith("stock min")||h.startsWith("stock voulu boite")),maxi:col(h=>h.startsWith("stock max")),voulE:col(h=>h.startsWith("stock voulu etag")),reelB:col(h=>h.startsWith("stock boite")),reelE:col(h=>h.startsWith("stock reel")),empl:col(h=>h.startsWith("emplacement")),dim:col(h=>h.startsWith("dimension")||h.startsWith("diametre")),stock:col(h=>h==="stock"),prix:col(h=>h==="prix unitaire"),f1:col(h=>h==="fournisseur 1"),f2:col(h=>h==="fournisseur 2"),f3:col(h=>h==="fournisseur 3")};
   const cell=(r,i)=>i>=0?r[i]:null;
-  const lignes=[];let ignorees=0;
+  // Feuille à deux stocks (garniture mécanique) : stock = boîte + étagère ; mini = stock voulu boîte ; maxi = voulu boîte + voulu étagère.
+  const deuxStocks=C.voulE>=0||C.reelB>=0||C.reelE>=0;
+  const lignes=[];let ignorees=0,arretLigne=null;
   for(let i=hi+1;i<rows.length;i++){
     const r=rows[i]||[];
     const reference=txt(cell(r,C.ref));
     if(!reference)continue;
-    const l={reference,dimensions:dimNorm(cell(r,C.dim))||null,emplacement:txt(cell(r,C.empl))||null,stock_mini:entier(cell(r,C.mini)),stock_maxi:entier(cell(r,C.maxi)),prix_unitaire:nombre(cell(r,C.prix)),fournisseur1:txt(cell(r,C.f1))||null,fournisseur2:txt(cell(r,C.f2))||null,fournisseur3:txt(cell(r,C.f3))||null,stock:entier(cell(r,C.stock))};
+    const numLigne=r0+i+1;
+    if(arretLigne==null&&cle(reference)==="SPECIALE")arretLigne=numLigne;
+    let mini=entier(cell(r,C.mini)),maxi=entier(cell(r,C.maxi)),stock=entier(cell(r,C.stock));
+    if(deuxStocks){
+      const rb=entier(cell(r,C.reelB)),re=entier(cell(r,C.reelE)),ve=entier(cell(r,C.voulE));
+      stock=(rb==null&&re==null)?null:(rb||0)+(re||0);
+      maxi=(mini==null&&ve==null)?null:(mini||0)+(ve||0);
+    }
+    const l={ligne:numLigne,reference,dimensions:dimNorm(cell(r,C.dim))||null,emplacement:txt(cell(r,C.empl))||null,stock_mini:mini,stock_maxi:maxi,prix_unitaire:nombre(cell(r,C.prix)),fournisseur1:txt(cell(r,C.f1))||null,fournisseur2:txt(cell(r,C.f2))||null,fournisseur3:txt(cell(r,C.f3))||null,stock};
     const autres=[l.dimensions,l.emplacement,l.stock_mini,l.stock_maxi,l.prix_unitaire,l.stock].some(v=>v!=null&&v!=="");
     if(!autres){ignorees++;continue;}
     lignes.push(l);
   }
-  return {lignes,ignorees,colonnes:C};
+  return {lignes,ignorees,colonnes:C,arretLigne,deuxStocks};
 }
 
 async function executerImport({lignes,existants,majQte,onEtat}){
@@ -649,6 +669,12 @@ function ImportExcel({articles,onFermer,onTermine}){
   const [fichier,setFichier]=useState(null); // {nom,buf,feuilles}
   const [feuille,setFeuille]=useState(null);
   const [prefixe,setPrefixe]=useState("6");
+  const [ligneMax,setLigneMax]=useState("");
+  // Roulements : références en 6XXX seulement ; autres feuilles (ex. GM) : tout. Si "SPÉCIALE" est repérée, on s'arrête juste avant.
+  const reglagesPour=(nom,lect)=>{
+    setPrefixe(/^rlmt$|roulement/.test(normEnt(nom))?"6":"");
+    setLigneMax(lect&&lect.arretLigne?String(lect.arretLigne-1):"");
+  };
   const [majQte,setMajQte]=useState(false);
   const [lecture,setLecture]=useState(null);
   const [etat,setEtat]=useState("");
@@ -672,21 +698,23 @@ function ImportExcel({articles,onFermer,onTermine}){
       if(!noms.length)throw new Error("Aucune feuille dans ce fichier.");
       const defaut=noms.find(n=>normEnt(n)==="rlmt")||noms.find(n=>normEnt(n).includes("roulement"))||noms[0];
       const lect=await lireFeuille(buf,defaut);
-      setFichier({nom:f.name,buf,feuilles:noms});setFeuille(defaut);setLecture(lect);setEtape("apercu");
+      setFichier({nom:f.name,buf,feuilles:noms});setFeuille(defaut);setLecture(lect);reglagesPour(defaut,lect);setEtape("apercu");
     }catch(err){setErreur("Ce fichier n'a pas pu être lu ("+((err&&err.message)||"erreur")+"). Utilisez un fichier Excel .xlsx ou .xlsm.");}
     setOccupe(false);
     if(inputRef.current)inputRef.current.value="";
   }
   async function changerFeuille(nom){
     setFeuille(nom);setOccupe(true);setErreur(null);
-    try{setLecture(await lireFeuille(fichier.buf,nom));}catch(err){setErreur("Feuille illisible ("+((err&&err.message)||"erreur")+").");}
+    try{const lect=await lireFeuille(fichier.buf,nom);setLecture(lect);reglagesPour(nom,lect);}catch(err){setErreur("Feuille illisible ("+((err&&err.message)||"erreur")+").");}
     setOccupe(false);
   }
   const pre=cle(prefixe);
+  const max=parseInt(ligneMax,10);
+  const candidates=((lecture&&lecture.lignes)||[]).filter(l=>(!pre||cle(l.reference).startsWith(pre))&&(isNaN(max)||l.ligne<=max));
   const vues=new Map();
-  ((lecture&&lecture.lignes)||[]).forEach(l=>{if(!pre||cle(l.reference).startsWith(pre))vues.set(cle(l.reference),l);});
+  candidates.forEach(l=>{vues.set(cle(l.reference),l);});
   const lignes=[...vues.values()];
-  const nbDoublons=((lecture&&lecture.lignes)||[]).filter(l=>!pre||cle(l.reference).startsWith(pre)).length-lignes.length;
+  const nbDoublons=candidates.length-lignes.length;
   const nbNouveaux=lignes.filter(l=>!existants.has(cle(l.reference))).length;
   async function importer(){
     setEtape("import");setErreur(null);
@@ -698,7 +726,7 @@ function ImportExcel({articles,onFermer,onTermine}){
   }
   return(<Feuille titre="⬆ Importer le catalogue depuis Excel" large onFermer={onFermer}>
     {etape==="fichier"&&<>
-      <p className="stk-aide">Choisissez votre fichier de stock (.xlsx ou .xlsm). L'appli lit la feuille des roulements, ajoute les nouvelles références et met à jour dimensions, emplacements, mini/maxi, prix et fournisseurs. <strong>Elle ne modifie jamais les quantités déjà suivies dans l'appli.</strong></p>
+      <p className="stk-aide">Choisissez votre fichier de stock (.xlsx ou .xlsm). L'appli lit la feuille choisie (roulements, garniture mécanique…), ajoute les nouvelles références et met à jour dimensions, emplacements, mini/maxi, prix et fournisseurs. <strong>Elle ne modifie jamais les quantités déjà suivies dans l'appli.</strong></p>
       <input ref={inputRef} type="file" accept=".xlsx,.xlsm,.xls" onChange={choisirFichier} style={{display:"none"}}/>
       <button type="button" className="stk-btn stk-btn--p" disabled={occupe} onClick={()=>inputRef.current&&inputRef.current.click()}>{occupe?"Lecture du fichier…":"📂 Choisir le fichier Excel"}</button>
     </>}
@@ -706,14 +734,17 @@ function ImportExcel({articles,onFermer,onTermine}){
       <div className="stk-info">Fichier : <strong>{fichier.nom}</strong></div>
       <div className="stk-champs">
         <label><span>Feuille à importer</span><select value={feuille} onChange={e=>changerFeuille(e.target.value)} disabled={occupe}>{fichier.feuilles.map(n=><option key={n} value={n}>{n}</option>)}</select></label>
-        <label><span>Références commençant par</span><input type="text" value={prefixe} onChange={e=>setPrefixe(e.target.value)} placeholder="6 = roulements 6XXX"/></label>
+        <label><span>Références commençant par</span><input type="text" value={prefixe} onChange={e=>setPrefixe(e.target.value)} placeholder="vide = toutes (6 = roulements 6XXX)"/></label>
+        <label><span>S'arrêter à la ligne n°</span><input type="text" inputMode="numeric" value={ligneMax} onChange={e=>setLigneMax(e.target.value.replace(/\D/g,""))} placeholder="vide = jusqu'au bout"/></label>
       </div>
+      {lecture&&lecture.arretLigne&&<div className="stk-info">« SPÉCIALE » repérée à la ligne {lecture.arretLigne} : par défaut, tout ce qui est en dessous n'est pas importé (la dernière ligne importée est la {lecture.arretLigne-1}). Vous pouvez changer la ligne ci-dessus.</div>}
       {lecture&&lecture.erreur&&<div className="stk-alerte">{lecture.erreur}</div>}
       {lecture&&!lecture.erreur&&<>
         <div className="stk-info"><strong>{lignes.length}</strong> référence{lignes.length>1?"s":""} à importer : <strong>{nbNouveaux}</strong> nouvelle{nbNouveaux>1?"s":""}, <strong>{lignes.length-nbNouveaux}</strong> déjà dans l'appli (catalogue mis à jour, quantités conservées).{lecture.ignorees>0&&<> {lecture.ignorees} ligne{lecture.ignorees>1?"s":""} de titre ignorée{lecture.ignorees>1?"s":""}.</>}{nbDoublons>0&&<> {nbDoublons} doublon{nbDoublons>1?"s":""} ignoré{nbDoublons>1?"s":""}.</>}</div>
         {lignes.length>0&&<div style={{overflowX:"auto"}}><table className="stk-table"><thead><tr><th>Référence</th><th>Dimensions</th><th>Empl.</th><th>Mini</th><th>Maxi</th><th>Stock Excel</th><th>Prix</th></tr></thead><tbody>
           {lignes.slice(0,6).map(l=><tr key={l.reference}><td>{l.reference}</td><td>{l.dimensions||""}</td><td>{l.emplacement||""}</td><td>{l.stock_mini==null?"":l.stock_mini}</td><td>{l.stock_maxi==null?"":l.stock_maxi}</td><td>{l.stock==null?"":l.stock}</td><td>{fmtEuro(l.prix_unitaire)}</td></tr>)}
         </tbody></table>{lignes.length>6&&<p className="stk-aide" style={{marginTop:6}}>… et {lignes.length-6} autre{lignes.length-6>1?"s":""}.</p>}</div>}
+        {lecture.deuxStocks&&<p className="stk-aide">Feuille à deux stocks : le <strong>stock</strong> importé est « boîte + étagère » ; le <strong>mini</strong> est le « stock voulu boîte » ; le <strong>maxi</strong> est « voulu boîte + voulu étagère ».</p>}
         <p className="stk-aide">Au premier import, le « Stock » d'Excel devient le stock de départ de chaque nouvelle référence.</p>
         <label style={{display:"flex",alignItems:"flex-start",gap:10,fontSize:14}}><input type="checkbox" checked={majQte} onChange={e=>setMajQte(e.target.checked)} style={{width:22,height:22,minHeight:0,padding:0,flex:"none",marginTop:2}}/><span>Remettre aussi les quantités des références déjà suivies au « Stock » d'Excel (enregistré comme un inventaire dans l'historique). À éviter une fois l'appli utilisée.</span></label>
       </>}
@@ -1188,7 +1219,7 @@ export default function PageStock({techs,sessionTech}){
     const va=(a.quantite||0)<=0?0:1,vb=(b.quantite||0)<=0?0:1;
     return va-vb||((a.quantite||0)/(a.stock_mini||1))-((b.quantite||0)/(b.stock_mini||1))||triRef(a,b);
   });
-  const aDemander=reco.filter(a=>!demandes.has(cle(a.reference)));
+  const aDemander=reco.filter(a=>!demandes.has(cle(designationDemande(a))));
   const nbRupture=articles.filter(a=>(a.quantite||0)<=0).length;
   const valeur=articles.reduce((s,a)=>s+Math.max(0,a.quantite||0)*(a.prix_unitaire||0),0);
 
@@ -1198,11 +1229,11 @@ export default function PageStock({techs,sessionTech}){
     setCmdEnCours(true);
     const id="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     const base=Date.now();
-    const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:"Roulements",designation:a.reference,quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+(a.quantite||0)+" / mini "+(a.stock_mini==null?0:a.stock_mini)+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
+    const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:familleDe(a.reference),designation:designationDemande(a),quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+(a.quantite||0)+" / mini "+(a.stock_mini==null?0:a.stock_mini)+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
     const r=await appel("POST","demandes_materiel",rows,"return=minimal");
     setCmdEnCours(false);
     if(!r.ok){afficherToast("La demande n'a pas abouti (connexion, ou « Matériel à commander » pas encore activé)");return;}
-    setDemandes(prev=>{const n=new Set(prev);arts.forEach(a=>n.add(cle(a.reference)));return n;});
+    setDemandes(prev=>{const n=new Set(prev);arts.forEach(a=>n.add(cle(designationDemande(a))));return n;});
     afficherToast("✓ "+arts.length+" référence"+(arts.length>1?"s":"")+" ajoutée"+(arts.length>1?"s":"")+" à Matériel à commander (à renouveler)");
   }
   async function traiterAssociation(brut){
@@ -1245,7 +1276,7 @@ export default function PageStock({techs,sessionTech}){
   }
   return(<div className="stk"><style>{CSS_STOCK}</style>
     <div className="stk-barre">
-      <div className="stk-tete"><h2>🗃 Stock — roulements</h2><p className="stk-sous">Scannez, le reste suit. Le catalogue vient d'Excel.</p></div>
+      <div className="stk-tete"><h2>🗃 Stock</h2><p className="stk-sous">Scannez, le reste suit. Le catalogue vient d'Excel.</p></div>
       <select className="stk-select" value={qui||""} onChange={e=>setQui(e.target.value||null)} aria-label="Opérateur"><option value="">Opérateur ?</option>{liste.map(t=><option key={t} value={t}>{t}</option>)}</select>
     </div>
     {disponible===null&&<p className="stk-aide">Chargement…</p>}
@@ -1255,7 +1286,7 @@ export default function PageStock({techs,sessionTech}){
     </div>
     {articles.length>0&&<button type="button" className="stk-grand stk-grand--i" onClick={()=>setInv(true)}>📋 {brouillon?"Reprendre l'inventaire ("+Object.keys(brouillon.comptes).length+" comptées)":"Inventaire"}<small>{brouillon?"comptage en cours sur cette tablette":"scanner, compter, terminer"}</small></button>}
     {disponible===true&&articles.length===0&&<div className="stk-vide">
-      <div><strong>Aucun article pour le moment.</strong><br/>Importez la feuille des roulements de votre fichier Excel pour démarrer.</div>
+      <div><strong>Aucun article pour le moment.</strong><br/>Importez une feuille de votre fichier Excel (roulements, garniture mécanique…) pour démarrer.</div>
       <button type="button" className="stk-btn stk-btn--p" onClick={()=>setImportOuvert(true)}>⬆ Importer depuis Excel</button>
     </div>}
     {articles.length>0&&<>
@@ -1268,7 +1299,7 @@ export default function PageStock({techs,sessionTech}){
       </div>
       {reco.length===0?<div className="stk-rien">✓ Rien à renouveler : tous les stocks sont au-dessus du minimum.</div>
         :<div className="stk-liste" style={{marginTop:0}}>{reco.map(a=>{
-          const st=a.quantite||0,dem=demandes.has(cle(a.reference));
+          const st=a.quantite||0,dem=demandes.has(cle(designationDemande(a)));
           return(<div key={a.id} className={"stk-reno"+(st<=0?" vide":"")}>
             <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>setFicheId(a.id)}>
               <div><span className="stk-ref">{a.reference}</span>{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
