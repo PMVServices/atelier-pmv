@@ -1,0 +1,23 @@
+{
+  "short_name": "PMV Stock",
+  "name": "PMV Stock — gestion de stock",
+  "description": "Gestion de stock de l'atelier PMV : scan, entrées, sorties, inventaire",
+  "id": "/?app=stock",
+  "icons": [
+    { "src": "logo72.png",  "sizes": "72x72",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "logo96.png",  "sizes": "96x96",   "type": "image/png", "purpose": "any maskable" },
+    { "src": "logo128.png", "sizes": "128x128", "type": "image/png", "purpose": "any maskable" },
+    { "src": "logo144.png", "sizes": "144x144", "type": "image/png", "purpose": "any maskable" },
+    { "src": "logo152.png", "sizes": "152x152", "type": "image/png", "purpose": "any maskable" },
+    { "src": "logo192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "logo384.png", "sizes": "384x384", "type": "image/png", "purpose": "any maskable" },
+    { "src": "logo512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "start_url": "/?app=stock",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#1B4F8A",
+  "background_color": "#1B4F8A",
+  "lang": "fr",
+  "scope": "/"
+}

@@ -965,6 +965,34 @@ function SessionScan({mode:modeInit,articles,techs,qui,setQui,onFermer,onChange,
   </div>);
 }
 
+// ─── Stock sur téléphone : lien du mode "Stock seul", QR code à scanner avec le téléphone ───────────
+function LienTelephone({onFermer}){
+  const lien=window.location.origin+"/?app=stock";
+  const [qr,setQr]=useState("");
+  const [copie,setCopie]=useState(false);
+  useEffect(()=>{let a=false;codeSvg("qr",lien).then(x=>{if(!a)setQr(x);}).catch(()=>{});return()=>{a=true;};},[lien]);
+  async function copier(){try{await navigator.clipboard.writeText(lien);setCopie(true);setTimeout(()=>setCopie(false),2500);}catch(e){}}
+  async function partager(){try{await navigator.share({title:"PMV Stock",url:lien});}catch(e){}}
+  return(<Feuille titre="📱 Stock sur téléphone" onFermer={onFermer}>
+    <p className="stk-aide">Ce lien ouvre l'appli directement sur la gestion de stock, sans les autres onglets (fiches, planning…). Le code PIN est demandé une fois sur le téléphone.</p>
+    <div className="stk-code">
+      {qr&&<div className="qr" style={{width:170,height:170}} dangerouslySetInnerHTML={{__html:qr}}/>}
+      <div style={{flex:"1 1 200px",fontSize:13.5,color:"#4B5563",overflowWrap:"anywhere"}}>
+        <strong style={{fontFamily:MONO}}>{lien}</strong>
+        <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
+          <button type="button" className="stk-btn stk-btn--s" onClick={copier}>{copie?"✓ Copié":"📋 Copier le lien"}</button>
+          {typeof navigator!=="undefined"&&navigator.share&&<button type="button" className="stk-btn stk-btn--s" onClick={partager}>📤 Envoyer</button>}
+        </div>
+      </div>
+    </div>
+    <ol style={{margin:0,paddingLeft:20,fontSize:14,lineHeight:1.6,color:"#1A1A2E"}}>
+      <li>Sur le téléphone, scannez ce QR code avec l'appareil photo (ou ouvrez le lien reçu).</li>
+      <li>Dans Chrome : menu <strong>⋮</strong> puis <strong>« Ajouter à l'écran d'accueil »</strong> (ou « Installer l'application »).</li>
+      <li>L'icône <strong>PMV Stock</strong> ouvre ensuite directement la gestion de stock.</li>
+    </ol>
+  </Feuille>);
+}
+
 // ─── Inventaire : scanner, saisir la quantité comptée, passer au suivant, tout enregistrer à la fin ──
 // Comptage "à l'aveugle" (le stock théorique n'est pas montré pendant la saisie, pour ne pas fausser le comptage).
 // Le brouillon est gardé sur la tablette : si l'appli se ferme en cours de route, on reprend où on en était.
@@ -1127,6 +1155,7 @@ export default function PageStock({techs,sessionTech}){
   const [ficheId,setFicheId]=useState(null);
   const [session,setSession]=useState(null); // null | "sortie" | "entree"
   const [inv,setInv]=useState(false);
+  const [tel,setTel]=useState(false);
   const [brouillon,setBrouillon]=useState(()=>lireBrouillonInv());
   const [assoc,setAssoc]=useState(null); // article dont on associe un code fabricant
   const [importOuvert,setImportOuvert]=useState(false);
@@ -1259,6 +1288,7 @@ export default function PageStock({techs,sessionTech}){
         <button type="button" onClick={()=>setEtiquettes({ids:[]})}>🏷 Étiquettes</button>
         <button type="button" onClick={()=>setImportOuvert(true)}>⬆ Importer Excel</button>
         <button type="button" onClick={exporter}>⬇ Exporter</button>
+        {!/[?&]app=stock(&|$)/.test(window.location.search)&&<button type="button" onClick={()=>setTel(true)}>📱 Sur téléphone</button>}
       </div>
       {voirTout&&<>
         <div className="stk-chips">
@@ -1270,6 +1300,7 @@ export default function PageStock({techs,sessionTech}){
     </>}
 
     {session&&<SessionScan mode={session} articles={articles} techs={techs} qui={qui} setQui={setQui} onFermer={()=>setSession(null)} onChange={apresMouvement} afficherToast={afficherToast}/>}
+    {tel&&<LienTelephone onFermer={()=>setTel(false)}/>}
     {inv&&<SessionInventaire articles={articles} techs={techs} qui={qui} setQui={setQui} recharger={recharger} afficherToast={afficherToast} onFini={apresMouvement} onFermer={()=>{setInv(false);setBrouillon(lireBrouillonInv());}}/>}
     {article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={qui} depuisScan={false} onFermer={()=>setFicheId(null)} onChange={apresMouvement} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setAssoc(a);}} onTermineScan={()=>{}}/>}
     {assoc&&<ScanneurCode titre={"Associer un code à "+assoc.reference} aide="Scannez le code imprimé sur la boîte du fabricant." onCode={traiterAssociation} onFermer={()=>setAssoc(null)}/>}

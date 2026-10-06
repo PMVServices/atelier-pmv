@@ -4756,6 +4756,9 @@ const NAV_ITEMS=[
   {id:"stats",label:"📊 Stats"},
 ];
 
+// Mode "Stock seul" (lien /?app=stock, utilisé par l'icône PMV Stock du téléphone) : une seule page, sans menu.
+const MODE_STOCK=typeof window!=="undefined"&&/[?&]app=stock(&|$)/.test(window.location.search);
+
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
   const [page,setPage]=useState(()=>loadDraft()?"fiche":"dashboard");const [sessionTech,setSessionTech]=useState(()=>loadDraft()?.sessionTech||null);const [ficheOuverte,setFicheOuverte]=useState(()=>{const d=loadDraft();return d?{id:d.ficheId,de:d.v?.de,client:d.v?.client,materiel_lieu:d.v?.materiel_lieu,type_materiel:d.typeMateriel,statut_chantier:d.statutChantier,etape_active:d.actif,etapes_validees:d.validees}:null;});const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState(()=>loadDraft()?.typeMateriel||"Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);const [rapportFicheId,setRapportFicheId]=useState(null);const [seedValeurs,setSeedValeurs]=useState(null);
@@ -4810,6 +4813,16 @@ export default function App(){
   const isMobile=width<900;
   const [menuOuvert,setMenuOuvert]=useState(false);
   if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
+  if(MODE_STOCK){
+    return(<div style={S.app}>
+      <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
+        <img src={LOGO_B64} alt="PMV" style={{height:30,objectFit:"contain",borderRadius:4,flexShrink:0}}/>
+        <span style={{color:"#fff",fontWeight:700,fontSize:16,marginLeft:10}}>Stock</span>
+        <a href={window.location.pathname} style={{marginLeft:"auto",color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a>
+      </div>
+      <PageStock techs={techs} sessionTech={sessionTech}/>
+    </div>);
+  }
 
   const navItems=NAV_ITEMS;
 
