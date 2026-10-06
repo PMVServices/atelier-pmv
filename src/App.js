@@ -4111,36 +4111,43 @@ const PALIERS_FAMILLES=[
 ];
 const CONDOS_UF=["1,5","2,5","3,5","4","5","6,3","7","8","10","12,5","14","15","16","20","25","30","35","40","45","50","60","70"];
 function cfgMaterielVide(type){
-  return {type:type||"commander",serie:null,sel:null,texte:"",qty:1,di:"",de:"",ep:"",levres:null,vv:null,vvDi:"",fil:null,gmType:null,gmRef:null,gmDiam:"",famille:null};
+  return {type:type||"commander",serie:null,sel:null,texte:"",qty:1,di:"",de:"",ep:"",levres:null,vv:null,vvDi:"",fil:null,gmMobile:null,gmFixe:null,gmTexteM:"",gmTexteF:"",gmDiam:"",famille:null};
 }
 function nombrePositif(v){const n=parseFloat(String(v).replace(",","."));return isNaN(n)||n<=0?null:n;}
 const fmtNb=n=>String(n).replace(".",",");
-// Désignation générée pour chaque catégorie ; null tant que les choix sont incomplets.
-function designationMateriel(cat,c){
+// Désignations générées pour chaque catégorie (liste vide tant que les choix sont incomplets).
+// Garniture : une mobile et/ou une fixe, ajoutées ensemble (même Ø d'arbre), une ligne chacune.
+function designationsMateriel(cat,c){
   const t=s=>(s||"").trim();
+  const une=d=>d?[d]:[];
   switch(cat){
-    case "roulements":return c.serie==="Autre"?(t(c.texte)||null):(c.sel||null);
+    case "roulements":return une(c.serie==="Autre"?t(c.texte):c.sel);
     case "garniture":{
-      if(!c.gmType||!c.gmRef)return null;
-      const ref=c.gmRef==="__autre"?t(c.texte):c.gmRef;
       const d=nombrePositif(c.gmDiam);
-      if(!ref||!d)return null;
-      return "GM "+c.gmType+" "+ref+" Ø"+fmtNb(d);
+      const choix=[["mobile",c.gmMobile,c.gmTexteM],["fixe",c.gmFixe,c.gmTexteF]].filter(x=>x[1]);
+      if(!choix.length||!d)return [];
+      const out=[];
+      for(const [genre,ref,texte] of choix){
+        const r=ref==="__autre"?t(texte):ref;
+        if(!r)return []; // un choix "Autre" sans référence bloque l'ajout
+        out.push("GM "+genre+" "+r+" Ø"+fmtNb(d));
+      }
+      return out;
     }
     case "levres":{
       const a=nombrePositif(c.di),b=nombrePositif(c.de),e=nombrePositif(c.ep);
-      if(!a||!b||!e||!c.levres)return null;
-      return fmtNb(a)+" × "+fmtNb(b)+" × "+fmtNb(e)+", "+(c.levres==="simple"?"simple":"double")+" lèvre";
+      if(!a||!b||!e||!c.levres)return [];
+      return [fmtNb(a)+" × "+fmtNb(b)+" × "+fmtNb(e)+", "+(c.levres==="simple"?"simple":"double")+" lèvre"];
     }
-    case "vavs":{const d=nombrePositif(c.vvDi);return(!c.vv||!d)?null:c.vv+fmtNb(d);}
-    case "palier":return c.famille==="Autre"?(t(c.texte)||null):(c.sel||null);
+    case "vavs":{const d=nombrePositif(c.vvDi);return(!c.vv||!d)?[]:[c.vv+fmtNb(d)];}
+    case "palier":return une(c.famille==="Autre"?t(c.texte):c.sel);
     case "condo":{
-      if(!c.fil)return null;
+      if(!c.fil)return [];
       const v=c.sel==="__autre"?t(c.texte):c.sel;
-      if(!v)return null;
-      return "Condensateur "+(c.fil==="fil"?"filaire":"à cosses")+" "+(/[a-zµ]/i.test(v)?v:v+"mf");
+      if(!v)return [];
+      return ["Condensateur "+(c.fil==="fil"?"filaire":"à cosses")+" "+(/[a-zµ]/i.test(v)?v:v+"mf")];
     }
-    default:return t(c.texte)||null;
+    default:return une(t(c.texte));
   }
 }
 function ilYa(iso){
@@ -4319,8 +4326,15 @@ function BoutonChoixMat({actif,onClick,className,children}){
 function ChampTexteMat({label,valeur,onChange,placeholder}){
   return(<label className="mat-champ"><span className="mat-lib">{label}</span><input type="text" value={valeur} onChange={e=>onChange(e.target.value)} placeholder={placeholder} autoComplete="off"/></label>);
 }
+// Saisie "texte + clavier décimal" plutôt que type="number" : selon la langue du clavier, un champ number
+// peut refuser la virgule (valeur vide). On ne garde que chiffres et une seule virgule (le point devient virgule).
+function nettoyerNombre(s){
+  const v=String(s).replace(/[^0-9.,]/g,"").replace(/\./g,",");
+  const i=v.indexOf(",");
+  return i<0?v:v.slice(0,i+1)+v.slice(i+1).replace(/,/g,"");
+}
 function ChampNombreMat({label,valeur,onChange}){
-  return(<label className="mat-champ"><span className="mat-lib">{label}</span><input type="number" inputMode="decimal" min="0" step="any" value={valeur} onChange={e=>onChange(e.target.value)} placeholder="mm"/></label>);
+  return(<label className="mat-champ"><span className="mat-lib">{label}</span><input type="text" inputMode="decimal" value={valeur} onChange={e=>onChange(nettoyerNombre(e.target.value))} placeholder="mm" autoComplete="off"/></label>);
 }
 function BadgeTypeMat({type,onClick}){
   const t=TYPES_DEMANDE[type]||TYPES_DEMANDE.commander;
@@ -4349,15 +4363,16 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
   useEffect(()=>{window.scrollTo(0,0);},[etape]);
 
   const maj=patch=>setCfg(c=>({...c,...patch}));
-  const designation=cat?designationMateriel(cat,cfg):null;
+  const designations=cat?designationsMateriel(cat,cfg):[];
 
   function choisirType(t){setTypeDefaut(t);setCfg(cfgMaterielVide(t));setEtape("cat");}
   function ouvrirCat(id){setCat(id);setCfg(cfgMaterielVide(typeDefaut));setLignesCat([]);setConfirmQuit(false);setEtape("cfg");}
   function retourCat(){if(lignesCat.length){setConfirmQuit(true);return;}setEtape("cat");}
   function ajouter(){
-    if(!designation)return;
-    setLignesCat(a=>a.concat([{id:idRef.current++,cat:nomCategorieMat(cat),designation,qty:cfg.qty,type:cfg.type}]));
-    maj({sel:null,texte:"",qty:1,di:"",de:"",ep:"",vvDi:"",gmRef:null,gmDiam:""});
+    if(!designations.length)return;
+    const nouvelles=designations.map(d=>({id:idRef.current++,cat:nomCategorieMat(cat),designation:d,qty:cfg.qty,type:cfg.type}));
+    setLignesCat(a=>a.concat(nouvelles));
+    maj({sel:null,texte:"",qty:1,di:"",de:"",ep:"",vvDi:"",gmMobile:null,gmFixe:null,gmTexteM:"",gmTexteF:"",gmDiam:""});
   }
   function validerCat(){
     setDerniere({nom:nomCategorieMat(cat),lignes:lignesCat});
@@ -4400,12 +4415,19 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
         {cfg.serie&&cfg.serie!=="Autre"&&<div className="mat-groupe"><span className="mat-lib">Référence {cfg.serie}</span><div className="mat-refs">{refsRoulements(cfg.serie).map(r=>{const [b,s]=decouperRef(r);return(<BoutonChoixMat key={r} className="mat-ref-btn" actif={cfg.sel===r} onClick={()=>maj({sel:r})}><b>{b}</b>{s&&<small>{s}</small>}</BoutonChoixMat>);})}</div></div>}
         {cfg.serie==="Autre"&&<ChampTexteMat label="Référence du roulement" valeur={cfg.texte} onChange={v=>maj({texte:v})} placeholder="Texte libre"/>}
       </>);
-      case "garniture":return(<>
-        <div className="mat-groupe"><span className="mat-lib">Garniture mobile</span><div className="mat-rang">{GM_MOBILE_OPTIONS.map(o=>{const v=o==="Autre"?"__autre":o;return(<BoutonChoixMat key={o} actif={cfg.gmType==="mobile"&&cfg.gmRef===v} onClick={()=>maj({gmType:"mobile",gmRef:v})}>{o}</BoutonChoixMat>);})}</div></div>
-        <div className="mat-groupe"><span className="mat-lib">Garniture fixe</span><div className="mat-rang">{GM_FIXE_OPTIONS.map(o=>{const v=o==="Autre"?"__autre":o;return(<BoutonChoixMat key={o} actif={cfg.gmType==="fixe"&&cfg.gmRef===v} onClick={()=>maj({gmType:"fixe",gmRef:v})}>{o}</BoutonChoixMat>);})}</div></div>
-        {cfg.gmRef==="__autre"&&<ChampTexteMat label="Référence précise" valeur={cfg.texte} onChange={v=>maj({texte:v})} placeholder="Texte libre"/>}
-        {cfg.gmRef&&<ChampNombreMat label="Diamètre arbre (mm)" valeur={cfg.gmDiam} onChange={v=>maj({gmDiam:v})}/>}
-      </>);
+      case "garniture":{
+        // Mobile et fixe sont indépendantes (on peut prendre l'une, l'autre ou les deux) ; retoucher un choix le retire.
+        const bascule=(cle,v)=>maj({[cle]:cfg[cle]===v?null:v});
+        const liste=(options,cle)=>options.map(o=>{const v=o==="Autre"?"__autre":o;return(<BoutonChoixMat key={o} actif={cfg[cle]===v} onClick={()=>bascule(cle,v)}>{o}</BoutonChoixMat>);});
+        return(<>
+          <p className="mat-aide">Mobile, fixe ou les deux : chacune devient une ligne, avec le même diamètre d'arbre.</p>
+          <div className="mat-groupe"><span className="mat-lib">Garniture mobile</span><div className="mat-rang">{liste(GM_MOBILE_OPTIONS,"gmMobile")}</div></div>
+          {cfg.gmMobile==="__autre"&&<ChampTexteMat label="Référence garniture mobile" valeur={cfg.gmTexteM} onChange={v=>maj({gmTexteM:v})} placeholder="Texte libre"/>}
+          <div className="mat-groupe"><span className="mat-lib">Garniture fixe</span><div className="mat-rang">{liste(GM_FIXE_OPTIONS,"gmFixe")}</div></div>
+          {cfg.gmFixe==="__autre"&&<ChampTexteMat label="Référence garniture fixe" valeur={cfg.gmTexteF} onChange={v=>maj({gmTexteF:v})} placeholder="Texte libre"/>}
+          {(cfg.gmMobile||cfg.gmFixe)&&<ChampNombreMat label="Diamètre arbre (mm)" valeur={cfg.gmDiam} onChange={v=>maj({gmDiam:v})}/>}
+        </>);
+      }
       case "levres":return(<>
         <div className="mat-trois"><ChampNombreMat label="Ø intérieur (mm)" valeur={cfg.di} onChange={v=>maj({di:v})}/><ChampNombreMat label="Ø extérieur (mm)" valeur={cfg.de} onChange={v=>maj({de:v})}/><ChampNombreMat label="Épaisseur (mm)" valeur={cfg.ep} onChange={v=>maj({ep:v})}/></div>
         <div className="mat-groupe"><span className="mat-lib">Lèvres</span><div className="mat-rang">{[["simple","Simple lèvre"],["double","Double lèvre"]].map(([v,l])=><BoutonChoixMat key={v} actif={cfg.levres===v} onClick={()=>maj({levres:v})}>{l}</BoutonChoixMat>)}</div></div>
@@ -4467,8 +4489,8 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
       <div className="mat-ajout">
         <div className="mat-qte-bloc"><span className="mat-lib">Quantité</span><div className="mat-qte"><button type="button" onClick={()=>maj({qty:Math.max(1,cfg.qty-1)})} aria-label="Diminuer">−</button><output>{cfg.qty}</output><button type="button" onClick={()=>maj({qty:Math.min(99,cfg.qty+1)})} aria-label="Augmenter">+</button></div></div>
         <div className="mat-qte-bloc"><span className="mat-lib">Type</span><div className="mat-rang">{["commander","renouveler"].map(t=><BoutonChoixMat key={t} className="mat-choix--s" actif={cfg.type===t} onClick={()=>maj({type:t})}>{TYPES_DEMANDE[t].label}</BoutonChoixMat>)}</div></div>
-        <div className="mat-apercu">{designation?<>Sera ajouté : <span className="mat-ref">{designation}</span> × {cfg.qty}</>:"Complétez les choix pour pouvoir ajouter."}</div>
-        <button type="button" className="mat-btn mat-btn--s" disabled={!designation} onClick={ajouter}>Ajouter</button>
+        <div className="mat-apercu">{designations.length?<>Sera ajouté : {designations.map((d,i)=><React.Fragment key={d+i}>{i>0&&" + "}<span className="mat-ref">{d}</span> × {cfg.qty}</React.Fragment>)}</>:"Complétez les choix pour pouvoir ajouter."}</div>
+        <button type="button" className="mat-btn mat-btn--s" disabled={!designations.length} onClick={ajouter}>{designations.length>1?"Ajouter les "+designations.length:"Ajouter"}</button>
       </div>
       {lignesCat.length===0
         ?<p className="mat-aide">Ajoutez un ou plusieurs articles, puis validez la catégorie.</p>
