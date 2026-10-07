@@ -91,8 +91,12 @@ function suffixerChamps(champs,suf){
 const CHAMPS_INFOS_ELECTRIQUES=[
     {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
     {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",unite:"DAR",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",unite:"DAR",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",unite:"DAR",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",unite:"DAR",required:false,groupe:"isol_wu_pair"},
-    {id:"adx_resultat",label:"ADX mesure isol. — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true},
-    {id:"adx_valeur",label:"ADX mesure isol. — valeur",type:"ohm",required:true},
+    {id:"adx_resultat",label:"ADX mesure isol. — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:v=>!v.sur_variateur},
+    {id:"adx_valeur",label:"ADX mesure isol. — valeur",type:"ohm",required:true,condition:v=>!v.sur_variateur},
+    {id:"adx_resultat_var",label:"ADX mesure isol. avec variateur 2800V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
+    {id:"adx_valeur_var",label:"ADX mesure isol. avec variateur 2800V — valeur",type:"ohm",required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
+    {id:"adx_resultat_novar",label:"ADX mesure isol. sans variateur 2000V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Non"}},
+    {id:"adx_valeur_novar",label:"ADX mesure isol. sans variateur 2000V — valeur",type:"ohm",required:true,condition:{champ:"sur_variateur",valeur:"Non"}},
     {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
     {id:"plaque_bornes_taille",label:"Plaque à bornes — taille",type:"text",required:true,condition:{champ:"plaque_bornes_etat",valeur:"HS"}},
     {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
@@ -129,7 +133,8 @@ const ETAPE_ROTATION_2="Information rotation avant démontage (2e passage)";
 const CHAMPS_INFOS_ELECTRIQUES_2=suffixerChamps(
   CHAMPS_INFOS_ELECTRIQUES.filter(c=>!["couplage","plaque_bornes_etat","plaque_bornes_taille","sonde_presence"].includes(c.id)),
   "_2"
-).map(c=>c.id==="sonde_valeur_2"?{...c,condition:{champ:"sonde_presence",valeur:"Présente"}}:c);
+).map(c=>c.id==="sonde_valeur_2"?{...c,condition:{champ:"sonde_presence",valeur:"Présente"}}:c)
+ .map(c=>c.condition&&typeof c.condition==="object"&&!Array.isArray(c.condition)&&c.condition.champ==="sur_variateur_2"?{...c,condition:{...c.condition,champ:"sur_variateur"}}:c);
 const CHAMPS_ROTATION_AVANT_2=suffixerChamps(CHAMPS_ROTATION_AVANT.filter(c=>c.id!=="moteur_neuf"),"_2");
 function etapesMoteurPour(v){
   if(v&&v.essai_vide_avant==="Non"&&v.moteur_neuf==="Non"){
