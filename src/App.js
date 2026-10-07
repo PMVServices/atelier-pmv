@@ -145,6 +145,8 @@ const CHAMPS={
     {id:"depose_technicien",label:"Par qui",type:"technicien",required:true,groupe:"depose_pair",condition:{champ:"depose_nos_soins",valeur:"Oui"}},
     {id:"enleve_nos_soins",label:"Enlevé par nos soins",type:"oui_non",required:true,groupe:"enleve_pair"},
     {id:"enleve_technicien",label:"Par qui",type:"technicien",required:true,groupe:"enleve_pair",condition:{champ:"enleve_nos_soins",valeur:"Oui"}},
+    {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true},
+    {id:"lignage",label:"Lignage",type:"choix",options:["Non","Poulie","Accouplement"],required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
     {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair"},
     {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois"],required:true,groupe:"delai_pair"},
@@ -235,6 +237,8 @@ const CHAMPS_POMPE={
     {id:"depose_technicien",label:"Par qui",type:"technicien",required:true,groupe:"depose_pair",condition:{champ:"depose_nos_soins",valeur:"Oui"}},
     {id:"enleve_nos_soins",label:"Enlevé par nos soins",type:"oui_non",required:true,groupe:"enleve_pair"},
     {id:"enleve_technicien",label:"Par qui",type:"technicien",required:true,groupe:"enleve_pair",condition:{champ:"enleve_nos_soins",valeur:"Oui"}},
+    {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true},
+    {id:"lignage",label:"Lignage",type:"choix",options:["Non","Poulie","Accouplement"],required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
     {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair"},
     {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois"],required:true,groupe:"delai_pair"},
@@ -260,7 +264,7 @@ const CHAMPS_POMPE={
     {id:"demande_client",label:"Demande client",type:"text",required:true,dictee:true},
   ],
   "Infos électriques":[
-    {id:"sur_variateur",label:"Sur variateur",type:"oui_non",required:true},
+    {id:"sur_variateur",label:"Sur variateur",type:"oui_non",required:true,condition:v=>!v.sur_variateur},
     {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
     {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",unite:"DAR",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",unite:"DAR",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",unite:"DAR",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",unite:"DAR",required:false,groupe:"isol_wu_pair"},
     {id:"adx_resultat_var",label:"ADX mesure isol. avec variateur 2800V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
@@ -419,6 +423,8 @@ const CHAMPS_REDUCTEUR={
     {id:"depose_technicien",label:"Par qui",type:"technicien",required:true,groupe:"depose_pair",condition:{champ:"depose_nos_soins",valeur:"Oui"}},
     {id:"enleve_nos_soins",label:"Enlevé par nos soins",type:"oui_non",required:true,groupe:"enleve_pair"},
     {id:"enleve_technicien",label:"Par qui",type:"technicien",required:true,groupe:"enleve_pair",condition:{champ:"enleve_nos_soins",valeur:"Oui"}},
+    {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true},
+    {id:"lignage",label:"Lignage",type:"choix",options:["Non","Poulie","Accouplement"],required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
     {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair"},
     {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois"],required:true,groupe:"delai_pair"},
@@ -443,7 +449,7 @@ const CHAMPS_REDUCTEUR={
     {id:"demande_client",label:"Demande client",type:"text",required:true,dictee:true},
   ],
   "Infos électriques":[
-    {id:"sur_variateur",label:"Sur variateur",type:"oui_non",required:true},
+    {id:"sur_variateur",label:"Sur variateur",type:"oui_non",required:true,condition:v=>!v.sur_variateur},
     {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
     {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",unite:"DAR",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",unite:"DAR",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",unite:"DAR",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",unite:"DAR",required:false,groupe:"isol_wu_pair"},
     {id:"adx_resultat_var",label:"ADX mesure isol. avec variateur 2800V — résultat",type:"select",options:["PASS","Douteux","Hors Tolérance"],required:true,condition:{champ:"sur_variateur",valeur:"Oui"}},
@@ -964,6 +970,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   }
   else if(c.type==="select"){const isAutre=val&&!c.options.includes(val)&&c.autreTexte;ctrl=<div style={{display:"flex",flexDirection:"column",gap:5}}><select value={isAutre?"Autre":(val||"")} onChange={e=>{if(e.target.value==="Autre")onChange(c.id,"Autre:");else onChange(c.id,e.target.value);}} style={S.sel}><option value="">— Sélectionner</option>{c.options.map(o=><option key={o}>{o}</option>)}</select>{(isAutre||val?.startsWith("Autre:"))&&c.autreTexte&&<input type="text" placeholder="Préciser..." value={val?.replace("Autre:","")||""} onChange={e=>onChange(c.id,"Autre:"+e.target.value)} style={S.inp}/>}</div>;}
   else if(c.type==="mesure")ctrl=<div><div style={{display:"flex",alignItems:"center",gap:6}}><input type="number" value={val||""} onChange={e=>onChange(c.id,e.target.value)} style={err?{...S.inpErr,flex:1}:{...S.inp,flex:1}} placeholder="—"/>{c.unite&&<span style={{fontSize:12,color:"#6B7280",whiteSpace:"nowrap"}}>{c.unite}</span>}</div>{err&&<div style={S.alert}>⚠ Sous le seuil ({c.seuilMin} {c.unite})</div>}</div>;
+  else if(c.type==="choix")ctrl=<div style={{display:"flex",gap:16,flexWrap:"wrap"}}>{c.options.map(opt=><label key={opt} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,cursor:"pointer"}}><input type="radio" checked={val===opt} onChange={()=>onChange(c.id,opt)}/> {opt}</label>)}</div>;
   else if(c.type==="oui_non")ctrl=<div style={{display:"flex",gap:16}}>{["Oui","Non"].map(opt=><label key={opt} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,cursor:"pointer"}}><input type="radio" checked={val===opt} onChange={()=>onChange(c.id,opt)}/> {opt}</label>)}</div>;
   else if(c.type==="date")ctrl=<input type="date" value={val} onChange={e=>onChange(c.id,e.target.value)} style={S.inp}/>;
   else if(c.type==="number")ctrl=<div style={{display:"flex",alignItems:"center",gap:6}}><input type="number" value={val} onChange={e=>onChange(c.id,e.target.value)} style={{...S.inp,flex:1}} placeholder="—"/>{c.unite&&<span style={{fontSize:12,color:"#6B7280",whiteSpace:"nowrap"}}>{c.unite}</span>}</div>;
