@@ -27,7 +27,7 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 
 - **Aucun débordement horizontal** à 320, 360, 390, 768, 900, 1280 et 1366 px de large, dans les deux rôles (technicien et administrateur), avec et sans technicien choisi.
   Sur iPhone, un seul élément trop large dézoome toute la page.
-- En-tête : barre d'onglets complète seulement à partir de **1350 px** ; en dessous, menu ☰.
+- En-tête : barre d'onglets complète seulement à partir de **1430 px** ; en dessous, menu ☰. Chaque nouvel onglet élargit la barre : après en avoir ajouté un, remesurer le pire cas (administrateur + technicien au long nom) et ajuster ce seuil (`isMobile` et le décalage de l'en-tête de fiche chantier dans `App.js`).
   Le bouton de rôle (🔒 / 🔓 Admin) est dans le menu ☰ sur téléphone/tablette ; l'en-tête de `/stock/` n'a que l'icône.
   Le badge de stockage se compacte sous 380 px (« Gérer » masqué) puis 340 px (barre masquée).
   Le nom du technicien dans l'en-tête est tronqué (110 px max) avec le nom complet en info-bulle.
@@ -49,7 +49,7 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
    const e=[...document.querySelectorAll("div")].find(d=>d.style.position==="sticky"&&d.style.top==="0px"&&d.querySelector("img"));
    ({W,pageDebordante:document.documentElement.scrollWidth>W,entete:e.getBoundingClientRect().width+" / "+e.scrollWidth})
    ```
-4. Cas le plus chargé de l'en-tête (PC) : administrateur + technicien choisi avec un long nom, à 1350 px.
+4. Cas le plus chargé de l'en-tête (PC) : administrateur + technicien choisi avec un long nom, au seuil de la barre complète (1430 px) et un pixel en dessous.
 5. Remettre le navigateur de test dans son état initial (rôle, brouillon, taille de fenêtre) et ne laisser aucune donnée de test dans la base.
 
 ## 4. Accès et rôles
@@ -106,6 +106,14 @@ Modèle de référence : le rapport « DE7591 Rapport d'entretien » de PMV (7 p
 - Photos allégées à l'export (1800 px, JPEG) : le Word passe d'environ 28 Mo à environ 2 Mo, le PDF de 76 Mo à environ 2 Mo ; l'orientation des photos de téléphone est corrigée.
 - Test : en développement (`npm start`), `window.__rapportTest.genRapportDocx(v, data, photos)` et `window.__rapportTestHtml.genRapportHtmlLeger(...)` génèrent le rapport sans passer par l'interface ; le Word se contrôle en l'ouvrant dans Word, le PDF en l'imprimant depuis Edge.
 - À savoir : l'onglet Rapport affichait « 0 fiche » tant que « Fiche Atelier » n'avait pas été ouvert ; la liste des fiches est maintenant chargée dès l'ouverture de l'appli.
+
+## 6 ter. Calendriers (onglet « Calendrier »)
+
+- But : noter à qui on a remis un calendrier annuel pour ne pas en redonner. Accessible aux deux rôles (technicien et administrateur).
+- Table Supabase `calendriers` (SQL dans `SQL_CALENDRIER`, `src/Calendrier.js`, à coller une fois par le responsable ; tant qu'elle manque, l'onglet affiche l'écran d'activation) : édition (année du calendrier), date de remise, client, contact, nombre de grands, nombre de petits, noté par.
+- « Donner un calendrier » : un client (liste des clients existante, ajout possible), puis un ou plusieurs contacts **du même client** (liste du carnet de contacts existante, ajout possible), avec le nombre de grands et de petits pour chacun ; date de remise (aujourd'hui par défaut) et édition (année suivante à partir de septembre). Les contacts déjà connus du client (remises précédentes, carnet rattaché à la société) sont proposés.
+- Avertissements : le client ou le contact a déjà reçu un calendrier pour l'édition choisie (quantités et date affichées).
+- Liste : barre de recherche (client, contact, date, mois, mots dans le désordre, sans accents), filtre par édition, regroupement par client avec totaux grands / petits, date et personne qui a noté, suppression d'une ligne avec confirmation.
 
 ## 7. Matériel à commander
 

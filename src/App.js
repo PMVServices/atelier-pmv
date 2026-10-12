@@ -6,6 +6,7 @@ import {NoticeActivation} from "./Activation";
 import PageStock, {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
+import PageCalendrier from "./Calendrier";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
@@ -2918,7 +2919,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(deAff||"de")+"/"+typeEquipement.replace(/[^a-z0-9]/gi,"_");
 
   return(<div style={{paddingBottom:80}}>
-    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<1350?52:56,zIndex:90}}>
+    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<1430?52:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div style={{minWidth:0,flex:largeur<600?"1 1 100%":"0 1 auto"}}>
           <p style={{margin:0,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:largeur<600?"nowrap":"normal"}}>{(v.ch_client||"Client")+" / "+(deAff||"DE")+" / "+(v.ch_eq_nom||typeEquipement)}</p>
@@ -5073,6 +5074,7 @@ const NAV_ITEMS=[
   {id:"suivi",label:"🔧 Matériel"},
   ...(SUIVI_COMMANDES?[{id:"commandes",label:"📦 Commandes"}]:[]),
   {id:"stock",label:"🗃 Stock"},
+  {id:"calendrier",label:"🗓 Calendrier"},
   {id:"stats",label:"📊 Stats",admin:true},
 ];
 
@@ -5138,7 +5140,7 @@ export default function App(){
   function voirMaterielCommandes(){setPage("suivi");}
 
   const width=useWidth();
-  const isMobile=width<1350; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
+  const isMobile=width<1430; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
   const [menuOuvert,setMenuOuvert]=useState(false);
   const [role,setRole]=useState(()=>localStorage.getItem(ROLE_KEY)==="admin"?"admin":"tech");
   const admin=role==="admin";
@@ -5180,7 +5182,7 @@ export default function App(){
       {/* Onglets — masqués sur mobile */}
       {!isMobile&&<div style={{display:"flex",alignItems:"center",gap:4,flex:1,justifyContent:"center"}}>
         {navItems.map(n=>(
-          <button key={n.id} onClick={()=>setPage(n.id)} style={{background:page===n.id?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"none",padding:"6px 10px",borderRadius:6,fontSize:13,cursor:"pointer",fontWeight:page===n.id?700:400,position:"relative",whiteSpace:"nowrap"}}>
+          <button key={n.id} onClick={()=>setPage(n.id)} style={{background:page===n.id?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"none",padding:"6px 8px",borderRadius:6,fontSize:13,cursor:"pointer",fontWeight:page===n.id?700:400,position:"relative",whiteSpace:"nowrap"}}>
             {n.label}
             {n.id==="planning"&&devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{devisCount}</span>}
             {admin&&n.id==="suivi"&&badgeMateriel>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeMateriel}</span>}
@@ -5242,6 +5244,7 @@ export default function App(){
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
       :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
     {page==="stock"&&<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
+    {page==="calendrier"&&<PageCalendrier sessionTech={sessionTech} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="stats"&&admin&&<PageStats fiches={fiches} pieces={pieces}/>}
   </div>);
 }

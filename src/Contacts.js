@@ -90,6 +90,9 @@ function useContacts(){
   return etat;
 }
 
+// Liste du carnet (lecture seule), chargée à la première utilisation : sert à proposer les contacts d'une société.
+export function useCarnet(){return useContacts();}
+
 // Cherche tous les mots (dans n'importe quel ordre, sans accents ni majuscules) ; 3 chiffres ou plus : cherche aussi dans le numéro.
 function chercher(liste,q){
   const mots=norm(q).split(" ").filter(Boolean);
