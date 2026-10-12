@@ -2500,11 +2500,10 @@ function ChampTags({valeur,onChange,options}){
 }
 
 const INFOS_CHANTIER_COMMUN=[
-  {id:"ch_chantier",label:"N° de chantier",type:"text",required:false,groupe:"ch_num"},
-  {id:"ch_de",label:"N° DE",type:"text",required:true,groupe:"ch_num"},
+  {id:"ch_de",label:"N° DE",type:"text",required:true,groupe:"ch_de_client"},
+  {id:"ch_client",label:"Client",type:"client",required:true,groupe:"ch_de_client"},
   {id:"ch_date",label:"Date d'intervention",type:"date",required:true,groupe:"ch_date_lieu"},
   {id:"ch_adresse",label:"Lieu du chantier / Adresse",type:"text",required:false,groupe:"ch_date_lieu"},
-  {id:"ch_client",label:"Client",type:"client",required:true},
   {id:"ch_contact",label:"Contact sur place",type:"contact",required:false,remplit:{telephone:"ch_tel",mail:"ch_mail"}},
   {id:"ch_tel",label:"Téléphone contact",type:"text",required:false,groupe:"ch_tel_mail"},
   {id:"ch_mail",label:"Mail contact",type:"text",required:false,groupe:"ch_tel_mail"},
@@ -2606,7 +2605,7 @@ function PageChantier({techs,clients,onAddClient,categories,sessionTech,onOuvrir
 
   // Dupliquer : reprend seulement les informations générales (client, N° DE, lieu, contact, type de travaux, techniciens)
   async function dupliquer(f){
-    const rows=await db.get("fiches_chantier_valeurs","?fiche_id=eq."+f.id+"&champ_id=in.(ch_chantier,ch_de,ch_client,ch_adresse,ch_contact,ch_tel,ch_mail,ch_type_travaux,ch_tech)");
+    const rows=await db.get("fiches_chantier_valeurs","?fiche_id=eq."+f.id+"&champ_id=in.(ch_de,ch_client,ch_adresse,ch_contact,ch_tel,ch_mail,ch_type_travaux,ch_tech)");
     const seed={};
     if(Array.isArray(rows))rows.forEach(function(r){seed[r.champ_id]=r.valeur;});
     setSeedV(seed);setFicheOuverte(null);setTypeChoisi(f.type_equipement||"Moteur");setView("choix");
@@ -2801,18 +2800,18 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(deAff||"de")+"/"+typeEquipement.replace(/[^a-z0-9]/gi,"_");
 
   return(<div style={{paddingBottom:80}}>
-    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
+    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<900?52:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-        <div>
-          <p style={{margin:0,fontSize:12,fontWeight:700}}>{(v.ch_client||"Client")+" / "+(deAff||"DE")+" / "+(v.ch_eq_nom||typeEquipement)}</p>
+        <div style={{minWidth:0,flex:largeur<600?"1 1 100%":"0 1 auto"}}>
+          <p style={{margin:0,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:largeur<600?"nowrap":"normal"}}>{(v.ch_client||"Client")+" / "+(deAff||"DE")+" / "+(v.ch_eq_nom||typeEquipement)}</p>
           <p style={{margin:0,fontSize:10,opacity:0.8}}>{"Fiche Chantier · "+typeEquipement}</p>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-          <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}>
+          {largeur>=600&&<div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}>
             <div style={{background:"#A7F3D0",borderRadius:20,height:6,width:prog+"%",transition:"width 0.3s"}}/>
-          </div>
+          </div>}
           <span style={{fontSize:11,opacity:0.85}}>{prog+"%"}</span>
-          {ficheId&&<button onClick={toggleRecuperation} style={{...S.p2,fontSize:11,padding:"4px 10px",background:statutRecuperation==="Récupéré"?"#22863A":"#FFF8E1",color:statutRecuperation==="Récupéré"?"#fff":"#8A4B00",border:"none"}}>{statutRecuperation==="Récupéré"?"✅ Récupéré":"⏳ En attente"}</button>}
+          {ficheId&&<button onClick={toggleRecuperation} style={{...S.p2,fontSize:11,padding:"4px 10px",background:statutRecuperation==="Récupéré"?"#22863A":"#FFF8E1",color:statutRecuperation==="Récupéré"?"#fff":"#8A4B00",border:"none"}}>{statutRecuperation==="Récupéré"?(largeur<600?"✅":"✅ Récupéré"):(largeur<600?"⏳":"⏳ En attente")}</button>}
           <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={apercu} title="Aperçu">{"👁"}</button>
           <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={imprimer} title="Imprimer / PDF">{"📄"}</button>
           <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={onRetour}>{"Liste"}</button>
@@ -4408,8 +4407,8 @@ function ChampMaterielChantier({valeur,onChange}){
     {lignes.length>0&&<div className="mat-liste" style={{marginBottom:14}}>
       <div className="mat-liste-t">Matériel de la fiche ({lignes.length})</div>
       {lignes.map(l=>{const st=etatDe(l);return(<div key={l.id} className="mat-ligne" style={{flexDirection:"column",alignItems:"stretch",padding:"8px 0"}}>
+        {l.cat&&<span style={{fontSize:11,fontWeight:700,color:"#667085",textTransform:"uppercase",letterSpacing:".05em"}}>{l.cat}</span>}
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          {l.cat&&<span style={{fontSize:11,fontWeight:700,color:"#667085",textTransform:"uppercase",letterSpacing:".05em",flex:"none"}}>{l.cat}</span>}
           <span className="mat-ref" style={{flex:1,minWidth:0}}>{l.designation}</span>
           <input type="text" inputMode="numeric" aria-label="Quantité" value={l.quantite} onChange={e=>majLigne(l.id,{quantite:e.target.value.replace(/\D/g,"")})} style={{width:56,minHeight:44,textAlign:"center",border:"1.5px solid #BFC8D4",borderRadius:10,fontSize:16,fontWeight:700}}/>
           <button type="button" className="mat-rm" onClick={()=>maj(lignes.filter(x=>x.id!==l.id))} aria-label={"Retirer "+l.designation}>✕</button>
@@ -4419,7 +4418,7 @@ function ChampMaterielChantier({valeur,onChange}){
     </div>}
     {!cat&&<div className="mat-groupe">
       <span className="mat-lib">Ajouter du matériel : choisir une catégorie</span>
-      <div className="mat-cats">{CATEGORIES_MATERIEL.map(c=>(<button type="button" key={c.id} className="mat-cat" onClick={()=>{setCat(c.id);setCfg(cfgMaterielVide("commander"));}}><IcoMat nom={c.id} taille={32}/><span>{c.nom}</span></button>))}</div>
+      <div className="mat-cats" style={{gridTemplateColumns:"repeat(auto-fill,minmax(128px,1fr))"}}>{CATEGORIES_MATERIEL.map(c=>(<button type="button" key={c.id} className="mat-cat" style={{minHeight:96}} onClick={()=>{setCat(c.id);setCfg(cfgMaterielVide("commander"));}}><IcoMat nom={c.id} taille={32}/><span>{c.nom}</span></button>))}</div>
     </div>}
     {cat&&<div className="mat-ecran">
       <div className="mat-fil"><button type="button" className="mat-retour" onClick={()=>setCat(null)}>‹ Catégories</button></div>
