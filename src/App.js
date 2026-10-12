@@ -6,6 +6,7 @@ import {NoticeActivation} from "./Activation";
 import PageStock, {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
+import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
 
@@ -2087,7 +2088,7 @@ function PageChoix({onChoisir,onRetour}){
 
 // ─── RAPPORT CLIENT (moteur) ────────────────────────────────────────────
 const VERDICT_OPTIONS=["Conforme","Non conforme","Autre"];
-const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","contact","bordereau","descriptif_travaux","commentaire_vibration_avant","commentaire_roulements","commentaire_demontage","ensemble_libre","commentaire_apres","certifie_par","realise_par","date","adx_captures","sections"];
+const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","contact","bordereau","commande_achat","date_depart","materiel_controle","descriptif_travaux","commentaire_vibration_avant","commentaire_roulements","commentaire_demontage","ensemble_libre","commentaire_apres","certifie_par","realise_par","date","adx_captures","sections"];
 const RAPPORT_SECTIONS=[
   {key:"electrique",label:"Photo à l'arrivée + rapport électrique du bobinage"},
   {key:"avant",label:"Relevé électrique + vibration avant entretien"},
@@ -2149,6 +2150,7 @@ function PageRapport({ficheId,techs,onRetour}){
   const [saved,setSaved]=useState(false);
   const [uploading,setUploading]=useState(null);
   const [exportingWord,setExportingWord]=useState(false);
+  const [modeleOk,setModeleOk]=useState(false);
   const captureFileRef=useRef();
 
   useEffect(()=>{
@@ -2157,7 +2159,8 @@ function PageRapport({ficheId,techs,onRetour}){
     Promise.all([
       db.get("fiche_valeurs","?fiche_id=eq."+ficheId),
       db.get("fiche_photos","?fiche_id=eq."+ficheId+"&order=created_at"),
-    ]).then(([valeurs,fotos])=>{
+      chargerParamsApp(),
+    ]).then(([valeurs,fotos,params])=>{
       const vv={};
       if(Array.isArray(valeurs))valeurs.forEach(r=>{vv[r.champ_id]=r.valeur;});
       setV(vv);
@@ -2166,6 +2169,9 @@ function PageRapport({ficheId,techs,onRetour}){
       RAPPORT_TEXT_KEYS.forEach(k=>{if(vv["rapport_"+k]!==undefined)d[k]=vv["rapport_"+k];});
       RAPPORT_VERDICT_KEYS.forEach(k=>{if(vv["rapport_"+k]!==undefined)d[k]=vv["rapport_"+k];});
       RAPPORT_PHOTO_SLOTS.forEach(s=>{const k="photo_"+s.key+"_url";if(vv["rapport_"+k]!==undefined)d[k]=vv["rapport_"+k];});
+      // textes habituels proposés (visibles et modifiables dans le formulaire avant l'export)
+      if(d.commentaire_apres===undefined)d.commentaire_apres=DEPART_ATELIER_DEFAUT;
+      if(d.materiel_controle===undefined)d.materiel_controle=(params&&params.rapport_materiel_controle)||MATERIEL_CONTROLE_DEFAUT;
       setData(d);
       setLoading(false);
     });
@@ -2238,6 +2244,11 @@ function PageRapport({ficheId,techs,onRetour}){
     setExportingWord(false);
   }
 
+  async function memoriserMateriel(){
+    try{await db.upsert("parametres_app",[{cle:"rapport_materiel_controle",valeur:data.materiel_controle||""}],"cle");setModeleOk(true);setTimeout(()=>setModeleOk(false),2500);}
+    catch(e){alert("Erreur : "+e.message);}
+  }
+
   const photosAuto=RAPPORT_PHOTO_SLOTS.filter(s=>s.categorie);
   const photoApres=RAPPORT_PHOTO_SLOTS.find(s=>s.key==="apres");
   const techsList=techs||[];
@@ -2269,7 +2280,9 @@ function PageRapport({ficheId,techs,onRetour}){
       <div style={{marginBottom:10}}><label style={S.lbl}>Mois/année (page de garde)</label><input type="text" value={data.mois_annee||""} onChange={e=>upd("mois_annee",e.target.value)} placeholder="MM/AAAA" style={S.inp}/></div>
       <div style={{marginBottom:10}}><label style={S.lbl}>Adresse du chantier</label><input type="text" value={data.adresse_chantier||""} onChange={e=>upd("adresse_chantier",e.target.value)} style={S.inp}/></div>
       <div style={{marginBottom:10}}><label style={S.lbl}>Contact sur place</label><input type="text" value={data.contact||""} onChange={e=>upd("contact",e.target.value)} style={S.inp}/></div>
+      <div style={{marginBottom:10}}><label style={S.lbl}>N° / date commande achat</label><input type="text" value={data.commande_achat||""} onChange={e=>upd("commande_achat",e.target.value)} placeholder="Ex : 5249029 / 12.06.2026" style={S.inp}/></div>
       <div style={{marginBottom:10}}><label style={S.lbl}>Bordereau d'expédition</label><input type="text" value={data.bordereau||""} onChange={e=>upd("bordereau",e.target.value)} style={S.inp}/></div>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Départ de nos ateliers (date)</label><input type="date" value={data.date_depart||""} onChange={e=>upd("date_depart",e.target.value)} style={{...S.inp,maxWidth:200}}/></div>
       <div style={{marginBottom:0}}><label style={S.lbl}>Descriptif des travaux réalisés</label><textarea value={data.descriptif_travaux||""} onChange={e=>upd("descriptif_travaux",e.target.value)} style={{...S.inp,minHeight:60,resize:"vertical",fontFamily:"inherit"}}/></div>
     </div>
 
@@ -2317,17 +2330,25 @@ function PageRapport({ficheId,techs,onRetour}){
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Conclusion</p>
       <LigneVerdict label="Le moteur est … mécaniquement" rk="verdict_meca" data={data} upd={upd}/>
       <LigneVerdict label="Le moteur est … électriquement" rk="verdict_elec" data={data} upd={upd}/>
-      <div style={{marginBottom:10}}><label style={S.lbl}>Commentaire final</label><input type="text" value={data.commentaire_apres||""} onChange={e=>upd("commentaire_apres",e.target.value)} placeholder="Ex : L'arbre est protégé et la boîte à bornes fermée." style={S.inp}/></div>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Départ de nos ateliers — contrôle final</label><textarea value={data.commentaire_apres||""} onChange={e=>upd("commentaire_apres",e.target.value)} placeholder="Ex : L'arbre est protégé et le serrage de la boîte à bornes a été vérifié." style={{...S.inp,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/></div>
       <div style={{marginBottom:0}}><BlocPhotoRapport slot={photoApres} url={photosResolved.apres} ficheId={ficheId} uploading={uploading} onUpload={uploadManuel}/></div>
     </div>
 
     <div style={S.card}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Signatures</p>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:10}}>
-        <div><label style={S.lbl}>Certifié conforme par</label><select value={data.certifie_par||""} onChange={e=>upd("certifie_par",e.target.value)} style={S.sel}><option value="">— Sélectionner</option>{techsList.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
-        <div><label style={S.lbl}>Rapport réalisé par</label><select value={data.realise_par||""} onChange={e=>upd("realise_par",e.target.value)} style={S.sel}><option value="">— Sélectionner</option>{techsList.map(t=><option key={t} value={t}>{t}</option>)}</select></div>
-      </div>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Entretien certifié conforme par</label><ChampTechniciensMultiples valeur={data.certifie_par||""} onChange={nv=>upd("certifie_par",nv)} techs={techsList}/></div>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Rapport réalisé par</label><ChampTechniciensMultiples valeur={data.realise_par||""} onChange={nv=>upd("realise_par",nv)} techs={techsList}/></div>
       <div style={{marginBottom:0}}><label style={S.lbl}>Date du rapport</label><input type="date" value={data.date||""} onChange={e=>upd("date",e.target.value)} style={{...S.inp,maxWidth:200}}/></div>
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Matériel de contrôle utilisé — dates de validité</p>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px"}}>Imprimé en fin de rapport, une ligne par appareil. Vérifiez les dates avant chaque envoi.</p>
+      <textarea value={data.materiel_controle||""} onChange={e=>upd("materiel_controle",e.target.value)} style={{...S.inp,minHeight:110,resize:"vertical",fontFamily:"inherit"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8,flexWrap:"wrap"}}>
+        <button type="button" style={{...S.p2,fontSize:12,padding:"6px 12px"}} onClick={memoriserMateriel}>💾 Garder cette liste comme liste habituelle</button>
+        {modeleOk&&<span style={{fontSize:12,color:"#22863A"}}>✓ Liste mémorisée pour les prochains rapports</span>}
+      </div>
     </div>
 
     <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:30}}>
@@ -5124,6 +5145,8 @@ export default function App(){
   const [demandeAdmin,setDemandeAdmin]=useState(false);
   function entrer(r){setRole(r);try{localStorage.setItem(ROLE_KEY,r);}catch(e){}}
   useEffect(()=>{if(!admin&&page==="stats")setPage("dashboard");},[admin,page]);
+  // la liste des fiches sert aussi au tableau de bord et à l'onglet Rapport : on la charge dès l'ouverture de l'appli
+  useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{if(Array.isArray(d))setFiches(prev=>prev.length?prev:d);}).catch(()=>{});},[]);
   useEffect(()=>{
     if(!pinOk)return undefined;
     verifierResumeQuotidien();

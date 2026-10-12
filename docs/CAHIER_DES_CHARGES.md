@@ -95,6 +95,18 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 - À l'enregistrement, les lignes « à renouveler » et « à commander » partent automatiquement dans l'onglet Matériel (`synchroniserMaterielChantier`, demande `ch-<id fiche>`, sans doublon, sans modifier une ligne déjà commandée, sans mail).
 - Imprimé groupé par état.
 
+## 6 bis. Rapport client (Word et PDF)
+
+Modèle de référence : le rapport « DE7591 Rapport d'entretien » de PMV (7 pages). Le contenu est construit une seule fois (`src/rapportModele.js`) puis mis en page en Word (`src/rapportDocx.js`) et en aperçu / PDF (`src/pdfUtils.js`) : les deux versions disent toujours la même chose. Toute évolution du contenu se fait dans `rapportModele.js`.
+
+- **Structure** : page de garde (logo, « Rapport d'entretien », matériel, n° de série, client — DE, mois/année en grand sur une bande décorative) → page d'identification (coordonnées PMV, tableau client / référence / adresse / contact / localisation / n° et date de commande achat / bordereau / date de réception / départ de nos ateliers / descriptif des travaux, sommaire) → chapitres numérotés dans l'ordre du modèle : 1 Norme ISO et identification (tableau ISO, photo et description de la plaque), 2 Mesures avant entretien (photo à l'arrivée, essai mécanique avant démontage côté commande / côté opposé, mesures, consommation à vide), 3 Photo et observation au démontage, 4 Mesure des parties mécaniques (portées avec verdict, roulements installés), 5 Rapport électrique du bobinage (« après nettoyage / étuvage » selon la fiche ; valeurs U/V, V/W, W/U, masse, DAR ; captures d'appareil une par page), 6 Mesures après entretien (essai mécanique, mesure électrique à vide et en charge), 7 Conclusion (verdicts, photo après entretien, départ de nos ateliers, certifié par / réalisé par, liste du matériel de contrôle).
+- Un chapitre sans contenu n'est pas imprimé ; les cases « Sections à inclure » du formulaire restent respectées. Verdicts : « conforme » surligné en vert, « non conforme » en rouge, texte libre en gras.
+- En-tête (logo, « Rapport d'entretien — DE — client ») et pied de page (« PMV Services, votre spécialiste de l'entretien du moteur électrique et annexe », « Page X sur Y ») sur toutes les pages sauf la couverture.
+- Formulaire : champs ajoutés « N° / date commande achat », « Départ de nos ateliers (date) », « Départ de nos ateliers — contrôle final » (texte proposé : arbre protégé et serrage de la boîte à bornes vérifié), « Matériel de contrôle utilisé — dates de validité » (liste proposée, modifiable ; bouton pour la garder comme liste habituelle, stockée dans `parametres_app`, clé `rapport_materiel_controle`), « certifié par » / « réalisé par » à choix multiple (« CD et DN »). **Les dates de validité du matériel de contrôle sont à vérifier avant chaque envoi.**
+- Photos allégées à l'export (1800 px, JPEG) : le Word passe d'environ 28 Mo à environ 2 Mo, le PDF de 76 Mo à environ 2 Mo ; l'orientation des photos de téléphone est corrigée.
+- Test : en développement (`npm start`), `window.__rapportTest.genRapportDocx(v, data, photos)` et `window.__rapportTestHtml.genRapportHtmlLeger(...)` génèrent le rapport sans passer par l'interface ; le Word se contrôle en l'ouvrant dans Word, le PDF en l'imprimant depuis Edge.
+- À savoir : l'onglet Rapport affichait « 0 fiche » tant que « Fiche Atelier » n'avait pas été ouvert ; la liste des fiches est maintenant chargée dès l'ouverture de l'appli.
+
 ## 7. Matériel à commander
 
 - Onglet « Matériel » unique ; chaque groupe affiche son origine : Demande / Stock / Fiche chantier / Fiche atelier (selon le préfixe de `demande_id` : `ch-`, `stock-`, sinon assistant).
