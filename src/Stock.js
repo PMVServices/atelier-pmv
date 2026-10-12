@@ -1219,7 +1219,7 @@ function SessionInventaire({articles,techs,qui,setQui,onFermer,onFini,recharger,
 }
 
 // ─── Page Stock : tout part du scan ; l'écran d'accueil montre ce qui est à renouveler ───────────
-export default function PageStock({techs,sessionTech}){
+export default function PageStock({techs,sessionTech,admin}){
   const {articles,disponible,recharger}=useStock();
   const liste=(techs||[]).filter(t=>t!=="Autre");
   const [qui,setQuiEtat]=useState(()=>{
@@ -1336,7 +1336,7 @@ export default function PageStock({techs,sessionTech}){
   if(disponible===false){
     return(<div className="stk"><style>{CSS_STOCK}</style>
       <div className="stk-tete"><h2>🗃 Stock</h2></div>
-      <div style={{marginTop:14}}><NoticeActivation titre="Une étape reste à faire pour activer le stock" intro="La base de données doit recevoir trois petites tables (articles, mouvements, codes). C'est à faire une seule fois, par le responsable (compte Supabase)." sql={SQL_STOCK} onVerifier={recharger}/></div>
+      <div style={{marginTop:14}}>{!admin?<p className="stk-aide">Le stock n'est pas encore activé : prévenez l'administration.</p>:<NoticeActivation titre="Une étape reste à faire pour activer le stock" intro="La base de données doit recevoir trois petites tables (articles, mouvements, codes). C'est à faire une seule fois, par le responsable (compte Supabase)." sql={SQL_STOCK} onVerifier={recharger}/>}</div>
     </div>);
   }
   return(<div className="stk"><style>{CSS_STOCK}</style>
@@ -1349,12 +1349,12 @@ export default function PageStock({techs,sessionTech}){
       <button type="button" className="stk-grand stk-grand--s" disabled={!articles.length} onClick={()=>setSession("sortie")}>📤 Sortie<small>scanner ce qu'on prend</small></button>
       <button type="button" className="stk-grand stk-grand--e" disabled={!articles.length} onClick={()=>setSession("entree")}>📥 Entrée<small>scanner ce qui arrive</small></button>
     </div>
-    {articles.length>0&&<button type="button" className="stk-grand stk-grand--i" onClick={()=>setInv(true)}>📋 {brouillon?"Reprendre l'inventaire ("+Object.keys(brouillon.comptes).length+" comptées)":"Inventaire"}<small>{brouillon?"comptage en cours sur cette tablette":"scanner, compter, terminer"}</small></button>}
-    {disponible===true&&articles.length===0&&<div className="stk-vide">
+    {admin&&articles.length>0&&<button type="button" className="stk-grand stk-grand--i" onClick={()=>setInv(true)}>📋 {brouillon?"Reprendre l'inventaire ("+Object.keys(brouillon.comptes).length+" comptées)":"Inventaire"}<small>{brouillon?"comptage en cours sur cette tablette":"scanner, compter, terminer"}</small></button>}
+    {admin&&disponible===true&&articles.length===0&&<div className="stk-vide">
       <div><strong>Aucun article pour le moment.</strong><br/>Importez une feuille de votre fichier Excel (roulements, garniture mécanique…) pour démarrer.</div>
       <button type="button" className="stk-btn stk-btn--p" onClick={()=>setImportOuvert(true)}>⬆ Importer depuis Excel</button>
     </div>}
-    {articles.length>0&&<>
+    {admin&&articles.length>0&&<>
       {fams.length>1&&<div className="stk-mode stk-fams" style={{gridTemplateColumns:"repeat("+(fams.length+1)+",1fr)",marginBottom:10}} role="group" aria-label="Famille">
         {[["toutes","Tout ("+articles.length+")"]].concat(fams.map(([f,l])=>[f,LIB_FAMILLE[f]+" ("+l.length+")"])).map(([f,l])=><button type="button" key={f} className={famille===f?"on fam":""} aria-pressed={famille===f} onClick={()=>setFamille(f)}>{l}</button>)}
       </div>}
@@ -1394,13 +1394,13 @@ export default function PageStock({techs,sessionTech}){
     </>}
 
     {session&&<SessionScan mode={session} articles={articles} techs={techs} qui={qui} setQui={setQui} onFermer={()=>setSession(null)} onChange={apresMouvement} afficherToast={afficherToast}/>}
-    {tel&&<LienTelephone onFermer={()=>setTel(false)}/>}
-    {remiseMax&&<RemiseMax liste={base} libelle={famille==="toutes"?"toutes les familles":LIB_FAMILLE[famille]} qui={qui} onFermer={n=>{setRemiseMax(false);if(n)afficherToast("✓ "+n+" référence"+(n>1?"s":"")+" remise"+(n>1?"s":"")+" au stock maximum");}} onFait={apresMouvement}/>}
-    {inv&&<SessionInventaire articles={articles} techs={techs} qui={qui} setQui={setQui} recharger={recharger} afficherToast={afficherToast} onFini={apresMouvement} onFermer={()=>{setInv(false);setBrouillon(lireBrouillonInv());}}/>}
-    {article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={qui} depuisScan={false} onFermer={()=>setFicheId(null)} onChange={apresMouvement} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setAssoc(a);}} onTermineScan={()=>{}}/>}
-    {assoc&&<ScanneurCode titre={"Associer un code à "+assoc.reference} aide="Scannez le code imprimé sur la boîte du fabricant." onCode={traiterAssociation} onFermer={()=>setAssoc(null)}/>}
-    {importOuvert&&<ImportExcel articles={articles} onFermer={()=>setImportOuvert(false)} onTermine={apresMouvement}/>}
-    {etiquettes&&<Etiquettes articles={articles} idsInitiaux={etiquettes.ids} onFermer={()=>setEtiquettes(null)}/>}
+    {admin&&tel&&<LienTelephone onFermer={()=>setTel(false)}/>}
+    {admin&&remiseMax&&<RemiseMax liste={base} libelle={famille==="toutes"?"toutes les familles":LIB_FAMILLE[famille]} qui={qui} onFermer={n=>{setRemiseMax(false);if(n)afficherToast("✓ "+n+" référence"+(n>1?"s":"")+" remise"+(n>1?"s":"")+" au stock maximum");}} onFait={apresMouvement}/>}
+    {admin&&inv&&<SessionInventaire articles={articles} techs={techs} qui={qui} setQui={setQui} recharger={recharger} afficherToast={afficherToast} onFini={apresMouvement} onFermer={()=>{setInv(false);setBrouillon(lireBrouillonInv());}}/>}
+    {admin&&article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={qui} depuisScan={false} onFermer={()=>setFicheId(null)} onChange={apresMouvement} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setAssoc(a);}} onTermineScan={()=>{}}/>}
+    {admin&&assoc&&<ScanneurCode titre={"Associer un code à "+assoc.reference} aide="Scannez le code imprimé sur la boîte du fabricant." onCode={traiterAssociation} onFermer={()=>setAssoc(null)}/>}
+    {admin&&importOuvert&&<ImportExcel articles={articles} onFermer={()=>setImportOuvert(false)} onTermine={apresMouvement}/>}
+    {admin&&etiquettes&&<Etiquettes articles={articles} idsInitiaux={etiquettes.ids} onFermer={()=>setEtiquettes(null)}/>}
     {toast&&<div className="stk-toast" role="status">{toast}</div>}
   </div>);
 }

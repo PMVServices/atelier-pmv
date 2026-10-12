@@ -12,6 +12,9 @@ const LOGO_B64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgM
 // LOGO_B64 is in pdfUtils.js;
 
 const PIN_CODE="3739",PIN_KEY="pmv_pin_ok";
+// Deux niveaux d'accès : le code habituel ouvre l'appli en mode technicien (restreint), le code administrateur ouvre tout.
+// Barrière d'interface seulement : la base reste accessible à qui connaît la clé de l'appli.
+const ADMIN_CODE="2401",ROLE_KEY="pmv_role";
 // Suivi des commandes fournisseurs (colonnes, AR PDF, relances, statistiques, dossier surveillé) : désactivé.
 // Tout le code et toutes les données (table commandes_fournisseurs…) sont conservés : pour le remettre, passer à true.
 // Les demandes de matériel (à commander / à renouveler) vivent dans l'onglet Matériel, avec les pièces des fiches atelier.
@@ -716,14 +719,14 @@ const S={
   nr:{border:"1.5px solid #E2E6EA",borderRadius:8,padding:"8px 14px",display:"flex",alignItems:"center",gap:10,marginBottom:14,cursor:"pointer"},
 };
 
-function ModalPin({onSuccess}){
+function ModalPin({onSuccess,onAnnuler,seulAdmin,titre="Entrez le code PIN"}){
   const [s,setS]=useState("");const [err,setErr]=useState(false);
-  function tap(c){if(s.length>=4)return;const n=s+c;setS(n);if(n.length===4){if(n===PIN_CODE){localStorage.setItem(PIN_KEY,"1");onSuccess();}else{setErr(true);setTimeout(()=>{setS("");setErr(false);},800);}}}
+  function tap(c){if(s.length>=4)return;const n=s+c;setS(n);if(n.length===4){if(n===ADMIN_CODE){localStorage.setItem(PIN_KEY,"1");onSuccess("admin");}else if(n===PIN_CODE&&!seulAdmin){localStorage.setItem(PIN_KEY,"1");onSuccess("tech");}else{setErr(true);setTimeout(()=>{setS("");setErr(false);},800);}}}
   const touches=["1","2","3","4","5","6","7","8","9","","0","⌫"];
   return(<div style={{position:"fixed",inset:0,background:"#1B4F8A",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}}>
     <div style={{background:"#fff",borderRadius:16,padding:"32px 28px",width:300,textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
       <img src={LOGO_B64} alt="PMV Services" style={{height:60,marginBottom:12,objectFit:"contain"}}/>
-      <p style={{fontSize:13,color:"#6B7280",margin:"0 0 20px"}}>Entrez le code PIN</p>
+      <p style={{fontSize:13,color:"#6B7280",margin:"0 0 20px"}}>{titre}</p>
       <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:24}}>
         {[0,1,2,3].map(i=><div key={i} style={{width:16,height:16,borderRadius:"50%",background:s.length>i?(err?"#D73A49":"#1B4F8A"):"#E2E6EA",transition:"background 0.15s"}}/>)}
       </div>
@@ -731,6 +734,7 @@ function ModalPin({onSuccess}){
         {touches.map((t,i)=>t===""?<div key={i}/>:<button key={i} onClick={()=>t==="⌫"?setS(ss=>ss.slice(0,-1)):tap(t)} style={{padding:"14px",fontSize:18,fontWeight:600,borderRadius:10,border:"1.5px solid #E2E6EA",background:t==="⌫"?"#F5F6F8":"#fff",cursor:"pointer",color:t==="⌫"?"#6B7280":"#1A1A2E"}}>{t}</button>)}
       </div>
       {err&&<p style={{color:"#D73A49",fontSize:13,marginTop:12,fontWeight:600}}>Code incorrect</p>}
+      {onAnnuler&&<button onClick={onAnnuler} style={{marginTop:16,background:"none",border:"none",color:"#6B7280",fontSize:13,cursor:"pointer",textDecoration:"underline"}}>Annuler</button>}
     </div>
   </div>);
 }
@@ -1500,7 +1504,7 @@ function PageStats({fiches,pieces}){
 
 
 // ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
-function PageDashboard({fiches,pieces,commandesResume,demandesMat,onDemandeMateriel,onVoirMateriel,onOuvrirFiche,onNaviguer}){
+function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemandeMateriel,onVoirMateriel,onOuvrirFiche,onNaviguer}){
   const [delaisMap,setDelaisMap]=useState({});
   const [exportBusy,setExportBusy]=useState(null);
   useEffect(()=>{
@@ -1525,14 +1529,14 @@ function PageDashboard({fiches,pieces,commandesResume,demandesMat,onDemandeMater
   const fichesRapides=avecUrgence.filter(x=>x.urgence.id==="rapide");
 
   const fichesParDe={};fiches.forEach(f=>{if(f.de)fichesParDe[f.de.trim().toLowerCase()]=f;});
-  const piecesAReco=pieces.filter(p=>p.statut==="A_recommander"||!p.statut);
+  const piecesAReco=admin?pieces.filter(p=>p.statut==="A_recommander"||!p.statut):[];
   const parDEReco={};
   piecesAReco.forEach(p=>{if(!parDEReco[p.de])parDEReco[p.de]={de:p.de,client:p.client,n:0};parDEReco[p.de].n++;});
   const listeDEReco=Object.values(parDEReco);
 
   const commandesAlerte=(commandesResume?.retard||0)+(commandesResume?.aCompleter||0);
   const fichesAExporter=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Termine"&&delaisMap[f.id]?.__export_nas!=="fait");
-  const matDemandes=demandesMat?demandesMat.demandes:[];
+  const matDemandes=admin&&demandesMat?demandesMat.demandes:[];
   const nbMat=matDemandes.length;
   const nbMatRenouveler=matDemandes.filter(l=>l.type==="renouveler").length;
   const matAffichees=matDemandes.slice(0,6);
@@ -1583,7 +1587,7 @@ function PageDashboard({fiches,pieces,commandesResume,demandesMat,onDemandeMater
     </button>}
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:14,marginBottom:24}}>
-      {NAV_ITEMS.filter(n=>n.id!=="dashboard").map(n=>{
+      {NAV_ITEMS.filter(n=>n.id!=="dashboard"&&(admin||!n.admin)).map(n=>{
         const sep=n.label.indexOf(" ");const icone=n.label.slice(0,sep);const texte=n.label.slice(sep+1);
         return(<button key={n.id} onClick={()=>onNaviguer(n.id)} style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:14,padding:"24px 12px",minHeight:118,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",boxShadow:"0 2px 6px rgba(0,0,0,0.06)"}}>
           <span style={{fontSize:38,lineHeight:1}}>{icone}</span>
@@ -4758,6 +4762,66 @@ async function supprimerLigneMateriel(id){
 }
 
 // Onglet "Matériel" : demandes de matériel (à commander / à renouveler) + pièces à renouveler venues des fiches atelier.
+// Onglet Matériel côté technicien : résumé, en lecture seule, des demandes faites par la personne
+// (le traitement : commander, retirer, alertes mail… reste réservé aux administrateurs).
+function PageMesDemandes({techs,sessionTech,onDemandeMateriel}){
+  const liste=(techs||[]).filter(t=>t!=="Autre");
+  const [qui,setQui]=useState(()=>liste.includes(sessionTech)?sessionTech:null);
+  const [rows,setRows]=useState(null);
+  const [erreur,setErreur]=useState(null);
+  const charger=useCallback(async()=>{
+    if(!qui){setRows(null);return;}
+    try{
+      const r=await fetch(SUPA_URL+"/rest/v1/demandes_materiel?demandeur=eq."+encodeURIComponent(qui)+"&order=created_at.desc&limit=200",{headers:H});
+      const d=await r.json();
+      if(Array.isArray(d)){setRows(d);setErreur(null);}
+      else if(d&&d.code==="PGRST205"){setRows([]);setErreur("Le matériel à commander n'est pas encore activé.");}
+    }catch(e){setErreur("Pas de connexion pour le moment : la liste affichée peut ne pas être à jour.");}
+  },[qui]);
+  useEffect(()=>{
+    charger();
+    const t=setInterval(charger,30000);
+    window.addEventListener("focus",charger);
+    return()=>{clearInterval(t);window.removeEventListener("focus",charger);};
+  },[charger]);
+  const groupes=rows?regrouperDemandes(ordonnerDemandes(rows)):[];
+  const nbAttente=rows?rows.filter(l=>l.statut==="a_commander").length:0;
+  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:10}}>
+      <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🔧 Mes demandes de matériel</h2>
+      {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{...S.p1,fontSize:12,padding:"7px 14px",background:"#E8720C"}}>🛒 Faire une demande</button>}
+    </div>
+    <p style={{fontSize:12,color:"#6B7280",margin:"0 0 14px"}}>Résumé de vos demandes. La commande est faite par l'administration.</p>
+    <div style={{marginBottom:14}}>
+      <div style={{fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:".06em",marginBottom:6}}>Qui êtes-vous ?</div>
+      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+        {liste.map(t=>(<button key={t} onClick={()=>setQui(qui===t?null:t)} style={{padding:"8px 14px",borderRadius:20,border:"1.5px solid "+(qui===t?"#1B4F8A":"#D1D5DB"),background:qui===t?"#EEF4FF":"#fff",color:qui===t?"#1B4F8A":"#1A1A2E",fontSize:13,fontWeight:qui===t?700:500,cursor:"pointer"}}>{t}</button>))}
+      </div>
+    </div>
+    {erreur&&<div style={{...S.alert,marginBottom:12}}>{erreur}</div>}
+    {!qui&&<div style={{textAlign:"center",padding:30,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px dashed #D1D5DB"}}>Choisissez votre nom pour voir vos demandes.</div>}
+    {qui&&rows===null&&!erreur&&<div style={{textAlign:"center",padding:30,color:"#9CA3AF"}}>Chargement…</div>}
+    {qui&&rows&&rows.length===0&&<div style={{textAlign:"center",padding:30,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px dashed #D1D5DB"}}>Aucune demande pour le moment.</div>}
+    {qui&&rows&&rows.length>0&&<p style={{fontSize:12,color:"#6B7280",margin:"0 0 10px"}}>{rows.length} ligne{rows.length>1?"s":""} · {nbAttente} en attente de commande</p>}
+    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+      {groupes.map(g=>{const p=g[0];return(<div key={p.demande_id} style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:12,overflow:"hidden"}}>
+        <div style={{background:"#F8F9FA",padding:"10px 14px",display:"flex",flexWrap:"wrap",alignItems:"baseline",gap:"2px 12px"}}>
+          <span style={{fontSize:12,color:"#6B7280"}}>{ilYa(p.created_at)}</span>
+          <BadgeOrigine o={origineLigne(p)}/>
+          {p.chantier&&<span style={{fontWeight:700,color:"#1B4F8A"}}>{p.chantier}</span>}
+          {p.commentaire&&<div style={{flexBasis:"100%",fontSize:12,fontStyle:"italic",color:"#4B5563"}}>« {p.commentaire} »</div>}
+        </div>
+        {g.map(l=>(<div key={l.id} style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:8,padding:"10px 14px",borderTop:"1px solid #EEF1F5"}}>
+          <BadgeTypeMat type={l.type}/>
+          <span style={{fontFamily:MONO_MAT,fontWeight:600,overflowWrap:"anywhere",flex:"1 1 140px",minWidth:0}}>{l.designation}</span>
+          <span style={{fontWeight:700,whiteSpace:"nowrap"}}>× {l.quantite}</span>
+          <span style={{fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:20,whiteSpace:"nowrap",background:l.statut==="a_commander"?"#FFF8E1":"#E9F6EC",color:l.statut==="a_commander"?"#8A4B00":"#22863A"}}>{l.statut==="a_commander"?"⏳ En attente":"✅ Commandé"+(l.date_commande?" "+ilYa(l.date_commande):"")}</span>
+        </div>))}
+      </div>);})}
+    </div>
+  </div>);
+}
+
 function PageMateriel({pieces,setPieces,demandesMat,onDemandeMateriel}){
   useEffect(()=>{
     // fetch direct : un échec réseau ne doit pas vider la liste
@@ -4888,7 +4952,7 @@ const NAV_ITEMS=[
   {id:"suivi",label:"🔧 Matériel"},
   ...(SUIVI_COMMANDES?[{id:"commandes",label:"📦 Commandes"}]:[]),
   {id:"stock",label:"🗃 Stock"},
-  {id:"stats",label:"📊 Stats"},
+  {id:"stats",label:"📊 Stats",admin:true},
 ];
 
 // Mode "Stock seul" (adresse /stock/, utilisée par l'icône PMV Stock du téléphone) : une seule page, sans menu.
@@ -4955,19 +5019,26 @@ export default function App(){
   const width=useWidth();
   const isMobile=width<900;
   const [menuOuvert,setMenuOuvert]=useState(false);
-  if(!pinOk)return <ModalPin onSuccess={()=>setPinOk(true)}/>;
+  const [role,setRole]=useState(()=>localStorage.getItem(ROLE_KEY)==="admin"?"admin":"tech");
+  const admin=role==="admin";
+  const [demandeAdmin,setDemandeAdmin]=useState(false);
+  function entrer(r){setRole(r);try{localStorage.setItem(ROLE_KEY,r);}catch(e){}}
+  useEffect(()=>{if(!admin&&page==="stats")setPage("dashboard");},[admin,page]);
+  if(!pinOk)return <ModalPin onSuccess={r=>{entrer(r);setPinOk(true);}}/>;
+  if(demandeAdmin&&!admin)return <ModalPin seulAdmin titre="Code administrateur" onAnnuler={()=>setDemandeAdmin(false)} onSuccess={r=>{entrer(r);setDemandeAdmin(false);}}/>;
+  const boutonRole=<button onClick={admin?()=>entrer("tech"):()=>setDemandeAdmin(true)} title={admin?"Mode administrateur : toucher pour repasser en mode technicien":"Accès administrateur"} style={{background:admin?"rgba(255,255,255,0.25)":"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>{admin?"🔓 Admin":"🔒"}</button>;
   if(MODE_STOCK){
     return(<div style={S.app}>
       <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
         <img src={LOGO_B64} alt="PMV" style={{height:30,objectFit:"contain",borderRadius:4,flexShrink:0}}/>
         <span style={{color:"#fff",fontWeight:700,fontSize:16,marginLeft:10}}>Stock</span>
-        <a href="/" style={{marginLeft:"auto",color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a>
+        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{boutonRole}<a href="/" style={{color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a></span>
       </div>
-      <PageStock techs={techs} sessionTech={sessionTech}/>
+      <PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>
     </div>);
   }
 
-  const navItems=NAV_ITEMS;
+  const navItems=NAV_ITEMS.filter(n=>admin||!n.admin);
 
   return(<div style={S.app}>
     {/* ── HEADER ── */}
@@ -4981,7 +5052,7 @@ export default function App(){
           <button key={n.id} onClick={()=>setPage(n.id)} style={{background:page===n.id?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"none",padding:"6px 10px",borderRadius:6,fontSize:13,cursor:"pointer",fontWeight:page===n.id?700:400,position:"relative",whiteSpace:"nowrap"}}>
             {n.label}
             {n.id==="planning"&&devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{devisCount}</span>}
-            {n.id==="suivi"&&badgeMateriel>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeMateriel}</span>}
+            {admin&&n.id==="suivi"&&badgeMateriel>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeMateriel}</span>}
             {n.id==="commandes"&&badgeCommandes>0&&<span style={{position:"absolute",top:-4,right:-4,background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeCommandes}</span>}
           </button>
         ))}
@@ -4989,6 +5060,7 @@ export default function App(){
 
       {/* Droite */}
       <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:"auto",flexShrink:0}}>
+        {boutonRole}
         <BadgeStockage onClick={()=>setPage("stockage")}/>
         {!isMobile&&sessionTech&&<>
           <span style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:12,fontWeight:700,color:"#fff"}}>{sessionTech}</span>
@@ -5007,7 +5079,7 @@ export default function App(){
         <button key={n.id} onClick={()=>{setPage(n.id);setMenuOuvert(false);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:page===n.id?"rgba(255,255,255,0.15)":"transparent",color:"#fff",border:"none",borderBottom:"1px solid rgba(255,255,255,0.1)",padding:"14px 20px",fontSize:15,fontWeight:page===n.id?700:400,cursor:"pointer",textAlign:"left"}}>
           <span>{n.label}</span>
           {n.id==="planning"&&devisCount>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{devisCount}</span>}
-          {n.id==="suivi"&&badgeMateriel>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeMateriel}</span>}
+          {admin&&n.id==="suivi"&&badgeMateriel>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeMateriel}</span>}
           {n.id==="commandes"&&badgeCommandes>0&&<span style={{background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeCommandes}</span>}
         </button>
       ))}
@@ -5018,21 +5090,23 @@ export default function App(){
     </div>}
 
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
-    {page==="dashboard"&&<PageDashboard fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
+    {page==="dashboard"&&<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
-    {page==="suivi"&&<PageMateriel pieces={pieces} setPieces={setPieces} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>}
+    {page==="suivi"&&(admin
+      ?<PageMateriel pieces={pieces} setPieces={setPieces} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>
+      :<PageMesDemandes techs={techs} sessionTech={sessionTech} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>)}
     {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech} onOuvrirAtelier={ouvrirAtelierDepuisChantier} onMaterielMaj={demandesMat.recharger}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
     {page==="commandes"&&SUIVI_COMMANDES&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume} demandesMat={demandesMat} vueInitiale={vueCommandesInit} onVueConsommee={()=>setVueCommandesInit(null)} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
     {page==="demande"&&(demandesMat.disponible===false
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
       :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
-    {page==="stock"&&<PageStock techs={techs} sessionTech={sessionTech}/>}
-    {page==="stats"&&<PageStats fiches={fiches} pieces={pieces}/>}
+    {page==="stock"&&<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
+    {page==="stats"&&admin&&<PageStats fiches={fiches} pieces={pieces}/>}
   </div>);
 }
