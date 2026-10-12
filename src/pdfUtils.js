@@ -25,11 +25,11 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
     if(c.type==="oui_non")return val==="Oui"?"Oui":val==="Non"?"Non":val;
     if(c.type==="materiel_liste"){
       try{
-        var L=JSON.parse(val);var G=[["utilise","Utilisé"],["renouveler","À renouveler"],["non_renouveler","À ne pas renouveler"],["commander","À commander"]];
+        var L=JSON.parse(val);var G=[["renouveler","À renouveler"],["commander","À commander"],["utilise","Utilisé, à ne pas renouveler"]];L.forEach(function(x){if(x.statut==="non_renouveler")x.statut="utilise";});
         var out=[];
         G.forEach(function(g){
           var items=L.filter(function(x){return x.statut===g[0];});
-          if(items.length)out.push("<b>"+g[1]+"</b> : "+items.map(function(x){return esc(x.designation)+(x.reference?" ("+esc(x.reference)+")":"")+((x.quantite&&String(x.quantite)!=="1")?" ×"+esc(x.quantite):"");}).join(" ; "));
+          if(items.length)out.push("<b>"+g[1]+"</b> : "+items.map(function(x){return (x.cat?esc(x.cat)+" · ":"")+esc(x.designation)+(x.reference?" ("+esc(x.reference)+")":"")+((x.quantite&&String(x.quantite)!=="1")?" ×"+esc(x.quantite):"");}).join(" ; "));
         });
         return out.length?out.join("<br>"):"—";
       }catch(e){return val;}

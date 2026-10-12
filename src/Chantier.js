@@ -22,45 +22,14 @@ const fmtDate=iso=>{const d=new Date(iso);return isNaN(d)?"":d.toLocaleDateStrin
 
 export const OPTS_DOC={titre:"FICHE CHANTIER",couleur:COULEUR_CHANTIER,statut:""};
 
-// ── Matériel : utilisé / à renouveler / à ne pas renouveler / à commander ──
+// ── Matériel de la fiche : à renouveler / à commander / utilisé (à ne pas renouveler) ──
+// La saisie (catégories et listes de références) est dans App.js : ChampMaterielChantier.
 export const STATUTS_MATERIEL=[
-  {id:"utilise",label:"Utilisé",color:"#1B4F8A",bg:"#EEF4FF"},
   {id:"renouveler",label:"À renouveler",color:"#8A4B00",bg:"#FFF3DC"},
-  {id:"non_renouveler",label:"À ne pas renouveler",color:"#22863A",bg:"#F0FFF4"},
-  {id:"commander",label:"À commander",color:"#B42318",bg:"#FEF3F2"},
+  {id:"commander",label:"À commander",color:"#1B4F8A",bg:"#EAF1FB"},
+  {id:"utilise",label:"Utilisé, à ne pas renouveler",color:"#22863A",bg:"#E9F6EC"},
 ];
 export function lireMateriel(valeur){try{const a=JSON.parse(valeur||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}}
-
-export function ChampMaterielListe({valeur,onChange}){
-  const lignes=lireMateriel(valeur);
-  const [nouvelle,setNouvelle]=useState("");
-  const maj=nl=>onChange(JSON.stringify(nl));
-  const modif=(id,champs)=>maj(lignes.map(l=>l.id===id?{...l,...champs}:l));
-  function ajouter(){
-    const d=nouvelle.trim();if(!d)return;
-    maj([...lignes,{id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),designation:d,reference:"",quantite:"1",statut:"utilise"}]);
-    setNouvelle("");
-  }
-  return(<div>
-    {lignes.length===0&&<p style={{fontSize:12,color:"#9CA3AF",margin:"0 0 8px"}}>Aucune ligne. Ajoutez chaque pièce utilisée ou contrôlée, puis touchez son état.</p>}
-    {lignes.map(l=>(<div key={l.id} style={{border:"1px solid #E2E6EA",borderRadius:8,padding:8,marginBottom:8,background:"#fff"}}>
-      <div style={{display:"flex",gap:6,alignItems:"center"}}>
-        <input value={l.designation} onChange={e=>modif(l.id,{designation:e.target.value})} placeholder="Désignation" style={{...INP,flex:1,minWidth:0}}/>
-        <input value={l.reference||""} onChange={e=>modif(l.id,{reference:e.target.value})} placeholder="Réf." style={{...INP,width:100}}/>
-        <input type="text" inputMode="numeric" value={l.quantite} onChange={e=>modif(l.id,{quantite:e.target.value.replace(/\D/g,"")})} aria-label="Quantité" style={{...INP,width:52,textAlign:"center"}}/>
-        <button type="button" onClick={()=>maj(lignes.filter(x=>x.id!==l.id))} aria-label="Supprimer la ligne" style={{...BTN_O,color:"#6B7280",borderColor:"#D1D5DB",padding:"6px 10px"}}>✕</button>
-      </div>
-      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
-        {STATUTS_MATERIEL.map(s=>{const actif=l.statut===s.id;return(<button type="button" key={s.id} onClick={()=>modif(l.id,{statut:s.id})} style={{padding:"6px 12px",borderRadius:20,border:"1.5px solid "+(actif?s.color:"#D1D5DB"),background:actif?s.bg:"#fff",color:actif?s.color:"#6B7280",fontSize:12,fontWeight:actif?700:500,cursor:"pointer"}}>{s.label}</button>);})}
-      </div>
-    </div>))}
-    <div style={{display:"flex",gap:6}}>
-      <input value={nouvelle} onChange={e=>setNouvelle(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();ajouter();}}} placeholder="Ajouter une pièce (ex. Roulement 6309 C3)…" style={{...INP,flex:1}}/>
-      <button type="button" onClick={ajouter} style={BTN}>+ Ajouter</button>
-    </div>
-    {lignes.length>0&&<p style={{fontSize:11,color:"#6B7280",margin:"8px 0 0"}}>{STATUTS_MATERIEL.map(s=>({s,n:lignes.filter(l=>l.statut===s.id).length})).filter(x=>x.n).map(x=>x.n+" "+x.s.label.toLowerCase()).join(" · ")}</p>}
-  </div>);
-}
 
 // ── Case "Entretien en atelier" : ouvre une fiche atelier préremplie ──
 export const TYPES_AVEC_FICHE_ATELIER=["Pompe","Moteur","Moto-réducteur"];
