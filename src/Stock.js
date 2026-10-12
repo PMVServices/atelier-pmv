@@ -1273,7 +1273,6 @@ export default function PageStock({techs,sessionTech}){
   });
   const aDemander=reco.filter(a=>!demandes.has(cle(designationDemande(a))));
   const nbRupture=base.filter(a=>(a.quantite||0)<=0).length;
-  const valeur=base.reduce((s,a)=>s+Math.max(0,a.quantite||0)*(a.prix_unitaire||0),0);
 
   async function envoyerDemandes(arts){
     if(!arts.length||cmdEnCours)return;
@@ -1361,7 +1360,7 @@ export default function PageStock({techs,sessionTech}){
       </div>}
       <input className="stk-champ" value={recherche} onChange={e=>setRecherche(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){const a=articles.find(x=>cle(x.reference)===cle(recherche))||(trouves.length===1?trouves[0]:null);if(a){setRecherche("");setFicheId(a.id);}}}} placeholder="🔍 Chercher une référence, des dimensions…" autoComplete="off"/>
       {q&&<div className="stk-liste">{trouves.length===0?<div className="stk-vide">Aucune référence ne correspond.</div>:trouves.map(carte)}</div>}
-      <p className="stk-resume" style={{marginTop:12}}><span><b>{base.length}</b> références</span><span><b>{nbRupture}</b> en rupture</span><span>Valeur du stock <b>{fmtEuro(valeur)}</b></span></p>
+      <p className="stk-resume" style={{marginTop:12}}><span><b>{base.length}</b> références</span><span><b>{nbRupture}</b> en rupture</span></p>
 
       <div className="stk-titre"><h3>🔔 À renouveler ({reco.length})</h3>
         {famille!=="toutes"&&boutonToutDemander(reco)}

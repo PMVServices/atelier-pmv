@@ -10,6 +10,11 @@ const LOGO_B64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgM
 // LOGO_B64 is in pdfUtils.js;
 
 const PIN_CODE="3739",PIN_KEY="pmv_pin_ok";
+// Suivi des commandes fournisseurs (colonnes, AR PDF, relances, statistiques, dossier surveillé) : désactivé.
+// Tout le code et toutes les données (table commandes_fournisseurs…) sont conservés : pour le remettre, passer à true.
+// L'onglet reste alors dédié au "Matériel à commander" (demandes des techniciens).
+const SUIVI_COMMANDES=false;
+const NOM_ONGLET_COMMANDES=SUIVI_COMMANDES?"Commandes":"À commander";
 const DRAFT_KEY="pmv_draft_fiche";
 function saveDraft(d){try{sessionStorage.setItem(DRAFT_KEY,JSON.stringify({...d,ts:Date.now()}));}catch(e){}}
 function loadDraft(){try{const s=sessionStorage.getItem(DRAFT_KEY);return s?JSON.parse(s):null;}catch(e){return null;}}
@@ -1684,7 +1689,7 @@ function PageDashboard({fiches,pieces,commandesResume,demandesMat,onDemandeMater
         {matAffichees.map(l=><LigneMateriel key={l.id} l={l} mode="dash"/>)}
       </div>
       {nbMat>matAffichees.length&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10}}>… et {nbMat-matAffichees.length} autre{nbMat-matAffichees.length>1?"s":""} ligne{nbMat-matAffichees.length>1?"s":""}</div>}
-      <button onClick={onVoirMateriel} style={{...S.p1,fontSize:12,padding:"6px 14px"}}>🛒 Voir et traiter dans Commandes →</button>
+      <button onClick={onVoirMateriel} style={{...S.p1,fontSize:12,padding:"6px 14px"}}>🛒 Voir et traiter dans {NOM_ONGLET_COMMANDES} →</button>
     </>)}
 
     {fichesUrgentes.length>0&&section("🔴 Fiches urgentes ("+fichesUrgentes.length+")","#D73A49","#FFF5F5",
@@ -2505,7 +2510,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>setNrMap(p=>({...p,[i]:!p[i]}))} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={champsActifs}/>)}
 
       <SectionMaterielCommander v={v} ficheId={ficheId} de={v.de} client={v.client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeMateriel}/>
-      <SectionCommandesLiees de={v.de} onOuvrirCommandes={onOuvrirCommandes}/>
+      {onOuvrirCommandes&&<SectionCommandesLiees de={v.de} onOuvrirCommandes={onOuvrirCommandes}/>}
 
       <div style={{...S.card,marginTop:8}}>
         <p style={{fontSize:13,fontWeight:700,margin:"0 0 10px"}}>💬 Commentaires divers</p>
@@ -4220,7 +4225,7 @@ function messageMailDemande(d){
   const lignes=d.lignes.map(x=>"• ["+TYPES_DEMANDE[x.type].label+"] "+x.cat+" : "+x.designation+" × "+x.qty).join("\n");
   return "Demandé par "+d.tech+(d.chantier?" — chantier "+d.chantier:"")+"\n\n"+lignes+"\n"
     +(d.commentaire?"\nCommentaire : "+d.commentaire+"\n":"")
-    +"\nÀ traiter dans l'appli : "+window.location.origin+" (Commandes > À commander)";
+    +"\nÀ traiter dans l'appli : "+window.location.origin+(SUIVI_COMMANDES?" (Commandes > À commander)":" (onglet À commander)");
 }
 async function alerteMailDemande(d){
   const cfg=configMailDepuisParams(await chargerParamsApp());
@@ -4541,8 +4546,8 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
       <div className="mat-liste">{resultat.lignes.map(l=>ligneListe(l))}</div>
       {m.etat==="envoye"&&<p className="mat-aide">Alerte mail envoyée à {m.adresse}.</p>}
       {m.etat==="echec"&&<p className="mat-aide" style={{color:"#B42318"}}>L'alerte mail n'a pas pu partir ({m.detail}). La demande, elle, est bien enregistrée.</p>}
-      {m.etat==="non_configure"&&<p className="mat-aide">Alerte mail activée mais pas encore configurée (Commandes, onglet À commander, Alerte mail).</p>}
-      <div className="mat-deux"><button type="button" className="mat-btn mat-btn--p" onClick={nouvelle}>Nouvelle demande</button><button type="button" className="mat-btn" onClick={onVoirCommandes}>Voir dans Commandes</button></div>
+      {m.etat==="non_configure"&&<p className="mat-aide">Alerte mail activée mais pas encore configurée ({SUIVI_COMMANDES?"Commandes, onglet À commander":"onglet À commander"}, Alerte mail).</p>}
+      <div className="mat-deux"><button type="button" className="mat-btn mat-btn--p" onClick={nouvelle}>Nouvelle demande</button><button type="button" className="mat-btn" onClick={onVoirCommandes}>Voir dans {NOM_ONGLET_COMMANDES}</button></div>
     </div>);
   }
   return(<div className="mat"><style>{CSS_MATERIEL}</style>{corps}</div>);
@@ -4690,6 +4695,17 @@ async function supprimerLigneMateriel(id){
   catch(e){return false;}
 }
 
+// Onglet "À commander" quand le suivi des commandes fournisseurs est désactivé : seulement les demandes de matériel.
+function PageMaterielACommander({demandesMat,onDemandeMateriel}){
+  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
+      <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🛒 Matériel à commander</h2>
+      {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{...S.p1,fontSize:12,padding:"7px 14px",background:"#E8720C"}}>🛒 Faire une demande</button>}
+    </div>
+    <VueMaterielCommandes demandes={demandesMat?demandesMat.demandes:[]} disponible={demandesMat?demandesMat.disponible:null} recharger={demandesMat?demandesMat.recharger:async()=>{}} onDemandeMateriel={onDemandeMateriel}/>
+  </div>);
+}
+
 function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel}){
   const [filtre,setFiltre]=useState("tous");
   const [historique,setHistorique]=useState(null);
@@ -4763,7 +4779,7 @@ const NAV_ITEMS=[
   {id:"planning",label:"📋 Planning"},
   {id:"rapport",label:"📧 Rapport"},
   {id:"suivi",label:"🔧 Matériel"},
-  {id:"commandes",label:"📦 Commandes"},
+  {id:"commandes",label:SUIVI_COMMANDES?"📦 Commandes":"🛒 À commander"},
   {id:"stock",label:"🗃 Stock"},
   {id:"stats",label:"📊 Stats"},
 ];
@@ -4805,6 +4821,7 @@ export default function App(){
 
   const [commandesResume,setCommandesResume]=useState({retard:0,aCompleter:0});
   useEffect(()=>{
+    if(!SUIVI_COMMANDES)return undefined;
     function rafraichir(){chargerCommandesCloud().then(c=>setCommandesResume(calculerResumeCommandes(c)));}
     rafraichir();
     const interval=setInterval(rafraichir,15000);
@@ -4888,14 +4905,15 @@ export default function App(){
     {page==="dashboard"&&<PageDashboard fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
-    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={()=>setPage("commandes")} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
+    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
     {page==="suivi"&&<PageSuivi/>}
     {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
-    {page==="commandes"&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume} demandesMat={demandesMat} vueInitiale={vueCommandesInit} onVueConsommee={()=>setVueCommandesInit(null)} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
+    {page==="commandes"&&!SUIVI_COMMANDES&&<PageMaterielACommander demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
+    {page==="commandes"&&SUIVI_COMMANDES&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume} demandesMat={demandesMat} vueInitiale={vueCommandesInit} onVueConsommee={()=>setVueCommandesInit(null)} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
     {page==="demande"&&(demandesMat.disponible===false
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
       :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
