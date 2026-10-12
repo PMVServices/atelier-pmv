@@ -1172,16 +1172,17 @@ function BadgeStockage({onClick}){
     const t=setInterval(()=>getStorageUsage().then(u=>setUsage(u)),60000);
     return()=>clearInterval(t);
   },[]);
+  const largeur=useWidth();
   const pct=usage?.pct||0;
   const estMo=usage?.estMo||0;
   const barColor=pct>=90?"#D73A49":pct>=70?"#E8720C":"#22863A";
   return(<button onClick={onClick} style={{display:"flex",alignItems:"center",gap:7,background:"rgba(255,255,255,0.12)",border:"1px solid rgba(255,255,255,0.2)",borderRadius:20,padding:"4px 12px",cursor:"pointer",color:"#fff",fontSize:11}}>
     <span style={{fontWeight:600,whiteSpace:"nowrap"}}>📦 {estMo} Mo</span>
-    <div style={{width:60,height:6,background:"rgba(255,255,255,0.2)",borderRadius:6,overflow:"hidden"}}>
+    {largeur>=340&&<div style={{width:60,height:6,background:"rgba(255,255,255,0.2)",borderRadius:6,overflow:"hidden"}}>
       <div style={{height:6,borderRadius:6,background:barColor,width:Math.min(pct,100)+"%",transition:"width .5s"}}/>
-    </div>
+    </div>}
     <span style={{fontSize:10,opacity:0.8,whiteSpace:"nowrap"}}>{pct}%</span>
-    <span style={{fontSize:10,opacity:0.7}}>Gérer</span>
+    {largeur>=380&&<span style={{fontSize:10,opacity:0.7}}>Gérer</span>}
   </button>);
 }
 
@@ -2805,7 +2806,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(deAff||"de")+"/"+typeEquipement.replace(/[^a-z0-9]/gi,"_");
 
   return(<div style={{paddingBottom:80}}>
-    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<900?52:56,zIndex:90}}>
+    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<1350?52:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div style={{minWidth:0,flex:largeur<600?"1 1 100%":"0 1 auto"}}>
           <p style={{margin:0,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:largeur<600?"nowrap":"normal"}}>{(v.ch_client||"Client")+" / "+(deAff||"DE")+" / "+(v.ch_eq_nom||typeEquipement)}</p>
@@ -5024,7 +5025,7 @@ export default function App(){
   function voirMaterielCommandes(){setPage("suivi");}
 
   const width=useWidth();
-  const isMobile=width<900;
+  const isMobile=width<1350; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
   const [menuOuvert,setMenuOuvert]=useState(false);
   const [role,setRole]=useState(()=>localStorage.getItem(ROLE_KEY)==="admin"?"admin":"tech");
   const admin=role==="admin";
@@ -5041,13 +5042,13 @@ export default function App(){
   },[pinOk]);
   if(!pinOk)return <ModalPin onSuccess={r=>{entrer(r);setPinOk(true);}}/>;
   if(demandeAdmin&&!admin)return <ModalPin seulAdmin titre="Code administrateur" onAnnuler={()=>setDemandeAdmin(false)} onSuccess={r=>{entrer(r);setDemandeAdmin(false);}}/>;
-  const boutonRole=<button onClick={admin?()=>entrer("tech"):()=>setDemandeAdmin(true)} title={admin?"Mode administrateur : toucher pour repasser en mode technicien":"Accès administrateur"} style={{background:admin?"rgba(255,255,255,0.25)":"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>{admin?"🔓 Admin":"🔒"}</button>;
+  const boutonRole=(compact)=><button onClick={admin?()=>entrer("tech"):()=>setDemandeAdmin(true)} title={admin?"Mode administrateur : toucher pour repasser en mode technicien":"Accès administrateur"} style={{background:admin?"rgba(255,255,255,0.25)":"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>{admin?(compact?"🔓":"🔓 Admin"):"🔒"}</button>;
   if(MODE_STOCK){
     return(<div style={S.app}>
       <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
         <img src={LOGO_B64} alt="PMV" style={{height:30,objectFit:"contain",borderRadius:4,flexShrink:0}}/>
         <span style={{color:"#fff",fontWeight:700,fontSize:16,marginLeft:10}}>Stock</span>
-        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{boutonRole}<a href="/" style={{color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a></span>
+        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{boutonRole(true)}<a href="/" style={{color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a></span>
       </div>
       <PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>
     </div>);
@@ -5075,10 +5076,10 @@ export default function App(){
 
       {/* Droite */}
       <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:"auto",flexShrink:0}}>
-        {boutonRole}
+        {!isMobile&&boutonRole(false)}
         <BadgeStockage onClick={()=>setPage("stockage")}/>
         {!isMobile&&sessionTech&&<>
-          <span style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:12,fontWeight:700,color:"#fff"}}>{sessionTech}</span>
+          <span title={sessionTech} style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:12,fontWeight:700,color:"#fff",maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sessionTech}</span>
           <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:11,cursor:"pointer"}} onClick={()=>setSessionTech(null)}>↩</button>
         </>}
         {/* Hamburger mobile */}
@@ -5098,6 +5099,10 @@ export default function App(){
           {n.id==="commandes"&&badgeCommandes>0&&<span style={{background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeCommandes}</span>}
         </button>
       ))}
+      <button onClick={()=>{if(admin)entrer("tech");else setDemandeAdmin(true);setMenuOuvert(false);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,width:"100%",background:admin?"rgba(255,255,255,0.12)":"transparent",color:"#fff",border:"none",borderTop:"1px solid rgba(255,255,255,0.2)",padding:"14px 20px",fontSize:15,cursor:"pointer",textAlign:"left"}}>
+        <span>{admin?"🔓 Mode administrateur":"🔒 Accès administrateur"}</span>
+        <span style={{fontSize:12,opacity:0.85}}>{admin?"Repasser en technicien":"Saisir le code"}</span>
+      </button>
       {sessionTech&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 20px",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
         <span style={{color:"#fff",fontSize:13}}>👤 {sessionTech}</span>
         <button onClick={()=>{setSessionTech(null);setMenuOuvert(false);}} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",padding:"5px 12px",borderRadius:6,fontSize:12,cursor:"pointer"}}>↩ Changer</button>
