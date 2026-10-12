@@ -1285,7 +1285,7 @@ export default function PageStock({techs,sessionTech}){
     setCmdEnCours(false);
     if(!r.ok){afficherToast("La demande n'a pas abouti (connexion, ou « Matériel à commander » pas encore activé)");return;}
     setDemandes(prev=>{const n=new Set(prev);arts.forEach(a=>n.add(cle(designationDemande(a))));return n;});
-    afficherToast("✓ "+arts.length+" référence"+(arts.length>1?"s":"")+" ajoutée"+(arts.length>1?"s":"")+" à Matériel à commander (à renouveler)");
+    afficherToast("✓ "+arts.length+" référence"+(arts.length>1?"s":"")+" ajoutée"+(arts.length>1?"s":"")+" au Matériel (à renouveler)");
   }
   async function traiterAssociation(brut){
     const code=String(brut||"").trim();

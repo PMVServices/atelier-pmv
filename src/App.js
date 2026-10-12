@@ -12,9 +12,9 @@ const LOGO_B64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgM
 const PIN_CODE="3739",PIN_KEY="pmv_pin_ok";
 // Suivi des commandes fournisseurs (colonnes, AR PDF, relances, statistiques, dossier surveillé) : désactivé.
 // Tout le code et toutes les données (table commandes_fournisseurs…) sont conservés : pour le remettre, passer à true.
-// L'onglet reste alors dédié au "Matériel à commander" (demandes des techniciens).
+// Les demandes de matériel (à commander / à renouveler) vivent dans l'onglet Matériel, avec les pièces des fiches atelier.
 const SUIVI_COMMANDES=false;
-const NOM_ONGLET_COMMANDES=SUIVI_COMMANDES?"Commandes":"À commander";
+const NOM_ONGLET_MATERIEL="Matériel";
 const DRAFT_KEY="pmv_draft_fiche";
 function saveDraft(d){try{sessionStorage.setItem(DRAFT_KEY,JSON.stringify({...d,ts:Date.now()}));}catch(e){}}
 function loadDraft(){try{const s=sessionStorage.getItem(DRAFT_KEY);return s?JSON.parse(s):null;}catch(e){return null;}}
@@ -1491,101 +1491,6 @@ function PageStats({fiches,pieces}){
 }
 
 // ─── PAGE SUIVI MATÉRIEL ─────────────────────────────────────────────────
-function PageSuivi(){
-  const [pieces,setPieces]=useState([]);const [loading,setLoading]=useState(true);const [filtre,setFiltre]=useState("actif");const [ouverts,setOuverts]=useState({});
-
-  const ST={
-    A_recommander:{label:"À recommander",color:"#E8720C",bg:"#FFF8E1"},
-    Commande:{label:"Commandé",color:"#22863A",bg:"#F0FFF4"},
-  };
-
-  useEffect(()=>{
-    db.get("suivi_pieces","?order=created_at.desc").then(d=>{
-      setPieces(Array.isArray(d)?d:[]);setLoading(false);
-    }).catch(()=>setLoading(false));
-  },[]);
-
-  async function changerStatut(id,statut){
-    await db.patch("suivi_pieces","?id=eq."+id,{statut,updated_at:new Date().toISOString()});
-    setPieces(prev=>prev.map(p=>p.id===id?{...p,statut}:p));
-  }
-
-  async function commander(id){await changerStatut(id,"Commande");}
-
-  const filtrees=filtre==="actif"
-    ?pieces.filter(p=>p.statut!=="Commande")
-    :filtre==="Commande"
-    ?pieces.filter(p=>p.statut==="Commande")
-    :pieces;
-
-  const parDE={};
-  filtrees.forEach(p=>{
-    if(!parDE[p.de])parDE[p.de]={de:p.de,client:p.client,pieces:[]};
-    parDE[p.de].pieces.push(p);
-  });
-  const deList=Object.keys(parDE).sort();
-
-  const nAReco=pieces.filter(p=>p.statut==="A_recommander"||!p.statut).length;
-  const nCom=pieces.filter(p=>p.statut==="Commande").length;
-
-  function toggleDE(de){setOuverts(prev=>({...prev,[de]:!prev[de]}));}
-
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
-      <h2 style={{fontSize:20,fontWeight:700,margin:0}}>Matériel à renouveler</h2>
-      {nAReco>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>{nAReco} à recommander</span>}
-    </div>
-
-    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8,marginBottom:16}}>
-      {[
-        {id:"actif",label:"À recommander",n:nAReco,color:"#E8720C"},
-        {id:"Commande",label:"Commandé",n:nCom,color:"#22863A"},
-        {id:"tous",label:"Tout voir",n:pieces.length,color:"#6B7280"},
-      ].map(s=>(
-        <div key={s.id} onClick={()=>setFiltre(s.id)} style={{background:"#fff",borderRadius:10,border:"1.5px solid "+(filtre===s.id?s.color:"#E2E6EA"),padding:"12px",cursor:"pointer",textAlign:"center",transition:"border-color .15s"}}>
-          <div style={{fontSize:22,fontWeight:700,color:filtre===s.id?s.color:"#1A1A2E"}}>{s.n}</div>
-          <div style={{fontSize:11,color:"#6B7280",marginTop:2}}>{s.label}</div>
-        </div>
-      ))}
-    </div>
-
-    {loading&&<div style={{textAlign:"center",padding:32,color:"#9CA3AF"}}>Chargement…</div>}
-    {!loading&&deList.length===0&&<div style={{textAlign:"center",padding:32,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>Aucune pièce dans cette catégorie</div>}
-
-    {deList.map(de=>{
-      const g=parDE[de];
-      const isOpen=!!ouverts[de];
-      const nReco=g.pieces.filter(p=>p.statut==="A_recommander"||!p.statut).length;
-      return(<div key={de} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,overflow:"hidden"}}>
-        <div onClick={()=>toggleDE(de)} style={{background:"#F8F9FA",padding:"10px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",borderBottom:isOpen?"1px solid #E2E6EA":"none"}}>
-          <span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{de}</span>
-          <span style={{fontSize:13,color:"#6B7280"}}>— {g.client||"—"}</span>
-          <span style={{marginLeft:"auto",fontSize:11,background:"#F5F6F8",padding:"2px 8px",borderRadius:12,color:"#6B7280"}}>{g.pieces.length} pièce{g.pieces.length>1?"s":""}</span>
-          {nReco>0&&<span style={{fontSize:10,background:"#FFF8E1",color:"#E8720C",padding:"2px 6px",borderRadius:10,fontWeight:600}}>{nReco} à reco.</span>}
-          <span style={{fontSize:14,color:"#9CA3AF"}}>{isOpen?"▲":"▼"}</span>
-        </div>
-        {isOpen&&<div>
-          {g.pieces.map(p=>{
-            const estCommande=p.statut==="Commande";
-            const sc=estCommande?ST.Commande:ST.A_recommander;
-            return(<div key={p.id} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 16px",borderBottom:"1px solid #F5F6F8"}}>
-              <div style={{flex:1,minWidth:120}}>
-                <span style={{fontSize:13,fontWeight:600,textDecoration:estCommande?"line-through":"none",color:estCommande?"#9CA3AF":"#1A1A2E"}}>{p.designation}</span>
-                {p.reference&&<span style={{fontSize:11,color:"#6B7280",marginLeft:8,background:"#F5F6F8",padding:"1px 6px",borderRadius:4}}>{p.reference}</span>}
-              </div>
-              <span style={{fontSize:10,background:p.source==="auto"?"#F0FFF4":"#EEF4FF",color:p.source==="auto"?"#22863A":"#1B4F8A",padding:"2px 6px",borderRadius:10}}>{p.source==="auto"?"Auto":"Manuel"}</span>
-              <span style={{fontSize:11,fontWeight:600,padding:"3px 10px",borderRadius:20,background:sc.bg,color:sc.color}}>{sc.label}</span>
-              {!estCommande
-                ?<button onClick={()=>commander(p.id)} style={{fontSize:12,padding:"5px 14px",borderRadius:6,border:"none",background:"#22863A",color:"#fff",cursor:"pointer",fontWeight:600}}>✓ Commander</button>
-                :<button onClick={()=>changerStatut(p.id,"A_recommander")} style={{fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #E2E6EA",background:"#fff",color:"#6B7280",cursor:"pointer"}}>↩ Annuler</button>
-              }
-            </div>);
-          })}
-        </div>}
-      </div>);
-    })}
-  </div>);
-}
 
 
 // ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
@@ -1683,13 +1588,25 @@ function PageDashboard({fiches,pieces,commandesResume,demandesMat,onDemandeMater
 
     {rienASignaler&&<div style={{textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
 
-    {nbMat>0&&section("🛒 Matériel à commander ("+nbMat+")","#1B4F8A","#EEF4FF",<>
-      <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>{nbMat-nbMatRenouveler} à commander · {nbMatRenouveler} à renouveler</div>
-      <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+    {(nbMat>0||listeDEReco.length>0)&&section("🔧 Matériel ("+(nbMat+piecesAReco.length)+")","#1B4F8A","#EEF4FF",<>
+      <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>{nbMat-nbMatRenouveler} à commander · {nbMatRenouveler+piecesAReco.length} à renouveler</div>
+      {nbMat>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
         {matAffichees.map(l=><LigneMateriel key={l.id} l={l} mode="dash"/>)}
-      </div>
+      </div>}
       {nbMat>matAffichees.length&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10}}>… et {nbMat-matAffichees.length} autre{nbMat-matAffichees.length>1?"s":""} ligne{nbMat-matAffichees.length>1?"s":""}</div>}
-      <button onClick={onVoirMateriel} style={{...S.p1,fontSize:12,padding:"6px 14px"}}>🛒 Voir et traiter dans {NOM_ONGLET_COMMANDES} →</button>
+      {listeDEReco.length>0&&<div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+        {listeDEReco.map(d=>{
+          const ficheLiee=fichesParDe[(d.de||"").trim().toLowerCase()];
+          return(<div key={d.de} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #E2E6EA",borderRadius:10,padding:"10px 12px"}}>
+            <div style={{fontSize:12,minWidth:0}}>
+              <strong>{d.de||"—"}</strong> — {d.client||"—"}
+              <div style={{fontSize:11,color:"#9CA3AF"}}>{d.n} pièce{d.n>1?"s":""} à renouveler (fiche atelier)</div>
+            </div>
+            {ficheLiee&&<button onClick={()=>onOuvrirFiche(ficheLiee)} style={{...S.p2,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap"}}>📂 Ouvrir</button>}
+          </div>);
+        })}
+      </div>}
+      <button onClick={onVoirMateriel} style={{...S.p1,fontSize:12,padding:"6px 14px"}}>🔧 Voir et traiter dans {NOM_ONGLET_MATERIEL} →</button>
     </>)}
 
     {fichesUrgentes.length>0&&section("🔴 Fiches urgentes ("+fichesUrgentes.length+")","#D73A49","#FFF5F5",
@@ -1708,21 +1625,6 @@ function PageDashboard({fiches,pieces,commandesResume,demandesMat,onDemandeMater
       <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>{commandesResume.retard} en retard · {commandesResume.aCompleter} à compléter</div>
       <button onClick={()=>onNaviguer("commandes")} style={{...S.p1,fontSize:12,padding:"6px 14px"}}>📦 Voir le suivi des commandes →</button>
     </>)}
-
-    {listeDEReco.length>0&&section("🔧 Matériel à recommander ("+listeDEReco.length+")","#E8720C","#FFF8E1",
-      listeDEReco.map(d=>{
-        const ficheLiee=fichesParDe[(d.de||"").trim().toLowerCase()];
-        return(<div key={d.de} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #F3D9A8",borderRadius:6,padding:"8px 10px",marginBottom:6}}>
-          <div style={{fontSize:12}}>
-            <strong>{d.de||"—"}</strong> — {d.client||"—"}
-            <div style={{fontSize:11,color:"#9CA3AF"}}>{d.n} pièce{d.n>1?"s":""} à recommander</div>
-          </div>
-          {ficheLiee
-            ?<button onClick={()=>onOuvrirFiche(ficheLiee)} style={{...S.p2,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap"}}>📂 Ouvrir</button>
-            :<button onClick={()=>onNaviguer("suivi")} style={{...S.p2,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap"}}>🔧 Voir</button>}
-        </div>);
-      })
-    )}
 
     {fichesAExporter.length>0&&section("📦 Fiches terminées à exporter ("+fichesAExporter.length+")","#0D9488","#F0FDFA",<>
       <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>Téléchargez le ZIP puis déposez-le sur le NAS depuis l'ordinateur.</div>
@@ -4225,7 +4127,7 @@ function messageMailDemande(d){
   const lignes=d.lignes.map(x=>"• ["+TYPES_DEMANDE[x.type].label+"] "+x.cat+" : "+x.designation+" × "+x.qty).join("\n");
   return "Demandé par "+d.tech+(d.chantier?" — chantier "+d.chantier:"")+"\n\n"+lignes+"\n"
     +(d.commentaire?"\nCommentaire : "+d.commentaire+"\n":"")
-    +"\nÀ traiter dans l'appli : "+window.location.origin+(SUIVI_COMMANDES?" (Commandes > À commander)":" (onglet À commander)");
+    +"\nÀ traiter dans l'appli : "+window.location.origin+" (onglet Matériel)";
 }
 async function alerteMailDemande(d){
   const cfg=configMailDepuisParams(await chargerParamsApp());
@@ -4546,8 +4448,8 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
       <div className="mat-liste">{resultat.lignes.map(l=>ligneListe(l))}</div>
       {m.etat==="envoye"&&<p className="mat-aide">Alerte mail envoyée à {m.adresse}.</p>}
       {m.etat==="echec"&&<p className="mat-aide" style={{color:"#B42318"}}>L'alerte mail n'a pas pu partir ({m.detail}). La demande, elle, est bien enregistrée.</p>}
-      {m.etat==="non_configure"&&<p className="mat-aide">Alerte mail activée mais pas encore configurée ({SUIVI_COMMANDES?"Commandes, onglet À commander":"onglet À commander"}, Alerte mail).</p>}
-      <div className="mat-deux"><button type="button" className="mat-btn mat-btn--p" onClick={nouvelle}>Nouvelle demande</button><button type="button" className="mat-btn" onClick={onVoirCommandes}>Voir dans {NOM_ONGLET_COMMANDES}</button></div>
+      {m.etat==="non_configure"&&<p className="mat-aide">Alerte mail activée mais pas encore configurée (onglet Matériel, Alerte mail).</p>}
+      <div className="mat-deux"><button type="button" className="mat-btn mat-btn--p" onClick={nouvelle}>Nouvelle demande</button><button type="button" className="mat-btn" onClick={onVoirCommandes}>Voir dans {NOM_ONGLET_MATERIEL}</button></div>
     </div>);
   }
   return(<div className="mat"><style>{CSS_MATERIEL}</style>{corps}</div>);
@@ -4695,18 +4597,49 @@ async function supprimerLigneMateriel(id){
   catch(e){return false;}
 }
 
-// Onglet "À commander" quand le suivi des commandes fournisseurs est désactivé : seulement les demandes de matériel.
-function PageMaterielACommander({demandesMat,onDemandeMateriel}){
+// Onglet "Matériel" : demandes de matériel (à commander / à renouveler) + pièces à renouveler venues des fiches atelier.
+function PageMateriel({pieces,setPieces,demandesMat,onDemandeMateriel}){
+  useEffect(()=>{
+    // fetch direct : un échec réseau ne doit pas vider la liste
+    fetch(SUPA_URL+"/rest/v1/suivi_pieces?order=created_at.desc",{headers:H}).then(r=>r.json()).then(rows=>{if(Array.isArray(rows))setPieces(rows);}).catch(()=>{});
+  },[]);
+  async function changerStatutPiece(id,statut){
+    try{
+      const r=await fetch(SUPA_URL+"/rest/v1/suivi_pieces?id=eq."+id,{method:"PATCH",headers:{...H,"Prefer":"return=minimal"},body:JSON.stringify({statut,updated_at:new Date().toISOString()})});
+      if(r.ok)setPieces(prev=>prev.map(p=>p.id===id?{...p,statut}:p));
+      return r.ok;
+    }catch(e){return false;}
+  }
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
-      <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🛒 Matériel à commander</h2>
+      <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🔧 Matériel</h2>
       {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{...S.p1,fontSize:12,padding:"7px 14px",background:"#E8720C"}}>🛒 Faire une demande</button>}
     </div>
-    <VueMaterielCommandes demandes={demandesMat?demandesMat.demandes:[]} disponible={demandesMat?demandesMat.disponible:null} recharger={demandesMat?demandesMat.recharger:async()=>{}} onDemandeMateriel={onDemandeMateriel}/>
+    <VueMaterielCommandes demandes={demandesMat?demandesMat.demandes:[]} disponible={demandesMat?demandesMat.disponible:null} recharger={demandesMat?demandesMat.recharger:async()=>{}} onDemandeMateriel={onDemandeMateriel} piecesFiches={pieces} onPieceStatut={changerStatutPiece}/>
   </div>);
 }
 
-function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel}){
+// Pièces à renouveler venues d'une fiche atelier (table suivi_pieces), regroupées par N° DE.
+function GroupePiecesFiche({de,client,pieces,histo,occupe,onChanger}){
+  return(<div style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:12,overflow:"hidden"}}>
+    <div style={{background:"#F8F9FA",padding:"10px 14px",display:"flex",flexWrap:"wrap",alignItems:"baseline",gap:"2px 12px"}}>
+      <span style={{fontWeight:700,color:"#1B4F8A"}}>{de||"Sans N° DE"}</span>
+      <span style={{fontSize:12,color:"#6B7280"}}>{client||"—"} · fiche atelier</span>
+    </div>
+    {pieces.map(p=>(<div key={p.id} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:"4px 12px",alignItems:"center",padding:"10px 14px",borderTop:"1px solid #EEF1F5"}}>
+      <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:8,minWidth:0}}>
+        <BadgeTypeMat type="renouveler"/>
+        <span style={{fontFamily:MONO_MAT,fontWeight:600,overflowWrap:"anywhere"}}>{p.designation}</span>
+        {p.reference&&<span style={{fontSize:11,color:"#6B7280",background:"#F5F6F8",borderRadius:4,padding:"1px 6px"}}>{p.reference}</span>}
+      </div>
+      {histo
+        ?<button onClick={()=>onChanger(p,"A_recommander")} disabled={occupe===p.id} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>↩ Remettre</button>
+        :<button onClick={()=>onChanger(p,"Commande")} disabled={occupe===p.id} style={{...S.p1,fontSize:12,padding:"8px 14px",opacity:occupe===p.id?0.6:1}}>✓ Commandé</button>}
+    </div>))}
+  </div>);
+}
+
+function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel,piecesFiches=[],onPieceStatut}){
   const [filtre,setFiltre]=useState("tous");
   const [historique,setHistorique]=useState(null);
   const [confirmSuppr,setConfirmSuppr]=useState(null);
@@ -4737,20 +4670,30 @@ function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel})
     if(!ok)setErreur(ECHEC);
     setConfirmSuppr(null);await recharger();if(filtre==="historique")await chargerHisto();
   }
-  const nC=demandes.filter(l=>l.type==="commander").length,nR=demandes.length-nC;
+  async function changerPiece(p,statut){
+    setOccupe(p.id);setErreur(null);
+    const ok=onPieceStatut?await onPieceStatut(p.id,statut):false;
+    if(!ok)setErreur(ECHEC);
+    setOccupe(null);
+  }
+  const pAct=piecesFiches.filter(p=>p.statut!=="Commande"),pCmd=piecesFiches.filter(p=>p.statut==="Commande");
+  const nC=demandes.filter(l=>l.type==="commander").length,nR=demandes.length-nC+pAct.length;
   const histo=filtre==="historique";
   const liste=histo?(historique||[]):demandes.filter(l=>filtre==="tous"||l.type===filtre);
+  const piecesListe=histo?pCmd:(filtre==="tous"||filtre==="renouveler")?pAct:[];
+  const groupesPieces=[];
+  {const idx={};piecesListe.forEach(p=>{const k=p.de||"";if(idx[k]===undefined){idx[k]=groupesPieces.length;groupesPieces.push({de:k,client:p.client,pieces:[]});}groupesPieces[idx[k]].pieces.push(p);});}
   if(disponible===false)return <NoticeTablesMateriel onVerifier={recharger}/>;
   return(<div>
     <PanneauAlerteMail/>
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
-      {[["tous","Tout ("+demandes.length+")"],["commander","À commander ("+nC+")"],["renouveler","À renouveler ("+nR+")"],["historique","Historique"]].map(([id,lib])=>(
+      {[["tous","Tout ("+(demandes.length+pAct.length)+")"],["commander","À commander ("+nC+")"],["renouveler","À renouveler ("+nR+")"],["historique","Historique"]].map(([id,lib])=>(
         <button key={id} onClick={()=>setFiltre(id)} style={{border:"1.5px solid "+(filtre===id?"#1B4F8A":"#D1D5DB"),background:filtre===id?"#EEF4FF":"#fff",color:filtre===id?"#1B4F8A":"#4B5563",borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{lib}</button>
       ))}
     </div>
     {erreur&&<div style={{...S.alert,marginBottom:12}}>{erreur}</div>}
     {histo&&historique===null&&<div style={{textAlign:"center",padding:30,color:"#9CA3AF"}}>Chargement…</div>}
-    {liste.length===0&&!(histo&&historique===null)&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px dashed #D1D5DB"}}>
+    {liste.length===0&&piecesListe.length===0&&!(histo&&historique===null)&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px dashed #D1D5DB"}}>
       {histo?"Aucune ligne commandée pour le moment.":"Rien à commander pour le moment."}
       {!histo&&onDemandeMateriel&&<div style={{marginTop:14,display:"flex",justifyContent:"center"}}><button onClick={onDemandeMateriel} style={{...S.p1,fontSize:13}}>🛒 Faire une demande de matériel</button></div>}
     </div>}
@@ -4761,6 +4704,9 @@ function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel})
       :<div style={{display:"flex",flexDirection:"column",gap:12}}>
         {regrouperDemandes(liste).map(g=><GroupeDemande key={g[0].demande_id} lignes={g} occupe={occupe} onCommande={commander} onSuppr={setConfirmSuppr}/>)}
       </div>)}
+    {groupesPieces.length>0&&<div style={{display:"flex",flexDirection:"column",gap:12,marginTop:liste.length>0?12:0}}>
+      {groupesPieces.map(g=><GroupePiecesFiche key={g.de||"sans"} de={g.de} client={g.client} pieces={g.pieces} histo={histo} occupe={occupe} onChanger={changerPiece}/>)}
+    </div>}
     {confirmSuppr&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300}}>
       <div style={{background:"#fff",borderRadius:12,padding:24,width:340}}>
         <p style={{margin:"0 0 16px",fontWeight:600}}>Supprimer cette ligne ?</p>
@@ -4779,7 +4725,7 @@ const NAV_ITEMS=[
   {id:"planning",label:"📋 Planning"},
   {id:"rapport",label:"📧 Rapport"},
   {id:"suivi",label:"🔧 Matériel"},
-  {id:"commandes",label:SUIVI_COMMANDES?"📦 Commandes":"🛒 À commander"},
+  ...(SUIVI_COMMANDES?[{id:"commandes",label:"📦 Commandes"}]:[]),
   {id:"stock",label:"🗃 Stock"},
   {id:"stats",label:"📊 Stats"},
 ];
@@ -4834,9 +4780,11 @@ export default function App(){
   const demandesMat=useDemandesMateriel();
   const [vueCommandesInit,setVueCommandesInit]=useState(null);
   const [origineDemande,setOrigineDemande]=useState("dashboard");
-  const badgeCommandes=commandesAlerte+demandesMat.demandes.length;
+  const piecesAReco=pieces.filter(p=>p.statut!=="Commande");
+  const badgeMateriel=demandesMat.demandes.length+piecesAReco.length;
+  const badgeCommandes=commandesAlerte;
   function ouvrirDemande(depuis){setOrigineDemande(depuis);setPage("demande");}
-  function voirMaterielCommandes(){setVueCommandesInit("materiel");setPage("commandes");}
+  function voirMaterielCommandes(){setPage("suivi");}
 
   const width=useWidth();
   const isMobile=width<900;
@@ -4867,6 +4815,7 @@ export default function App(){
           <button key={n.id} onClick={()=>setPage(n.id)} style={{background:page===n.id?"rgba(255,255,255,0.25)":"transparent",color:"#fff",border:"none",padding:"6px 10px",borderRadius:6,fontSize:13,cursor:"pointer",fontWeight:page===n.id?700:400,position:"relative",whiteSpace:"nowrap"}}>
             {n.label}
             {n.id==="planning"&&devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{devisCount}</span>}
+            {n.id==="suivi"&&badgeMateriel>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeMateriel}</span>}
             {n.id==="commandes"&&badgeCommandes>0&&<span style={{position:"absolute",top:-4,right:-4,background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeCommandes}</span>}
           </button>
         ))}
@@ -4892,6 +4841,7 @@ export default function App(){
         <button key={n.id} onClick={()=>{setPage(n.id);setMenuOuvert(false);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",background:page===n.id?"rgba(255,255,255,0.15)":"transparent",color:"#fff",border:"none",borderBottom:"1px solid rgba(255,255,255,0.1)",padding:"14px 20px",fontSize:15,fontWeight:page===n.id?700:400,cursor:"pointer",textAlign:"left"}}>
           <span>{n.label}</span>
           {n.id==="planning"&&devisCount>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{devisCount}</span>}
+          {n.id==="suivi"&&badgeMateriel>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeMateriel}</span>}
           {n.id==="commandes"&&badgeCommandes>0&&<span style={{background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeCommandes}</span>}
         </button>
       ))}
@@ -4909,10 +4859,9 @@ export default function App(){
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
-    {page==="suivi"&&<PageSuivi/>}
+    {page==="suivi"&&<PageMateriel pieces={pieces} setPieces={setPieces} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>}
     {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
-    {page==="commandes"&&!SUIVI_COMMANDES&&<PageMaterielACommander demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
     {page==="commandes"&&SUIVI_COMMANDES&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume} demandesMat={demandesMat} vueInitiale={vueCommandesInit} onVueConsommee={()=>setVueCommandesInit(null)} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
     {page==="demande"&&(demandesMat.disponible===false
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
