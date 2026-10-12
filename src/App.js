@@ -2588,7 +2588,7 @@ function champsChantierPourType(type){
   };
 }
 
-function PageChantier({techs,clients,onAddClient,categories,sessionTech,onOuvrirAtelier}){
+function PageChantier({techs,clients,onAddClient,categories,sessionTech,onOuvrirAtelier,onMaterielMaj}){
   const [view,setView]=React.useState("liste"); // liste | choix | fiche
   const [ficheOuverte,setFicheOuverte]=React.useState(null);
   const [typeChoisi,setTypeChoisi]=React.useState("Moteur");
@@ -2623,6 +2623,7 @@ function PageChantier({techs,clients,onAddClient,categories,sessionTech,onOuvrir
       categories={categories}
       sessionTech={sessionTech}
       onOuvrirAtelier={onOuvrirAtelier}
+      onMaterielMaj={onMaterielMaj}
       onRetour={function(){setView("liste");charger();}}
       onSaved={function(f){
         setFiches2(function(prev){
@@ -2661,7 +2662,7 @@ function PageChantier({techs,clients,onAddClient,categories,sessionTech,onOuvrir
   />);
 }
 
-function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient,categories,sessionTech,onRetour,onSaved,onOuvrirAtelier}){
+function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient,categories,sessionTech,onRetour,onSaved,onOuvrirAtelier,onMaterielMaj}){
   var typeEquipement=fiche&&fiche.type_equipement?fiche.type_equipement:(typeEquipementInit||"Moteur");
   var champsParEtape=champsChantierPourType(typeEquipement);
   var etapes=ETAPES_CHANTIER;
@@ -2674,8 +2675,8 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   var [photos,setPhotos]=React.useState([]);
   var [statutChantier,setStatutChantier]=React.useState("En cours");
   var [statutRecuperation,setStatutRecuperation]=React.useState(fiche&&fiche.statut_recuperation?fiche.statut_recuperation:"En attente");
-  var [piecesCommande,setPiecesCommande]=React.useState([]);
   var [flash,setFlash]=React.useState(null);
+  var [infoMat,setInfoMat]=React.useState(null);
   var [erreur,setErreur]=React.useState(null);
 
   React.useEffect(function(){
@@ -2688,7 +2689,6 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
     db.get("fiches_chantier_photos","?fiche_id=eq."+fiche.id+"&order=created_at").then(function(p){
       if(Array.isArray(p))setPhotos(p.map(function(ph){return Object.assign({},ph,{url:db.photoUrl(ph.storage_path)});}));
     });
-    db.get("suivi_pieces","?fiche_id=eq."+fiche.id).then(function(p){if(Array.isArray(p))setPiecesCommande(p);});
     if(fiche.statut)setStatutChantier(fiche.statut);
     if(fiche.statut_recuperation)setStatutRecuperation(fiche.statut_recuperation);
   },[fiche]);
@@ -2723,13 +2723,18 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
         var rows=champsAEnregistrer.map(function(k){return {fiche_id:fid,champ_id:k,valeur:String(vSave[k])};});
         await db.upsert("fiches_chantier_valeurs",rows,"fiche_id,champ_id");
       }
+      // matériel "à renouveler" / "à commander" -> onglet Matériel
+      var sync=await synchroniserMaterielChantier({ficheId:fid,de:deNorm,client:v.ch_client||"",lieu:v.ch_eq_nom||"",tech:sessionTech||(v.ch_tech||"").split(",")[0].trim(),lignes:lireMateriel(vSave.ch_materiel)});
+      if(sync.ok&&(sync.crees||sync.maj||sync.retirees)&&onMaterielMaj)onMaterielMaj();
+      setInfoMat(sync.crees?"✓ "+sync.crees+" ligne"+(sync.crees>1?"s":"")+" envoyée"+(sync.crees>1?"s":"")+" dans Matériel":null);
+      if(!sync.ok&&sync.raison!=="absente")setErreur("Fiche enregistrée, mais l'envoi du matériel dans l'onglet Matériel n'a pas abouti (connexion ?). Enregistrez de nouveau pour réessayer.");
       if(idx2!==undefined){
         var nv=validees.slice();
         if(!nv.includes(idx2))nv.push(idx2);
         setValidees(nv);
         setActif(Math.min(idx2+1,etapes.length-1));
       }
-      setFlash("ok");setTimeout(function(){setFlash(null);},2000);
+      setFlash("ok");setTimeout(function(){setFlash(null);},3500);
       ok=true;
     }catch(e){setErreur(e.message||"Erreur");}
     setSaving(false);
@@ -2815,7 +2820,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
       </div>
     </div>
     <div style={{padding:"16px 16px 0"}}>
-      {flash==="ok"&&<div style={{...S.ok,marginBottom:12}}>{"Enregistré !"}</div>}
+      {flash==="ok"&&<div style={{...S.ok,marginBottom:12}}>{"Enregistré !"+(infoMat?"  "+infoMat:"")}</div>}
       {erreur&&<div style={{...S.alert,marginBottom:12}}>{erreur}</div>}
       {etapes.map(function(nom,i){
         var estAct=i===actif;
@@ -2843,7 +2848,6 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
           </div>}
         </div>);
       })}
-      <SectionMaterielCommander v={v} ficheId={ficheId} de={deAff} client={v.ch_client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeEquipement}/>
     </div>
   </div>);
 }
@@ -4027,6 +4031,25 @@ const TYPES_DEMANDE={
   commander:{label:"À commander",color:"#1B4F8A",bg:"#EAF1FB",bord:"#AFC6E6"},
   renouveler:{label:"À renouveler",color:"#8A4B00",bg:"#FFF3DC",bord:"#F3D19A"},
 };
+// Origine d'une ligne de l'onglet Matériel : demande d'un technicien, stock bas, fiche chantier, fiche atelier.
+// Elle se lit dans l'identifiant de la demande : "ch-…" = fiche chantier, "stock-…" (ou commentaire "Stock bas…" pour les
+// anciennes lignes) = stock, le reste = demande faite avec l'assistant. Les pièces de suivi_pieces viennent des fiches atelier.
+const ORIGINES_MAT={
+  demande:{label:"Demande",ico:"🛒",color:"#8A4B00",bg:"#FFF3DC"},
+  stock:{label:"Stock",ico:"🗃",color:"#374151",bg:"#F3F4F6"},
+  chantier:{label:"Fiche chantier",ico:"🏗",color:COULEUR_CHANTIER,bg:"#E6F4F1"},
+  atelier:{label:"Fiche atelier",ico:"📁",color:"#1B4F8A",bg:"#EEF4FF"},
+};
+function origineLigne(l){
+  const id=String(l.demande_id||"");
+  if(id.startsWith("ch-"))return "chantier";
+  if(id.startsWith("stock-")||String(l.commentaire||"").startsWith("Stock bas"))return "stock";
+  return "demande";
+}
+function BadgeOrigine({o}){
+  const t=ORIGINES_MAT[o]||ORIGINES_MAT.demande;
+  return <span style={{display:"inline-flex",alignItems:"center",gap:4,borderRadius:999,padding:"2px 9px",fontSize:11,fontWeight:700,whiteSpace:"nowrap",background:t.bg,color:t.color,border:"1px solid "+t.color+"55"}}>{t.ico} {t.label}</span>;
+}
 const CATEGORIES_MATERIEL=[
   {id:"roulements",nom:"Roulements"},
   {id:"garniture",nom:"Garniture"},
@@ -4558,7 +4581,7 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
 // mode : "dash" (tableau de bord, lecture seule) | "groupe" (dans une demande, onglet Commandes) | "histo" (historique)
 function LigneMateriel({l,mode,occupe,onCommande,onRemettre,onSuppr}){
   const groupe=mode==="groupe",histo=mode==="histo";
-  const meta=groupe?l.categorie:[l.categorie,l.demandeur||"—",l.chantier,histo?"commandé "+ilYa(l.date_commande):ilYa(l.created_at)].filter(Boolean).join(" · ");
+  const meta=groupe?l.categorie:[ORIGINES_MAT[origineLigne(l)].label,l.categorie,l.demandeur||"—",l.chantier,histo?"commandé "+ilYa(l.date_commande):ilYa(l.created_at)].filter(Boolean).join(" · ");
   const cadre=groupe
     ?{padding:"10px 14px",borderTop:"1px solid #EEF1F5"}
     :{background:"#fff",border:"1px solid #E2E6EA",borderRadius:10,padding:"12px 14px"};
@@ -4588,6 +4611,7 @@ function GroupeDemande({lignes,occupe,onCommande,onSuppr}){
       <span style={{fontWeight:700}}>👤 {p.demandeur||"—"}</span>
       {p.chantier&&<span style={{fontWeight:700,color:"#1B4F8A"}}>{p.chantier}</span>}
       <span style={{fontSize:12,color:"#6B7280"}}>{ilYa(p.created_at)}</span>
+      <BadgeOrigine o={origineLigne(p)}/>
       {p.commentaire&&<div style={{flexBasis:"100%",fontSize:12,fontStyle:"italic",color:"#4B5563"}}>« {p.commentaire} »</div>}
     </div>
     {lignes.map(l=><LigneMateriel key={l.id} l={l} mode="groupe" occupe={occupe} onCommande={onCommande} onSuppr={onSuppr}/>)}
@@ -4692,6 +4716,43 @@ async function modifierLigneMateriel(id,corps){
     return r.ok&&Array.isArray(data)&&data.length>0;
   }catch(e){return false;}
 }
+// Envoie dans l'onglet Matériel les lignes "à renouveler" / "à commander" d'une fiche chantier (une demande "ch-<id fiche>").
+// Rejouable sans doublon : une ligne déjà envoyée est mise à jour, une ligne retirée ou passée en "utilisé" est retirée tant
+// qu'elle n'a pas été commandée ; une ligne déjà commandée n'est jamais touchée.
+async function synchroniserMaterielChantier({ficheId,de,client,lieu,tech,lignes}){
+  const demandeId="ch-"+ficheId;
+  const voulues=lignes.filter(l=>l.statut==="renouveler"||l.statut==="commander");
+  let existantes;
+  try{
+    const r=await fetch(SUPA_URL+"/rest/v1/demandes_materiel?demande_id=eq."+encodeURIComponent(demandeId)+"&order=created_at&limit=500",{headers:H});
+    existantes=await r.json();
+  }catch(e){return {ok:false,raison:"reseau"};}
+  if(!Array.isArray(existantes))return {ok:false,raison:existantes&&existantes.code==="PGRST205"?"absente":"erreur"};
+  const cle=(c,d)=>(String(c||"")+"|"+String(d||"")).toLowerCase();
+  const pool={};
+  existantes.forEach(x=>{const k=cle(x.categorie,x.designation);(pool[k]=pool[k]||[]).push(x);});
+  const aCreer=[];let maj=0,retirees=0,echec=false;
+  const base=Date.now();
+  for(const l of voulues){
+    const q=Math.max(1,parseInt(l.quantite,10)||1);
+    const ex=(pool[cle(l.cat,l.designation)]||[]).shift();
+    if(!ex){
+      aCreer.push({demande_id:demandeId,type:l.statut,categorie:l.cat||null,designation:l.designation,quantite:q,demandeur:tech||null,chantier:de||null,commentaire:"Fiche chantier"+([client,lieu].filter(Boolean).length?" · "+[client,lieu].filter(Boolean).join(" · "):""),statut:"a_commander",created_at:new Date(base+aCreer.length).toISOString()});
+    }else if(ex.statut==="a_commander"&&(ex.type!==l.statut||ex.quantite!==q)){
+      if(await modifierLigneMateriel(ex.id,{type:l.statut,quantite:q}))maj++;else echec=true;
+    }
+  }
+  for(const k of Object.keys(pool))for(const ex of pool[k]){
+    if(ex.statut!=="a_commander")continue;
+    if(await supprimerLigneMateriel(ex.id))retirees++;else echec=true;
+  }
+  let crees=0;
+  if(aCreer.length){
+    const res=await db.post("demandes_materiel",aCreer);
+    if(Array.isArray(res)&&res.length===aCreer.length)crees=res.length;else echec=true;
+  }
+  return {ok:!echec,crees,maj,retirees};
+}
 async function supprimerLigneMateriel(id){
   try{const r=await fetch(SUPA_URL+"/rest/v1/demandes_materiel?id=eq."+id,{method:"DELETE",headers:H});return r.ok;}
   catch(e){return false;}
@@ -4724,7 +4785,8 @@ function GroupePiecesFiche({de,client,pieces,histo,occupe,onChanger}){
   return(<div style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:12,overflow:"hidden"}}>
     <div style={{background:"#F8F9FA",padding:"10px 14px",display:"flex",flexWrap:"wrap",alignItems:"baseline",gap:"2px 12px"}}>
       <span style={{fontWeight:700,color:"#1B4F8A"}}>{de||"Sans N° DE"}</span>
-      <span style={{fontSize:12,color:"#6B7280"}}>{client||"—"} · fiche atelier</span>
+      <BadgeOrigine o="atelier"/>
+      <span style={{fontSize:12,color:"#6B7280"}}>{client||"—"}</span>
     </div>
     {pieces.map(p=>(<div key={p.id} style={{display:"grid",gridTemplateColumns:"1fr auto",gap:"4px 12px",alignItems:"center",padding:"10px 14px",borderTop:"1px solid #EEF1F5"}}>
       <div style={{display:"flex",flexWrap:"wrap",alignItems:"center",gap:8,minWidth:0}}>
@@ -4965,7 +5027,7 @@ export default function App(){
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
     {page==="suivi"&&<PageMateriel pieces={pieces} setPieces={setPieces} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>}
-    {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech} onOuvrirAtelier={ouvrirAtelierDepuisChantier}/>}
+    {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech} onOuvrirAtelier={ouvrirAtelierDepuisChantier} onMaterielMaj={demandesMat.recharger}/>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
     {page==="commandes"&&SUIVI_COMMANDES&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume} demandesMat={demandesMat} vueInitiale={vueCommandesInit} onVueConsommee={()=>setVueCommandesInit(null)} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
     {page==="demande"&&(demandesMat.disponible===false

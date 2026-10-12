@@ -1278,7 +1278,7 @@ export default function PageStock({techs,sessionTech}){
     if(!arts.length||cmdEnCours)return;
     if(!qui){afficherToast("Choisissez d'abord l'opérateur (en haut de la page)");return;}
     setCmdEnCours(true);
-    const id="d"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+    const id="stock-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     const base=Date.now();
     const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:familleDe(a.reference),designation:designationDemande(a),quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+(a.quantite||0)+" / "+(libSeuils(a)||"seuil ?")+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
     const r=await appel("POST","demandes_materiel",rows,"return=minimal");
