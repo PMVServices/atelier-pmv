@@ -2,6 +2,7 @@ import React, {useState, useEffect, useMemo} from "react";
 import {db, SUPA_URL, H} from "./supabase";
 import {NoticeActivation} from "./Activation";
 import {ChampContact, useCarnet} from "./Contacts";
+import {chargerParamsApp} from "./Alertes";
 
 // Suivi de la distribution des calendriers annuels : à qui on en a donné, combien (grands / petits) et quand,
 // pour ne pas en redonner deux fois au même client ou à la même personne.
@@ -33,6 +34,15 @@ const aujourdhui=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.get
 // Les calendriers de l'année suivante se distribuent à partir de septembre
 const editionParDefaut=()=>{const d=new Date();return d.getMonth()>=8?d.getFullYear()+1:d.getFullYear();};
 const pluriel=(n,mot)=>n+" "+mot+(n>1?"s":"");
+// Stock de calendriers au départ (par édition) : 100 grands et 180 petits pour l'édition en cours ; modifiable par l'administrateur.
+// Rangé dans parametres_app sous la clé "calendrier_stock_<édition>" = "grands,petits".
+const STOCK_DEFAUT={g:100,p:180};
+const cleStock=ed=>"calendrier_stock_"+ed;
+function lireStock(params,ed){
+  const v=params&&params[cleStock(ed)];
+  if(v){const [g,p]=String(v).split(",").map(x=>parseInt(x,10));if(!isNaN(g)&&!isNaN(p))return {g,p};}
+  return ed===editionParDefaut()?STOCK_DEFAUT:null;
+}
 const libelleQte=(g,p)=>[g?pluriel(g,"grand"):"",p?pluriel(p,"petit"):""].filter(Boolean).join(" + ")||"—";
 
 async function lire(){
@@ -68,8 +78,23 @@ function Compteur({libelle,valeur,onChange}){
   </div>);
 }
 
+function TuileStock({libelle,depart,donnes}){
+  const reste=depart-donnes;
+  const part=depart>0?Math.max(0,Math.min(100,Math.round(reste/depart*100))):0;
+  const couleur=reste<0?"#D73A49":part<=20?"#E8720C":"#22863A";
+  return(<div style={{flex:"1 1 200px",minWidth:0,background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:10,padding:"10px 14px"}}>
+    <div style={{fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:".04em"}}>{libelle}</div>
+    <div style={{display:"flex",alignItems:"baseline",gap:8,flexWrap:"wrap"}}>
+      <span style={{fontSize:30,fontWeight:800,color:couleur,lineHeight:1.1}}>{reste}</span>
+      <span style={{fontSize:13,color:"#374151"}}>restants sur {depart}</span>
+    </div>
+    <div style={{height:6,background:"#E5E7EB",borderRadius:6,overflow:"hidden",margin:"6px 0 4px"}}><div style={{height:6,width:part+"%",background:couleur}}/></div>
+    <div style={{fontSize:12,color:"#6B7280"}}>{donnes} donné{donnes>1?"s":""}{reste<0?" — plus que le stock de départ !":""}</div>
+  </div>);
+}
+
 // ── formulaire : un client, un ou plusieurs contacts ──────────────────
-function FormulaireDon({lignes,champClient,sessionTech,editionsConnues,onEnregistre,onAnnuler}){
+function FormulaireDon({lignes,champClient,sessionTech,editionsConnues,departPour,onEnregistre,onAnnuler}){
   const carnet=useCarnet();
   const [client,setClient]=useState("");
   const [cleClient,setCleClient]=useState(0);
@@ -105,6 +130,10 @@ function FormulaireDon({lignes,champClient,sessionTech,editionsConnues,onEnregis
   const dejaContact=nom=>{const k=norm(nom);return k?lignes.filter(l=>l.edition===edition&&norm(l.contact)===k):[];};
 
   const valides=rows.filter(r=>r.contact.trim()&&(r.grands+r.petits)>0);
+  // stock après cet enregistrement (pour l'édition choisie)
+  const depart=departPour(edition);
+  const dejaG=lignes.filter(l=>l.edition===edition).reduce((n,l)=>n+(l.grands||0),0),dejaP=lignes.filter(l=>l.edition===edition).reduce((n,l)=>n+(l.petits||0),0);
+  const apresG=depart?depart.g-dejaG-rows.reduce((n,r)=>n+r.grands,0):null,apresP=depart?depart.p-dejaP-rows.reduce((n,r)=>n+r.petits,0):null;
   const pret=client.trim()&&valides.length>0;
 
   async function enregistrer(){
@@ -160,6 +189,9 @@ function FormulaireDon({lignes,champClient,sessionTech,editionsConnues,onEnregis
       </div>
     </div>
 
+    {depart&&<div style={{background:(apresG<0||apresP<0)?"#FFF5F5":"#F0FFF4",border:"1px solid "+((apresG<0||apresP<0)?"#D73A49":"#22863A"),borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:12,color:(apresG<0||apresP<0)?"#D73A49":"#22863A"}}>
+      Stock après cet enregistrement : <b>{apresG} grand{Math.abs(apresG)>1?"s":""}</b> et <b>{apresP} petit{Math.abs(apresP)>1?"s":""}</b>{(apresG<0||apresP<0)?" — attention, plus que le stock de départ.":"."}
+    </div>}
     {erreur&&<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,padding:"8px 10px",fontSize:13,color:"#D73A49",marginBottom:10}}>{erreur}</div>}
     <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}>
       <button type="button" onClick={enregistrer} disabled={!pret||occupe} style={{...BTN1,opacity:pret&&!occupe?1:0.5}}>{occupe?"⏳ Enregistrement…":"✓ Enregistrer"+(valides.length>1?" ("+valides.length+" contacts)":"")}</button>
@@ -169,7 +201,7 @@ function FormulaireDon({lignes,champClient,sessionTech,editionsConnues,onEnregis
 }
 
 // ── page ───────────────────────────────────────────────────────────────
-export default function PageCalendrier({sessionTech,champClient}){
+export default function PageCalendrier({sessionTech,champClient,admin}){
   const [donnees,setDonnees]=useState({lignes:[],dispo:null});
   const [charge,setCharge]=useState(false);
   const [erreur,setErreur]=useState(null);
@@ -179,12 +211,16 @@ export default function PageCalendrier({sessionTech,champClient}){
   const [aSupprimer,setASupprimer]=useState(null);
   const [message,setMessage]=useState(null);
   const [activation,setActivation]=useState(false);
+  const [params,setParams]=useState({});
+  const [modifStock,setModifStock]=useState(false);
+  const [saisieStock,setSaisieStock]=useState({g:"",p:""});
+  const [erreurStock,setErreurStock]=useState(null);
 
   async function recharger(){
     try{const r=await lire();setDonnees(r);setErreur(null);setCharge(true);return r.dispo;}
     catch(e){setErreur("Lecture impossible pour le moment (connexion ?).");setCharge(true);return null;}
   }
-  useEffect(()=>{recharger();},[]);
+  useEffect(()=>{recharger();chargerParamsApp().then(p=>setParams(p||{}));},[]);
   const lignes=donnees.lignes;
 
   const editions=useMemo(()=>{
@@ -204,6 +240,17 @@ export default function PageCalendrier({sessionTech,champClient}){
     filtrees.forEach(l=>{const k=norm(l.client);if(!m.has(k))m.set(k,{client:l.client,lignes:[],grands:0,petits:0,dernier:""});const g=m.get(k);g.lignes.push(l);g.grands+=l.grands||0;g.petits+=l.petits||0;if(String(l.donne_le)>g.dernier)g.dernier=String(l.donne_le);});
     return [...m.values()].sort((a,b)=>b.dernier.localeCompare(a.dernier)||a.client.localeCompare(b.client,"fr"));
   },[filtrees]);
+  const departEdition=edition==="toutes"?null:lireStock(params,edition);
+  const donnesG=deLEdition.reduce((n,l)=>n+(l.grands||0),0),donnesP=deLEdition.reduce((n,l)=>n+(l.petits||0),0);
+  function ouvrirModifStock(){const d=departEdition||STOCK_DEFAUT;setSaisieStock({g:String(d.g),p:String(d.p)});setErreurStock(null);setModifStock(true);}
+  async function enregistrerStock(){
+    const g=parseInt(saisieStock.g,10),p=parseInt(saisieStock.p,10);
+    if(isNaN(g)||isNaN(p)||g<0||p<0){setErreurStock("Indiquez deux nombres (0 ou plus).");return;}
+    try{
+      await db.upsert("parametres_app",[{cle:cleStock(edition),valeur:g+","+p}],"cle");
+      setParams(x=>({...x,[cleStock(edition)]:g+","+p}));setModifStock(false);
+    }catch(e){setErreurStock("L'enregistrement n'a pas abouti (connexion ?).");}
+  }
   const totalG=filtrees.reduce((n,l)=>n+(l.grands||0),0),totalP=filtrees.reduce((n,l)=>n+(l.petits||0),0);
 
   function apresEnregistrement(rows,client){
@@ -239,7 +286,28 @@ export default function PageCalendrier({sessionTech,champClient}){
     {message&&<div style={{background:"#F0FFF4",border:"1px solid #22863A",borderRadius:8,padding:"8px 12px",fontSize:13,color:"#22863A",marginBottom:12}}>{message}</div>}
     {erreur&&<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:8,padding:"8px 12px",fontSize:13,color:"#D73A49",marginBottom:12}}>{erreur}</div>}
 
-    {formulaire&&<FormulaireDon lignes={lignes} champClient={champClient} sessionTech={sessionTech} editionsConnues={editions} onEnregistre={apresEnregistrement} onAnnuler={()=>setFormulaire(false)}/>}
+    {formulaire&&<FormulaireDon lignes={lignes} champClient={champClient} sessionTech={sessionTech} editionsConnues={editions} departPour={ed=>lireStock(params,ed)} onEnregistre={apresEnregistrement} onAnnuler={()=>setFormulaire(false)}/>}
+
+    {edition!=="toutes"&&<div style={CARTE}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:10}}>
+        <div style={{fontSize:14,fontWeight:800,color:"#1B4F8A"}}>Stock de calendriers — édition {edition}</div>
+        {admin&&!modifStock&&<button type="button" onClick={ouvrirModifStock} style={{...BTN2,padding:"4px 10px",fontSize:12}}>✏ Stock de départ</button>}
+      </div>
+      {departEdition
+        ?<div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+          <TuileStock libelle="Grands calendriers" depart={departEdition.g} donnes={donnesG}/>
+          <TuileStock libelle="Petits calendriers" depart={departEdition.p} donnes={donnesP}/>
+        </div>
+        :<div style={{fontSize:13,color:"#6B7280"}}>Stock de départ non défini pour cette édition. {donnesG} grand{donnesG>1?"s":""} et {donnesP} petit{donnesP>1?"s":""} donnés. {admin?"Touchez « Stock de départ » pour le saisir.":"L'administrateur peut le saisir."}</div>}
+      {modifStock&&<div style={{marginTop:12,background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:10,padding:"10px 12px"}}>
+        <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:10}}>
+          <div style={{flex:"1 1 120px"}}><label style={LBL}>Grands au départ</label><input type="number" min="0" value={saisieStock.g} onChange={e=>setSaisieStock(x=>({...x,g:e.target.value}))} style={INP}/></div>
+          <div style={{flex:"1 1 120px"}}><label style={LBL}>Petits au départ</label><input type="number" min="0" value={saisieStock.p} onChange={e=>setSaisieStock(x=>({...x,p:e.target.value}))} style={INP}/></div>
+        </div>
+        {erreurStock&&<div style={{fontSize:12,color:"#D73A49",marginBottom:8}}>{erreurStock}</div>}
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}><button type="button" onClick={enregistrerStock} style={BTN1}>✓ Enregistrer</button><button type="button" onClick={()=>setModifStock(false)} style={BTN2}>Annuler</button></div>
+      </div>}
+    </div>}
 
     <div style={CARTE}>
       <div style={{display:"flex",gap:10,flexWrap:"wrap",alignItems:"flex-end"}}>
