@@ -5,7 +5,7 @@ import {SUPA_URL,SUPA_KEY,H,db} from "./supabase";
 import {NoticeActivation} from "./Activation";
 import PageStock from "./Stock";
 import {ChampContact} from "./Contacts";
-import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, envoyerAlerteMail} from "./Alertes";
+import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
 
 const LOGO_B64 = "data:image/jpeg;base64,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";
@@ -1826,10 +1826,10 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
       const ext=file.name.split(".").pop();
       const slug=catPhoto.toLowerCase().replace(/[^a-z0-9]/g,"_");
       const path=ch.chemin+"/"+slug+"_"+Date.now()+"."+ext;
-      const {data,error}=await window._supabase.storage.from("photos").upload(path,file,{upsert:true});
-      if(error)throw error;
+      await db.uploadPhoto(path,file);
       const rec=await db.post("fiche_photos",{fiche_id:f.id,storage_path:path,nom_fichier:file.name,categorie_nom:catPhoto,etape:""});
-      if(rec&&rec[0])setPhotos(prev=>[...prev,{...rec[0],url:db.photoUrl(path)}]);
+      if(!(rec&&rec[0]))throw new Error("La photo n'a pas pu être rattachée à la fiche.");
+      setPhotos(prev=>[...prev,{...rec[0],url:db.photoUrl(path)}]);
       setAjoutPhoto(false);setCatPhoto("");
     }catch(err){alert("Erreur upload: "+err.message);}
     setUploadEnCours(false);
@@ -2731,10 +2731,6 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
       var sync=await synchroniserMaterielChantier({ficheId:fid,de:deNorm,client:v.ch_client||"",lieu:v.ch_eq_nom||"",tech:sessionTech||(v.ch_tech||"").split(",")[0].trim(),lignes:lireMateriel(vSave.ch_materiel)});
       if(sync.ok&&(sync.crees||sync.maj||sync.retirees)&&onMaterielMaj)onMaterielMaj();
       setInfoMat(sync.crees?"✓ "+sync.crees+" ligne"+(sync.crees>1?"s":"")+" envoyée"+(sync.crees>1?"s":"")+" dans Matériel":null);
-      if(sync.crees&&sync.nouvelles&&sync.nouvelles.length){
-        alerteMailDemande({tech:sessionTech||(v.ch_tech||"").split(",")[0].trim()||"—",chantier:deNorm,commentaire:"Fiche chantier"+(v.ch_client?" · "+v.ch_client:"")+(v.ch_eq_nom?" · "+v.ch_eq_nom:""),lignes:sync.nouvelles.map(function(r){return {type:r.type,cat:r.categorie||"",designation:r.designation,qty:r.quantite};})})
-          .then(function(m){if(m&&m.etat==="envoye")setInfoMat(function(x){return (x||"")+" · alerte mail envoyée";});});
-      }
       if(!sync.ok&&sync.raison!=="absente")setErreur("Fiche enregistrée, mais l'envoi du matériel dans l'onglet Matériel n'a pas abouti (connexion ?). Enregistrez de nouveau pour réessayer.");
       if(idx2!==undefined){
         var nv=validees.slice();
@@ -4184,17 +4180,6 @@ function useDemandesMateriel(){
 }
 
 // Alertes par mail (EmailJS) : voir Alertes.js
-function messageMailDemande(d){
-  const lignes=d.lignes.map(x=>"• ["+TYPES_DEMANDE[x.type].label+"] "+x.cat+" : "+x.designation+" × "+x.qty).join("\n");
-  return "Demandé par "+d.tech+(d.chantier?" — chantier "+d.chantier:"")+"\n\n"+lignes+"\n"
-    +(d.commentaire?"\nCommentaire : "+d.commentaire+"\n":"")
-    +"\nÀ traiter dans l'appli : "+window.location.origin+" (onglet Matériel)";
-}
-async function alerteMailDemande(d){
-  const n=d.lignes.length;
-  return envoyerAlerteMail({type:"demande",sujet:"Matériel à commander — "+n+" article"+(n>1?"s":"")+" ("+d.tech+(d.chantier?", "+d.chantier:"")+")",message:messageMailDemande(d),demandeur:d.tech,chantier:d.chantier||""});
-}
-
 const CSS_MATERIEL=`
 .mat{max-width:820px;margin:0 auto;padding:18px 16px 48px;color:#1A1A2E;font-size:15px;line-height:1.45}
 .mat *{box-sizing:border-box}
@@ -4477,8 +4462,7 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
       return;
     }
     if(onEnvoyee)onEnvoyee();
-    const mail=await alerteMailDemande({tech,chantier:ch,commentaire:com,lignes:panier});
-    setResultat({nb:panier.length,tech,chantier:ch,mail,lignes:panier});
+    setResultat({nb:panier.length,tech,chantier:ch,lignes:panier});
     setPanier([]);setEnvoi({enCours:false,erreur:null});setEtape("sent");
   }
 
@@ -4548,13 +4532,9 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
       {!tech&&<p className="mat-aide">Choisissez qui demande pour pouvoir envoyer.</p>}
     </div>);
   }else if(etape==="sent"&&resultat){
-    const m=resultat.mail||{};
     corps=(<div className="mat-ecran">
-      <div className="mat-ok"><h2 className="mat-h2">Demande envoyée</h2><p style={{margin:0}}>{resultat.nb} article{resultat.nb>1?"s":""} demandé{resultat.nb>1?"s":""} par {resultat.tech}{resultat.chantier?" pour "+resultat.chantier:""}.</p><p className="mat-aide">Elle apparaît dans Commandes, onglet À commander, et sur le tableau de bord.</p></div>
+      <div className="mat-ok"><h2 className="mat-h2">Demande envoyée</h2><p style={{margin:0}}>{resultat.nb} article{resultat.nb>1?"s":""} demandé{resultat.nb>1?"s":""} par {resultat.tech}{resultat.chantier?" pour "+resultat.chantier:""}.</p><p className="mat-aide">Vous la retrouvez dans l'onglet Matériel. L'administration reçoit un résumé chaque jour par mail.</p></div>
       <div className="mat-liste">{resultat.lignes.map(l=>ligneListe(l))}</div>
-      {m.etat==="envoye"&&<p className="mat-aide">Alerte mail envoyée à {m.adresse}.</p>}
-      {m.etat==="echec"&&<p className="mat-aide" style={{color:"#B42318"}}>L'alerte mail n'a pas pu partir ({m.detail}). La demande, elle, est bien enregistrée.</p>}
-      {m.etat==="non_configure"&&<p className="mat-aide">Alerte mail activée mais pas encore configurée (onglet Matériel, Alerte mail).</p>}
       <div className="mat-deux"><button type="button" className="mat-btn mat-btn--p" onClick={nouvelle}>Nouvelle demande</button><button type="button" className="mat-btn" onClick={onVoirCommandes}>Voir dans {NOM_ONGLET_MATERIEL}</button></div>
     </div>);
   }
@@ -4609,30 +4589,53 @@ function PanneauAlerteMail(){
   useEffect(()=>{let a=false;chargerParamsApp().then(x=>{if(!a)setP(configMailDepuisParams(x));});return()=>{a=true;};},[]);
   if(!p)return null;
   const configure=!!(p.adresse.trim()&&p.service.trim()&&p.template.trim()&&p.cle.trim());
-  const statut=!p.actif&&!p.stockActif?"Alertes mail désactivées":configure?"Alertes mail activées → "+p.adresse:"Alertes mail activées, configuration EmailJS incomplète";
+  const joursTxt=[1,2,3,4,5,6,0].filter(j=>p.jours.includes(j)).map(j=>NOMS_JOURS[j].toLowerCase()).join(", ");
+  const statut=!p.resumeActif?"Résumé quotidien par mail désactivé":configure?"Résumé quotidien activé → "+p.adresse+" ("+(joursTxt||"aucun jour")+", dès "+p.heure+")":"Résumé quotidien activé, configuration EmailJS incomplète";
   const maj=patch=>setP(x=>({...x,...patch}));
+  const basculerJour=j=>setP(x=>({...x,jours:x.jours.includes(j)?x.jours.filter(n=>n!==j):x.jours.concat([j])}));
+  const cfgEnvoi=()=>({service:p.service.trim(),template:p.template.trim(),cle:p.cle.trim()});
   async function enregistrer(){
-    const rows=[["alerte_mail_actif",p.actif?"1":"0"],["alerte_stock_actif",p.stockActif?"1":"0"],["alerte_mail_adresse",p.adresse.trim()],["emailjs_service_id",p.service.trim()],["emailjs_template_id",p.template.trim()],["emailjs_public_key",p.cle.trim()]].map(([cle,valeur])=>({cle,valeur}));
+    // les deux anciens réglages "mail à chaque action" sont mis à zéro : il n'y a plus que le résumé quotidien
+    const rows=[["alerte_resume_actif",p.resumeActif?"1":"0"],["resume_jours",p.jours.join(",")],["resume_heure",p.heure||"07:30"],["alerte_mail_actif","0"],["alerte_stock_actif","0"],["alerte_mail_adresse",p.adresse.trim()],["emailjs_service_id",p.service.trim()],["emailjs_template_id",p.template.trim()],["emailjs_public_key",p.cle.trim()]].map(([cle,valeur])=>({cle,valeur}));
     try{await db.upsert("parametres_app",rows,"cle");setEnregistre(true);setTimeout(()=>setEnregistre(false),2500);}
     catch(e){setTest({ok:false,detail:"Enregistrement impossible : "+e.message});}
   }
   async function tester(){
     setTest({enCours:true});
     try{
-      const r=await envoyerViaEmailJS({service:p.service.trim(),template:p.template.trim(),cle:p.cle.trim()},{to_email:p.adresse.trim(),sujet:"Test — alerte matériel à commander",message:"Ceci est un message de test envoyé depuis l'appli Atelier PMV.\n\nSi vous le recevez, l'alerte mail fonctionne.",demandeur:"Test",chantier:""});
+      const r=await envoyerViaEmailJS(cfgEnvoi(),{to_email:p.adresse.trim(),sujet:"Test — résumé quotidien Atelier PMV",message:"Ceci est un message de test envoyé depuis l'appli Atelier PMV.\n\nSi vous le recevez, l'envoi par mail fonctionne.",demandeur:"Test",chantier:""});
       setTest({ok:r.ok,detail:r.ok?"Mail de test envoyé à "+p.adresse.trim():r.detail});
+    }catch(e){setTest({ok:false,detail:String((e&&e.message)||e)});}
+  }
+  async function envoyerMaintenant(){
+    setTest({enCours:true});
+    try{
+      const resume=await composerResume();
+      if(!resume){setTest({ok:false,detail:"Lecture du matériel et du stock impossible (connexion ?)."});return;}
+      const r=await envoyerViaEmailJS(cfgEnvoi(),{to_email:p.adresse.trim(),sujet:resume.sujet,message:resume.message,demandeur:"",chantier:""});
+      setTest({ok:r.ok,detail:r.ok?"Résumé envoyé à "+p.adresse.trim()+(resume.vide?" (rien à signaler pour le moment)":" : "+resume.sujet.replace("Résumé du jour — ","")):r.detail});
     }catch(e){setTest({ok:false,detail:String((e&&e.message)||e)});}
   }
   return(<div style={{...S.card,padding:"10px 14px",marginBottom:14}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap"}}>
-      <span style={{fontSize:13,fontWeight:600,color:(p.actif||p.stockActif)&&configure?"#22863A":"#4B5563"}}>🔔 {statut}</span>
+      <span style={{fontSize:13,fontWeight:600,color:p.resumeActif&&configure?"#22863A":"#4B5563"}}>🔔 {statut}</span>
       <button onClick={()=>setOuvert(!ouvert)} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>{ouvert?"Fermer":"Régler"}</button>
     </div>
     {ouvert&&<div style={{marginTop:12,display:"flex",flexDirection:"column",gap:10}}>
-      <label style={{display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,cursor:"pointer"}}><input type="checkbox" checked={p.actif} onChange={e=>maj({actif:e.target.checked})}/>Envoyer un mail à chaque nouvelle demande de matériel</label>
-      <label style={{display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,cursor:"pointer"}}><input type="checkbox" checked={!!p.stockActif} onChange={e=>maj({stockActif:e.target.checked})}/>Envoyer un mail quand un article passe sous son stock minimum</label>
-      <div><label style={S.lbl}>Adresse qui reçoit l'alerte</label><input value={p.adresse} onChange={e=>maj({adresse:e.target.value})} style={S.inp} placeholder="commandes@pmvservices.fr"/></div>
-      <div style={{fontSize:12,color:"#6B7280",lineHeight:1.5}}>L'envoi passe par <strong>EmailJS</strong> (compte gratuit sur emailjs.com). Dans EmailJS, le modèle de mail doit avoir : destinataire <code>{"{{to_email}}"}</code>, objet <code>{"{{sujet}}"}</code>, contenu <code>{"<div style=\"white-space:pre-line\">{{message}}</div>"}</code>.</div>
+      <label style={{display:"flex",alignItems:"center",gap:10,fontSize:13,fontWeight:600,cursor:"pointer"}}><input type="checkbox" checked={p.resumeActif} onChange={e=>maj({resumeActif:e.target.checked})}/>Envoyer un résumé par mail une fois par jour (plutôt qu'un mail à chaque action)</label>
+      {p.resumeActif&&<div style={{display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}}>
+          <span style={{fontSize:12,color:"#6B7280",marginRight:4}}>Jours d'envoi :</span>
+          {[1,2,3,4,5,6,0].map(j=>(<button key={j} type="button" onClick={()=>basculerJour(j)} aria-pressed={p.jours.includes(j)} style={{padding:"6px 12px",borderRadius:20,border:"1.5px solid "+(p.jours.includes(j)?"#1B4F8A":"#D1D5DB"),background:p.jours.includes(j)?"#EEF4FF":"#fff",color:p.jours.includes(j)?"#1B4F8A":"#6B7280",fontSize:12,fontWeight:p.jours.includes(j)?700:500,cursor:"pointer"}}>{NOMS_JOURS[j]}</button>))}
+        </div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8,alignItems:"center"}}>
+          <span style={{fontSize:12,color:"#6B7280"}}>À partir de :</span>
+          <input type="time" value={p.heure} onChange={e=>maj({heure:e.target.value})} style={{...S.inp,width:120}}/>
+        </div>
+        <div style={{fontSize:12,color:"#6B7280",lineHeight:1.5}}>Le résumé liste le matériel en attente (à commander, à renouveler) et les stocks sous leur minimum. Il part à la première ouverture de l'appli après cette heure, les jours cochés, seulement s'il y a quelque chose à signaler : au plus un mail par jour.</div>
+      </div>}
+      <div><label style={S.lbl}>Adresse qui reçoit le résumé</label><input value={p.adresse} onChange={e=>maj({adresse:e.target.value})} style={S.inp} placeholder="commandes@pmvservices.fr"/></div>
+      <div style={{fontSize:12,color:"#6B7280",lineHeight:1.5}}>L'envoi passe par <strong>EmailJS</strong> (compte gratuit sur emailjs.com, 200 mails par mois). Dans EmailJS, le modèle de mail doit avoir : destinataire <code>{"{{to_email}}"}</code>, objet <code>{"{{sujet}}"}</code>, contenu <code>{"<div style=\"white-space:pre-line\">{{message}}</div>"}</code>.</div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:10}}>
         <div><label style={S.lbl}>Service ID</label><input value={p.service} onChange={e=>maj({service:e.target.value})} style={S.inp} placeholder="service_xxxxxxx"/></div>
         <div><label style={S.lbl}>Template ID</label><input value={p.template} onChange={e=>maj({template:e.target.value})} style={S.inp} placeholder="template_xxxxxxx"/></div>
@@ -4640,7 +4643,8 @@ function PanneauAlerteMail(){
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         <button onClick={enregistrer} style={S.p1}>Enregistrer</button>
-        <button onClick={tester} disabled={!configure||(test&&test.enCours)} style={{...S.p2,opacity:configure?1:0.5}}>{test&&test.enCours?"Envoi du test…":"Envoyer un mail de test"}</button>
+        <button onClick={tester} disabled={!configure||(test&&test.enCours)} style={{...S.p2,opacity:configure?1:0.5}}>{test&&test.enCours?"Envoi…":"Envoyer un mail de test"}</button>
+        <button onClick={envoyerMaintenant} disabled={!configure||(test&&test.enCours)} style={{...S.p2,opacity:configure?1:0.5}}>📨 Envoyer le résumé maintenant</button>
         {enregistre&&<span style={{fontSize:12,color:"#22863A",fontWeight:600}}>✓ Enregistré</span>}
       </div>
       {test&&!test.enCours&&<div style={{fontSize:12,color:test.ok?"#22863A":"#B42318",wordBreak:"break-word"}}>{test.ok?"✓ ":"✕ "}{test.detail}</div>}
@@ -5005,6 +5009,14 @@ export default function App(){
   const [demandeAdmin,setDemandeAdmin]=useState(false);
   function entrer(r){setRole(r);try{localStorage.setItem(ROLE_KEY,r);}catch(e){}}
   useEffect(()=>{if(!admin&&page==="stats")setPage("dashboard");},[admin,page]);
+  useEffect(()=>{
+    if(!pinOk)return undefined;
+    verifierResumeQuotidien();
+    const auRetour=()=>{if(!document.hidden)verifierResumeQuotidien();};
+    document.addEventListener("visibilitychange",auRetour);
+    const t=setInterval(verifierResumeQuotidien,30*60*1000);
+    return()=>{document.removeEventListener("visibilitychange",auRetour);clearInterval(t);};
+  },[pinOk]);
   if(!pinOk)return <ModalPin onSuccess={r=>{entrer(r);setPinOk(true);}}/>;
   if(demandeAdmin&&!admin)return <ModalPin seulAdmin titre="Code administrateur" onAnnuler={()=>setDemandeAdmin(false)} onSuccess={r=>{entrer(r);setDemandeAdmin(false);}}/>;
   const boutonRole=<button onClick={admin?()=>entrer("tech"):()=>setDemandeAdmin(true)} title={admin?"Mode administrateur : toucher pour repasser en mode technicien":"Accès administrateur"} style={{background:admin?"rgba(255,255,255,0.25)":"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>{admin?"🔓 Admin":"🔒"}</button>;

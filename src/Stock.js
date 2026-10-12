@@ -2,7 +2,6 @@ import React, {useState, useEffect, useCallback, useRef} from "react";
 import {SUPA_URL, H, db} from "./supabase";
 import {NoticeActivation} from "./Activation";
 import {lancerImpression, telechargerHtml} from "./pdfUtils";
-import {envoyerAlerteMail, messageStockBas} from "./Alertes";
 
 // ─── GESTION DE STOCK (démarrage : roulements 6XXX) ──────────────────────────────────────────────
 // Principe : Excel garde le catalogue (références, dimensions, emplacements, mini/maxi, prix…), l'appli
@@ -129,13 +128,6 @@ async function appel(methode,chemin,corps,prefer){
 async function enregistrerMouvement(m){
   const r=await appel("POST","stock_mouvements",m,"return=representation");
   return r.ok&&Array.isArray(r.data)&&r.data.length===1;
-}
-// Alerte mail quand une sortie fait passer un article sous son minimum (ou en rupture) : items = [{article, avant, apres}].
-// Un seul mail par validation ; pas de nouveau mail pour un article déjà sous son minimum avant la sortie.
-async function alerteSeuil(items,qui){
-  const bas=items.filter(({article,avant,apres})=>(!aRecommander({...article,quantite:avant})&&aRecommander({...article,quantite:apres}))||(avant>0&&apres<=0));
-  if(!bas.length)return null;
-  return envoyerAlerteMail({type:"stock",sujet:"Stock bas — "+bas.length+" référence"+(bas.length>1?"s":"")+(bas.length===1?" : "+bas[0].article.reference:""),message:messageStockBas(bas,qui),demandeur:qui});
 }
 function telechargerFichier(blob,nom){
   const a=document.createElement("a");
@@ -827,7 +819,6 @@ function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,on
     if(!ok){setEnvoi({enCours:false,erreur:"L'enregistrement n'a pas abouti (connexion ?). Rien n'a été modifié : réessayez."});return;}
     setEnvoi({enCours:false,erreur:null});
     const resume=mode==="sortie"?"Sortie de "+n+" × "+article.reference+" enregistrée":mode==="entree"?"Entrée de "+n+" × "+article.reference+" enregistrée":"Inventaire de "+article.reference+" : "+n+" enregistré";
-    if(mode==="sortie")alerteSeuil([{article,avant:stock,apres}],qui);
     await onChange();
     if(depuisScan){onTermineScan("✓ "+resume+" — stock : "+apres);return;}
     setFait("✓ "+resume+" — stock : "+apres);
@@ -976,11 +967,6 @@ function SessionScan({mode:modeInit,articles,techs,qui,setQui,onFermer,onChange,
     const corps=lignes.map(l=>({article_id:l.article_id,type:mode,delta:mode==="sortie"?-l.qte:l.qte,chantier:ch,utilisateur:qui}));
     const r=await appel("POST","stock_mouvements",corps,"return=minimal");
     if(!r.ok){setEnvoi({enCours:false,erreur:"L'enregistrement n'a pas abouti (connexion ?). Rien n'a été modifié : réessayez."});return;}
-    if(mode==="sortie"){
-      const items=lignes.map(l=>{const a=parId(l.article_id);return a?{article:a,avant:a.quantite||0,apres:(a.quantite||0)-l.qte}:null;}).filter(Boolean);
-      const envoi2=alerteSeuil(items,qui);
-      if(envoi2)envoi2.then(m=>{if(m&&m.etat==="echec")setTimeout(()=>afficherToast("L'alerte « stock bas » n'a pas pu partir par mail"),2500);});
-    }
     await onChange();
     afficherToast("✓ "+(mode==="sortie"?"Sortie":"Entrée")+" enregistrée : "+lignes.length+" référence"+(lignes.length>1?"s":"")+", "+nbPieces+" pièce"+(nbPieces>1?"s":""));
     setLignes([]);setChantier("");setMessage(null);setEnvoi({enCours:false,erreur:null});
