@@ -171,7 +171,7 @@ export async function genRapportDocx(v, data, photos) {
   })];
 
   // ─── Couverture ────────────────────────────────────────────────────
-  const coverSub = [txt("marque_moteur"), num("puissance", "kW"), txt("materiel_lieu")].filter(Boolean).join(" · ");
+  const coverSub = [txt("marque_moteur"), num("puissance", v.puissance__unite || "kW"), txt("materiel_lieu")].filter(Boolean).join(" · ");
   const coverChildren = [
     ...(logo ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 400, after: 300 }, children: [new ImageRun({ type: logo.type, data: logo.data, transformation: fitBox(logo, 220, 100) })] })] : []),
     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: "RAPPORT D'ENTRETIEN", size: 20, color: "9CA3AF" })] }),

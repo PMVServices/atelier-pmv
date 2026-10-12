@@ -45,6 +45,7 @@ const ETAPE_DECLENCHE_DEVIS={
   "Moteur":"Information matériel au démontage",
   "Pompe":"Mécanique pompe au démontage",
   "Moto-réducteur":"Mécanique réducteur au démontage",
+  "Autre":"Information matériel au démontage", // même déroulement que le moteur
 };
 // Étape de suivi devis/commande, insérée dynamiquement juste après l'étape ci-dessus
 // uniquement quand "Devis / bon de commande nécessaire avant remontage ?" = Oui.
@@ -79,12 +80,16 @@ const siPompeAncienne=v=>v.pompe_neuve!=="Oui";
 const MARQUES_REDUCTEUR=["SEW-Eurodrive","Bonfiglioli","Nord Drivesystems","Flender","Bauer","Autre"];
 const siReducteurNeuf=v=>v.reducteur_neuf==="Oui";
 const siReducteurAncien=v=>v.reducteur_neuf!=="Oui";
-const CHAMPS_IDENTITE_COMMUN=["client","marque_moteur","puissance","vitesse","type_moteur","numero_serie","fixation","tension","materiel_lieu"];
+// Puissance : la valeur reste en texte libre, l'unité se choisit dans une liste (kW par défaut) et est rangée dans "<champ>__unite"
+const UNITES_PUISSANCE=["kW","W","CV","HP","kVA"];
+const CHAMPS_IDENTITE_COMMUN=["client","marque_moteur","puissance","puissance__unite","vitesse","type_moteur","numero_serie","fixation","tension","materiel_lieu"];
 const CHAMPS_IDENTITE_POMPE=["marque_pompe","modele_pompe","numero_serie_pompe","debit_nominal","pression_nominale","type_fluide","temperature_fluide"];
+const CHAMPS_IDENTITE_AUTRE=["type_materiel_libre"];
 const CHAMPS_IDENTITE_REDUCTEUR=["marque_reducteur","numero_serie_reducteur","modele_reducteur","type_reducteur","vitesse_sortie","rapport_reduction"];
 function champsIdentitePour(typeMateriel){
   if(typeMateriel==="Pompe")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_POMPE);
   if(typeMateriel==="Moto-réducteur")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_REDUCTEUR);
+  if(typeMateriel==="Autre")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_AUTRE);
   return CHAMPS_IDENTITE_COMMUN;
 }
 
@@ -171,7 +176,7 @@ const CHAMPS={
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
     {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:false,autreTexte:true},
-    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",groupe:"puiss_vit"},
+    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit"},
     {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:false,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
     {id:"type_moteur",label:"Type",type:"text",required:false,groupe:"type_serie_moteur"},
     {id:"numero_serie",label:"Numéro de série",type:"text",required:false,groupe:"type_serie_moteur"},
@@ -214,7 +219,7 @@ const CHAMPS={
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
     {id:"skf_av_dem",label:"Screen SKF avant démontage",type:"photo_skf",categorie:"Screen SKF avant au démontage",required:false,condition:siAncien},{id:"skf_ar_dem",label:"Screen SKF arrière démontage",type:"photo_skf",categorie:"Screen SKF arrière au démontage",required:false,condition:siAncien},{id:"tech_demontage",label:"Qui a démonté",type:"technicien",required:true,condition:siAncien},
     {id:"marque_moteur_neuf",label:"Marque du moteur",type:"select",options:MARQUES_MOTEUR,required:false,autreTexte:true,condition:siNeuf,groupe:"neuf_marque_puiss"},
-    {id:"puissance_moteur_neuf",label:"Puissance du moteur",type:"text",unite:"kW",required:false,condition:siNeuf,groupe:"neuf_marque_puiss"},
+    {id:"puissance_moteur_neuf",label:"Puissance du moteur",type:"text",unite:"kW",unitesChoix:UNITES_PUISSANCE,required:false,condition:siNeuf,groupe:"neuf_marque_puiss"},
     {id:"vitesse_moteur_neuf",label:"Vitesse du moteur",type:"text",unite:"tr/mn",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"type_moteur_neuf",label:"Type du moteur",type:"text",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"numero_serie_moteur_neuf",label:"N° de série",type:"text",required:false,condition:siNeuf},
@@ -264,7 +269,7 @@ const CHAMPS_POMPE={
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
     {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:false,autreTexte:true},
-    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",groupe:"puiss_vit"},
+    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit"},
     {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:false,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
     {id:"type_moteur",label:"Type moteur",type:"text",required:false,groupe:"type_serie_moteur"},
     {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:false,groupe:"type_serie_moteur"},
@@ -367,7 +372,7 @@ const CHAMPS_POMPE={
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
     {id:"tech_demontage_m",label:"Qui a démonté",type:"technicien",required:true,condition:siAncien},
     {id:"marque_moteur_neuf",label:"Marque du moteur",type:"select",options:MARQUES_MOTEUR,required:false,autreTexte:true,condition:siNeuf,groupe:"neuf_marque_puiss"},
-    {id:"puissance_moteur_neuf",label:"Puissance du moteur",type:"text",unite:"kW",required:false,condition:siNeuf,groupe:"neuf_marque_puiss"},
+    {id:"puissance_moteur_neuf",label:"Puissance du moteur",type:"text",unite:"kW",unitesChoix:UNITES_PUISSANCE,required:false,condition:siNeuf,groupe:"neuf_marque_puiss"},
     {id:"vitesse_moteur_neuf",label:"Vitesse du moteur",type:"text",unite:"tr/mn",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"type_moteur_neuf",label:"Type du moteur",type:"text",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"numero_serie_moteur_neuf",label:"N° de série",type:"text",required:false,condition:siNeuf},
@@ -392,7 +397,7 @@ const CHAMPS_POMPE={
     {id:"joint_ar_p",label:"Joints arrière pompe",type:"joints",required:false,groupe:"joint_ar_p",condition:siPompeAncienne},
     {id:"tech_demontage_p",label:"Qui a démonté la pompe",type:"technicien",required:true,condition:siPompeAncienne},
     {id:"marque_pompe_neuve",label:"Marque de pompe",type:"select",options:MARQUES_POMPE,required:false,autreTexte:true,condition:siPompeNeuve,groupe:"pneuve_marque_puiss"},
-    {id:"puissance_pompe_neuve",label:"Puissance",type:"text",unite:"kW",required:false,condition:siPompeNeuve,groupe:"pneuve_marque_puiss"},
+    {id:"puissance_pompe_neuve",label:"Puissance",type:"text",unite:"kW",unitesChoix:UNITES_PUISSANCE,required:false,condition:siPompeNeuve,groupe:"pneuve_marque_puiss"},
     {id:"numero_serie_pompe_neuve",label:"N° de série",type:"text",required:false,condition:siPompeNeuve,groupe:"pneuve_serie_type"},
     {id:"type_pompe_neuve",label:"Type de pompe",type:"text",required:false,condition:siPompeNeuve,groupe:"pneuve_serie_type"},
     {id:"travaux_conseille",label:"Travaux conseillé/à effectuer",type:"text",required:true,dictee:true},
@@ -451,7 +456,7 @@ const CHAMPS_REDUCTEUR={
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
     {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:false,autreTexte:true},
-    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",groupe:"puiss_vit"},
+    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit"},
     {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:false,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
     {id:"type_moteur",label:"Type moteur",type:"text",required:false,groupe:"type_serie_moteur"},
     {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:false,groupe:"type_serie_moteur"},
@@ -544,7 +549,7 @@ const CHAMPS_REDUCTEUR={
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
     {id:"tech_demontage_m",label:"Qui a démonté",type:"technicien",required:true,condition:siAncien},
     {id:"marque_moteur_neuf",label:"Marque du moteur",type:"select",options:MARQUES_MOTEUR,required:false,autreTexte:true,condition:siNeuf,groupe:"neuf_marque_puiss"},
-    {id:"puissance_moteur_neuf",label:"Puissance du moteur",type:"text",unite:"kW",required:false,condition:siNeuf,groupe:"neuf_marque_puiss"},
+    {id:"puissance_moteur_neuf",label:"Puissance du moteur",type:"text",unite:"kW",unitesChoix:UNITES_PUISSANCE,required:false,condition:siNeuf,groupe:"neuf_marque_puiss"},
     {id:"vitesse_moteur_neuf",label:"Vitesse du moteur",type:"text",unite:"tr/mn",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"type_moteur_neuf",label:"Type du moteur",type:"text",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"numero_serie_moteur_neuf",label:"N° de série",type:"text",required:false,condition:siNeuf},
@@ -560,7 +565,7 @@ const CHAMPS_REDUCTEUR={
     {id:"roulements_autres",label:"Autres roulements",type:"roulements_liste",required:false,condition:siReducteurAncien},
     {id:"tech_demontage_r",label:"Qui a démonté le réducteur",type:"technicien",required:true,condition:siReducteurAncien},
     {id:"marque_reducteur_neuf",label:"Marque du réducteur",type:"select",options:MARQUES_REDUCTEUR,required:false,autreTexte:true,condition:siReducteurNeuf,groupe:"rneuve_marque_puiss"},
-    {id:"puissance_reducteur_neuf",label:"Puissance",type:"text",unite:"kW",required:false,condition:siReducteurNeuf,groupe:"rneuve_marque_puiss"},
+    {id:"puissance_reducteur_neuf",label:"Puissance",type:"text",unite:"kW",unitesChoix:UNITES_PUISSANCE,required:false,condition:siReducteurNeuf,groupe:"rneuve_marque_puiss"},
     {id:"numero_serie_reducteur_neuf",label:"N° de série",type:"text",required:false,condition:siReducteurNeuf,groupe:"rneuve_serie_type"},
     {id:"type_reducteur_neuf",label:"Type de réducteur",type:"text",required:false,condition:siReducteurNeuf,groupe:"rneuve_serie_type"},
     {id:"autres_pieces_reducteur",label:"Autres pièces détachées",type:"text",required:false,dictee:true},
@@ -971,7 +976,7 @@ function SectionPhotos({etape,ficheId,cheminBase,categories,photos,onPhotoAdded}
 function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,photos=[],onPhotoAdded}){
   if(!champVisible(c,v))return null;
   const val=v[c.id]||"";const manqueOr=c.orRequiredWith&&!val&&!v[c.orRequiredWith];const manque=(c.required&&!val)||manqueOr;const err=enErreur(c,val);
-  const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>{c.label}{(c.required||c.orRequiredWith)&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}{c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:10}}> — {c.note}</span>}</label>;
+  const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>{c.label}{(c.required||c.orRequiredWith)&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&!c.unitesChoix&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}{c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:10}}> — {c.note}</span>}</label>;
   let ctrl;
   if(c.type==="contact")ctrl=<ChampContact valeur={val} onChange={onChange} champ={c} v={v}/>;
   else if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={nv=>onChange(c.id,nv)} clients={clients} onAddClient={onAddClient}/>;
@@ -995,6 +1000,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   else if(c.type==="oui_non")ctrl=<div style={{display:"flex",gap:16}}>{["Oui","Non"].map(opt=><label key={opt} style={{display:"flex",alignItems:"center",gap:5,fontSize:13,cursor:"pointer"}}><input type="radio" checked={val===opt} onChange={()=>onChange(c.id,opt)}/> {opt}</label>)}</div>;
   else if(c.type==="date")ctrl=<input type="date" value={val} onChange={e=>onChange(c.id,e.target.value)} style={S.inp}/>;
   else if(c.type==="number")ctrl=<div style={{display:"flex",alignItems:"center",gap:6}}><input type="number" value={val} onChange={e=>onChange(c.id,e.target.value)} style={{...S.inp,flex:1}} placeholder="—"/>{c.unite&&<span style={{fontSize:12,color:"#6B7280",whiteSpace:"nowrap"}}>{c.unite}</span>}</div>;
+  else if(c.unitesChoix)ctrl=<div style={{display:"flex",alignItems:"center",gap:6}}><input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} style={{...(manque?S.inpErr:S.inp),flex:1,minWidth:0}} placeholder="—"/><select value={v[c.id+"__unite"]||c.unite} onChange={e=>onChange(c.id+"__unite",e.target.value)} style={{...S.sel,width:76,flexShrink:0}} aria-label={"Unité — "+c.label}>{c.unitesChoix.map(u=><option key={u} value={u}>{u}</option>)}</select></div>;
   else if(c.dictee)ctrl=<ChampTexteDictee champId={c.id} valeur={val} onChange={onChange} erreur={manque}/>;
   else ctrl=<input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} onBlur={c.id==="de"?()=>{const t=val.trim();const m=t.match(/^(?:de)?(\d+)$/i);if(m&&t!=="DE"+m[1])onChange(c.id,"DE"+m[1]);}:undefined} style={manque?S.inpErr:S.inp} placeholder="—"/>;
   return <div style={{marginBottom:12}}>{lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>{manqueOr?"L'un des deux — "+c.label+" ou "+(c.orRequiredLabel||"l'autre champ")+" — est obligatoire":"Champ obligatoire"}</div>}</div>;
@@ -1009,7 +1015,7 @@ function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBas
 
 function SectionEtape({nom,idx,total,actif,validees,v,nr,onChange,onNR,onValider,onSauvegarder,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,champsSource}){
   const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
-  function resume(){return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${c.unite?" "+c.unite:""}`).join(" · ");}
+  function resume(){return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${(c.unitesChoix&&v[c.id+"__unite"])||c.unite?" "+((c.unitesChoix&&v[c.id+"__unite"])||c.unite):""}`).join(" · ");}
   if(estLock)return<div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
   if(estVal&&!estAct)return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>✅</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}}</span></div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modification tracée dans l'historique.</div><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={cs2}/></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
   return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{total||ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>{idx!==0&&<div style={S.nr} onClick={onNR}><input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/><div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché, les champs ne sont plus obligatoires</p></div></div>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={cs2}/></div>{!ok&&!nr&&<div style={{...S.alert,marginBottom:10}}>⚠ Des champs obligatoires (*) sont manquants.</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{(ok||nr)&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{!ok&&!nr&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ Remplissez les champs obligatoires (*) pour continuer</div>}</div>);
@@ -2007,8 +2013,8 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
 }
 
 function PageChoix({onChoisir,onRetour}){
-  const mats=[{id:"Moteur",emoji:"⚙️",desc:"Moteur électrique seul"},{id:"Pompe",emoji:"💧",desc:"Corps de pompe + moteur"},{id:"Ventilation",emoji:"🌀",desc:"Ventilateur + moteur",soon:true},{id:"Réducteur",emoji:"🔩",desc:"Réducteur + moteur",soon:true},{id:"Moto-réducteur",emoji:"🔧",desc:"Moto-réducteur complet"}];
-  return(<div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px"}}><button style={{...S.p2,marginBottom:20}} onClick={onRetour}>← Retour</button><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>Nouvelle fiche — quel matériel ?</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>{mats.map(m=><div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}><div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div><p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.id}</p><p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>{m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}</div>)}</div></div>);
+  const mats=[{id:"Moteur",emoji:"⚙️",desc:"Moteur électrique seul"},{id:"Pompe",emoji:"💧",desc:"Corps de pompe + moteur"},{id:"Moto-réducteur",emoji:"🔧",desc:"Moto-réducteur complet"},{id:"Autre",titre:"Autre matériel",emoji:"🧰",desc:"Ventilateur, treuil, compresseur… même fiche que le moteur, le type est saisi à la main"}];
+  return(<div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px"}}><button style={{...S.p2,marginBottom:20}} onClick={onRetour}>← Retour</button><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>Nouvelle fiche — quel matériel ?</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>{mats.map(m=><div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}><div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div><p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.titre||m.id}</p><p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>{m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}</div>)}</div></div>);
 }
 
 // ─── RAPPORT CLIENT (moteur) ────────────────────────────────────────────
@@ -2266,7 +2272,7 @@ function PageRapport({ficheId,techs,onRetour}){
 
 function PageRapportsListe({fiches,onOpen}){
   const [q,setQ]=useState("");
-  const moteurFiches=fiches.filter(f=>(f.type_materiel||"Moteur")==="Moteur");
+  const moteurFiches=fiches.filter(f=>["Moteur","Autre"].includes(f.type_materiel||"Moteur"));
   const filtrees=moteurFiches.filter(f=>{
     const qq=q.toLowerCase();
     return !qq||(f.de||"").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq);
@@ -2294,10 +2300,17 @@ function PageRapportsListe({fiches,onOpen}){
   </div>);
 }
 
+// "Autre matériel" : fiche du moteur + un champ "Type de matériel" saisi à la main, juste avant "Matériel / Identification lieux"
+const CHAMPS_AUTRE=(()=>{
+  const E=CHAMPS["Entrée"].slice();
+  const i=E.findIndex(c=>c.id==="materiel_lieu");
+  E.splice(i<0?E.length:i,0,{id:"type_materiel_libre",label:"Type de matériel",type:"text",required:true,note:"à saisir : ventilateur, treuil, compresseur…"});
+  return {...CHAMPS,"Entrée":E};
+})();
 function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed}){
   const isPompe=typeMateriel==="Pompe";
   const isReducteur=typeMateriel==="Moto-réducteur";
-  const champsActifs=isPompe?CHAMPS_POMPE:isReducteur?CHAMPS_REDUCTEUR:CHAMPS;
+  const champsActifs=isPompe?CHAMPS_POMPE:isReducteur?CHAMPS_REDUCTEUR:typeMateriel==="Autre"?CHAMPS_AUTRE:CHAMPS;
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
   const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {de:ficheInit?.de||"",date_entree:today(),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
   const etapesActives=insererEtapeSuiviDevis(isPompe?ETAPES_POMPE:isReducteur?ETAPES_REDUCTEUR:etapesMoteurPour(v),v,typeMateriel||"Moteur");
@@ -2409,7 +2422,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
     {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";}}/>}
     <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-        <div><p style={{margin:0,fontSize:12,fontWeight:700}}>{v.de} · {v.client||"Client"} · {v.materiel_lieu||typeMateriel||"Moteur"}</p><p style={{margin:0,fontSize:10,opacity:0.7}}>📁 {chem.client}/{chem.de}/{chem.mat} · {typeMateriel||"Moteur"}</p></div>
+        <div><p style={{margin:0,fontSize:12,fontWeight:700}}>{v.de} · {v.client||"Client"} · {[v.type_materiel_libre,v.materiel_lieu].filter(Boolean).join(" — ")||typeMateriel||"Moteur"}</p><p style={{margin:0,fontSize:10,opacity:0.7}}>📁 {chem.client}/{chem.de}/{chem.mat} · {typeMateriel||"Moteur"}</p></div>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
           <select value={statutChantier} onChange={e=>changerStatut(e.target.value)} style={{padding:"3px 8px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:11,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:prog+"%",transition:"width .4s"}}/></div>
@@ -5112,7 +5125,7 @@ export default function App(){
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
     {page==="dashboard"&&<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
-    {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
+    {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Autre"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}

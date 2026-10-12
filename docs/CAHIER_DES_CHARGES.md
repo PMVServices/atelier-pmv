@@ -73,6 +73,9 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 - N° DE toujours au format « DE0000 » (des chiffres seuls reçoivent le préfixe DE).
 - Une fiche peut être préremplie depuis une fiche chantier (case « Entretien en atelier »).
 - Le bouton « Ajouter photo » de la liste atelier fonctionne (upload via `db.uploadPhoto`).
+- Types proposés au choix « Nouvelle fiche » : Moteur, Pompe, Moto-réducteur, **Autre matériel** (il remplace les anciennes cartes « Bientôt disponible » Ventilation et Réducteur, qui n'étaient pas utilisables).
+  « Autre matériel » (`type_materiel` = « Autre ») suit exactement le déroulement du moteur (mêmes étapes, devis, rapport) ; seul s'ajoute le champ obligatoire « Type de matériel » (ventilateur, treuil, compresseur…) saisi à la main, juste avant « Matériel / Identification lieux ». Il apparaît dans l'en-tête, l'aperçu et le PDF.
+- **Puissance** (fiches atelier) : la valeur reste en texte libre ; l'unité se choisit dans une liste — kW par défaut, W, CV, HP, kVA — et s'affiche telle quelle dans l'aperçu, le PDF, le Word et la couverture du rapport. Une fiche sans unité enregistrée reste en kW. L'unité est rangée dans `<champ>__unite` (ex. `puissance__unite`). La fiche chantier garde son champ « Puissance (kW) » inchangé.
 
 ## 6. Fiche Chantier
 
