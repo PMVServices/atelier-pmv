@@ -4362,6 +4362,7 @@ function ChampMaterielChantier({valeur,onChange}){
   const [cat,setCat]=useState(null);
   const [cfg,setCfg]=useState(()=>cfgMaterielVide("commander"));
   const [statut,setStatut]=useState("renouveler");
+  const [scan,setScan]=useState(false);
   const designations=cat?designationsMateriel(cat,cfg):[];
   const maj=nl=>onChange(JSON.stringify(nl));
   const majLigne=(id,champs)=>maj(lignes.map(l=>l.id===id?{...l,...champs}:l));
@@ -4370,6 +4371,14 @@ function ChampMaterielChantier({valeur,onChange}){
     const base=Date.now().toString(36);
     maj(lignes.concat(designations.map((d,i)=>({id:base+i+Math.random().toString(36).slice(2,5),cat:nomCategorieMat(cat),designation:d,quantite:String(cfg.qty),statut}))));
     setCfg(c=>({...c,sels:[],autreCap:false,texte:"",qty:1,di:"",de:"",ep:"",vvDi:"",gmMobile:null,gmFixe:null,gmTexteM:"",gmTexteF:"",gmDiam:""}));
+  }
+  // Lignes issues du scan d'étiquettes : mêmes lignes que celles choisies par catégorie
+  function ajouterScan(ls){
+    if(ls.length){
+      const base=Date.now().toString(36);
+      maj(lignes.concat(ls.map((l,i)=>({id:base+i+Math.random().toString(36).slice(2,5),cat:l.cat,designation:l.designation,quantite:String(l.qty),statut:l.type}))));
+    }
+    setScan(false);
   }
   const etatDe=l=>STATUTS_MATERIEL.find(x=>x.id===(l.statut==="non_renouveler"?"utilise":l.statut))||STATUTS_MATERIEL[0];
   return(<div className="mat" style={{maxWidth:"none",padding:0,margin:0}}><style>{CSS_MATERIEL}</style>
@@ -4385,8 +4394,10 @@ function ChampMaterielChantier({valeur,onChange}){
         <div className="mat-rang">{STATUTS_MATERIEL.map(x=><ChipStatutMat key={x.id} s={x} actif={st.id===x.id} onClick={()=>majLigne(l.id,{statut:x.id})}/>)}</div>
       </div>);})}
     </div>}
-    {!cat&&<div className="mat-groupe">
+    {scan&&<ScanDemande typeDefaut={statut} etats={STATUTS_MATERIEL} onRetour={()=>setScan(false)} onTermine={ajouterScan}/>}
+    {!cat&&!scan&&<div className="mat-groupe">
       <span className="mat-lib">Ajouter du matériel : choisir une catégorie</span>
+      <button type="button" className="mat-btn mat-btn--s mat-btn--large" onClick={()=>setScan(true)}>📷 Scanner une étiquette (QR code)</button>
       <div className="mat-cats" style={{gridTemplateColumns:"repeat(auto-fill,minmax(128px,1fr))"}}>{CATEGORIES_MATERIEL.map(c=>(<button type="button" key={c.id} className="mat-cat" style={{minHeight:96}} onClick={()=>{setCat(c.id);setCfg(cfgMaterielVide("commander"));}}><IcoMat nom={c.id} taille={32}/><span>{c.nom}</span></button>))}</div>
     </div>}
     {cat&&<div className="mat-ecran">

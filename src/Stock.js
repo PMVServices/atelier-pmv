@@ -1021,7 +1021,9 @@ function SessionScan({mode:modeInit,articles,techs,qui,setQui,onFermer,onChange,
 // ─── Demande de matériel : identifier le matériel voulu en scannant son étiquette (QR code) ───────────────────────
 // Rend à l'assistant "Matériel à commander" les lignes scannées : [{cat, designation, qty, type}]. Même reconnaissance
 // que les sorties de stock : référence imprimée sur l'étiquette, ou code fabricant associé à un article.
-export function ScanDemande({typeDefaut,onTermine,onRetour}){
+const ETATS_DEMANDE=[{id:"commander",label:"À commander"},{id:"renouveler",label:"À renouveler"}];
+export function ScanDemande({typeDefaut,etats,onTermine,onRetour}){
+  const liste=etats||ETATS_DEMANDE;
   const [articles,setArticles]=useState(null); // null = chargement, false = stock indisponible
   const [lignes,setLignes]=useState([]); // [{designation,cat,detail,qty,type}]
   const [message,setMessage]=useState(null);
@@ -1071,7 +1073,7 @@ export function ScanDemande({typeDefaut,onTermine,onRetour}){
     else if(qc){traiter(saisie);setSaisie("");}
   }
   const majQte=(d,delta)=>setLignes(ls=>ls.map(l=>l.designation===d?{...l,qty:Math.max(1,l.qty+delta)}:l));
-  const basculerType=d=>setLignes(ls=>ls.map(l=>l.designation===d?{...l,type:l.type==="commander"?"renouveler":"commander"}:l));
+  const basculerType=d=>setLignes(ls=>ls.map(l=>{if(l.designation!==d)return l;const i=liste.findIndex(e=>e.id===l.type);return {...l,type:liste[(i+1)%liste.length].id};}));
   const retirer=d=>setLignes(ls=>ls.filter(l=>l.designation!==d));
   const nb=lignes.reduce((s,l)=>s+l.qty,0);
   return(<div className="stk" style={{padding:0,maxWidth:"none"}}><style>{CSS_STOCK}</style>
@@ -1088,12 +1090,12 @@ export function ScanDemande({typeDefaut,onTermine,onRetour}){
         {sugg.length>0&&<div className="stk-sugg" style={{marginTop:6}}>{sugg.map(a=><button type="button" key={a.id} className="stk-carte" onClick={()=>{ajouterArticle(a);setSaisie("");}}><div><div className="stk-ref">{a.reference}</div><div className="stk-sub">{a.dimensions||""}</div></div><div className="stk-sub">Ajouter</div></button>)}</div>}
       </div>
       {lignes.length===0
-        ?<p className="stk-aide" style={{textAlign:"center",padding:"10px 0"}}>Cadrez l'étiquette du matériel : elle s'ajoute à la liste. Présentez-la de nouveau pour ajouter une 2e pièce, ou touchez + . Touchez le type pour passer de « À commander » à « À renouveler ».</p>
+        ?<p className="stk-aide" style={{textAlign:"center",padding:"10px 0"}}>Cadrez l'étiquette du matériel : elle s'ajoute à la liste. Présentez-la de nouveau pour ajouter une 2e pièce, ou touchez + . Touchez l'état d'une ligne pour le changer.</p>
         :<div className="stk-lignes">{lignes.map(l=>(<div key={l.designation} className="stk-ligne flash">
           <div style={{minWidth:0}}>
             <div className="stk-ref">{l.designation}</div>
             <div className="stk-sub">{[l.cat,l.detail].filter(Boolean).join(" · ")}</div>
-            <button type="button" className="stk-btn stk-btn--s" style={{marginTop:6}} onClick={()=>basculerType(l.designation)} aria-label={"Changer le type de "+l.designation}>{l.type==="commander"?"À commander":"À renouveler"} ⇄</button>
+            <button type="button" className="stk-btn stk-btn--s" style={{marginTop:6}} onClick={()=>basculerType(l.designation)} aria-label={"Changer le type de "+l.designation}>{(liste.find(e=>e.id===l.type)||liste[0]).label} ⇄</button>
           </div>
           <div className="stk-qs stk-qs--s"><button type="button" onClick={()=>majQte(l.designation,-1)} aria-label="Diminuer">−</button><input type="text" inputMode="numeric" value={l.qty} onChange={e=>{const n=parseInt(e.target.value.replace(/\D/g,""),10);setLignes(ls=>ls.map(x=>x.designation===l.designation?{...x,qty:isNaN(n)||n<1?1:n}:x));}} aria-label={"Quantité "+l.designation}/><button type="button" onClick={()=>majQte(l.designation,1)} aria-label="Augmenter">+</button></div>
           <button type="button" className="stk-rm" onClick={()=>retirer(l.designation)} aria-label={"Retirer "+l.designation}>✕</button>
