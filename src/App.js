@@ -6,6 +6,7 @@ import {NoticeActivation} from "./Activation";
 import PageStock, {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
+import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
 
 const LOGO_B64 = "data:image/jpeg;base64,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";
@@ -82,6 +83,11 @@ const siReducteurNeuf=v=>v.reducteur_neuf==="Oui";
 const siReducteurAncien=v=>v.reducteur_neuf!=="Oui";
 // Puissance : la valeur reste en texte libre, l'unité se choisit dans une liste (kW par défaut) et est rangée dans "<champ>__unite"
 const UNITES_PUISSANCE=["kW","W","CV","HP","kVA"];
+// Délai demandé : "Pas de délai demandé" se choisit dans la liste d'unités (la durée n'est alors plus demandée)
+const PAS_DE_DELAI="Pas de délai demandé";
+// "Ne sais pas encore" compte comme "Non" partout où l'on teste "Oui"
+const NE_SAIT_PAS="Ne sais pas encore";
+const CHOIX_OUI_NON_NS=["Oui","Non",NE_SAIT_PAS];
 const CHAMPS_IDENTITE_COMMUN=["client","marque_moteur","puissance","puissance__unite","vitesse","type_moteur","numero_serie","fixation","tension","materiel_lieu"];
 const CHAMPS_IDENTITE_POMPE=["marque_pompe","modele_pompe","numero_serie_pompe","debit_nominal","pression_nominale","type_fluide","temperature_fluide"];
 const CHAMPS_IDENTITE_AUTRE=["type_materiel_libre"];
@@ -137,11 +143,11 @@ const CHAMPS_ROTATION_AVANT=[
     {id:"int_560_p1_avant",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
     {id:"int_560_p2_avant",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
     {id:"int_560_p3_avant",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant",condition:{champ:"essai_vide_avant",valeur:"Oui"}},
-    {id:"moteur_neuf",label:"Moteur neuf",type:"oui_non",required:true,condition:{champ:"essai_vide_avant",valeur:"Non"}},
+    {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,condition:{champ:"essai_vide_avant",valeur:"Non"}},
     {id:"nettoyage_hp",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true,groupe:"hp_etuvage"},
     {id:"etuvage_stator",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true,groupe:"hp_etuvage"},
     {id:"isol_masse_hp",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator",valeur:"Oui"}},
-    {id:"isol_enroul_min",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true},
+    {id:"isol_enroul_min",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true,groupe:"isol_enroul_pair"},{id:"isol_enroul_min_dar",label:"DAR enroulements",type:"number",unite:"DAR",required:false,groupe:"isol_enroul_pair"},
     {id:"tech_mesure_avant",label:"Qui a mesuré",type:"technicien",required:true},
 ];
 const ETAPE_ELEC_2="Infos électriques (2e passage)";
@@ -152,8 +158,17 @@ const CHAMPS_INFOS_ELECTRIQUES_2=suffixerChamps(
 ).map(c=>c.id==="sonde_valeur_2"?{...c,condition:{champ:"sonde_presence",valeur:"Présente"}}:c)
  .map(c=>c.condition&&typeof c.condition==="object"&&!Array.isArray(c.condition)&&c.condition.champ==="sur_variateur_2"?{...c,condition:{...c.condition,champ:"sur_variateur"}}:c);
 const CHAMPS_ROTATION_AVANT_2=suffixerChamps(CHAMPS_ROTATION_AVANT.filter(c=>c.id!=="moteur_neuf"),"_2");
+// Moteur neuf annoncé dès les infos électriques : un petit moteur qui ne marche plus est changé directement,
+// la fiche s'arrête après cette étape (rien à mesurer ni à démonter). Ne concerne que le moteur seul / "Autre matériel".
+const CHAMP_MOTEUR_NEUF_DEBUT={id:"moteur_neuf_debut",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,note:"« Oui » = moteur changé directement, la fiche s'arrête après cette étape"};
+const masquerSiMoteurNeufDebut=c=>{
+  if(c.id==="tech_elec")return c;
+  const cond=c.condition;
+  return {...c,condition:v=>v.moteur_neuf_debut!=="Oui"&&champVisible({condition:cond},v)};
+};
 function etapesMoteurPour(v){
-  if(v&&v.essai_vide_avant==="Non"&&v.moteur_neuf==="Non"){
+  if(v&&v.moteur_neuf_debut==="Oui")return [ETAPES[0],ETAPES[1]];
+  if(v&&v.essai_vide_avant==="Non"&&(v.moteur_neuf==="Non"||v.moteur_neuf===NE_SAIT_PAS)){
     return [ETAPES[0],ETAPES[1],ETAPES[2],ETAPE_ELEC_2,ETAPE_ROTATION_2,ETAPES[3],ETAPES[4]];
   }
   return ETAPES;
@@ -169,29 +184,30 @@ const CHAMPS={
     {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true},
     {id:"lignage",label:"Lignage",type:"choix",options:["Non","Poulie","Accouplement"],required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
-    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair"},
-    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois"],required:true,groupe:"delai_pair"},
-    {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:false,remplit:{telephone:"telephone",mail:"mail"}},
+    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair",condition:v=>v.delai_unite!==PAS_DE_DELAI},
+    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois",PAS_DE_DELAI],required:true,groupe:"delai_pair"},
+    {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:true,remplit:{telephone:"telephone",mail:"mail"}},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
-    {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:false,autreTexte:true},
-    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit"},
-    {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:false,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
-    {id:"type_moteur",label:"Type",type:"text",required:false,groupe:"type_serie_moteur"},
-    {id:"numero_serie",label:"Numéro de série",type:"text",required:false,groupe:"type_serie_moteur"},
-    {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:false,autreTexte:true},
+    {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:true,autreTexte:true},
+    {id:"puissance",label:"Puissance",type:"text",required:true,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit"},
+    {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:true,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
+    {id:"type_moteur",label:"Type",type:"text",required:true,groupe:"type_serie_moteur"},
+    {id:"numero_serie",label:"Numéro de série",type:"text",required:true,groupe:"type_serie_moteur"},
+    {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:true,autreTexte:true},
     {id:"tension",label:"Tension",type:"select",options:["230/400","400/690","Autre"],required:true,unite:"V",autreTexte:true},
     {id:"devis_necessaire",label:"Devis / bon de commande nécessaire avant remontage ?",type:"oui_non",required:true},
+    {id:"rapport_client",label:"Rapport client demandé ?",type:"oui_non",required:true},
     {id:"tech_entree",label:"Technicien",type:"technicien",required:true},
     {id:"demande_client",label:"Demande client",type:"text",required:true,dictee:true},
   ],
-  "Infos électriques":CHAMPS_INFOS_ELECTRIQUES,
+  "Infos électriques":[CHAMP_MOTEUR_NEUF_DEBUT,...CHAMPS_INFOS_ELECTRIQUES.map(masquerSiMoteurNeufDebut)],
   "Information rotation avant démontage":CHAMPS_ROTATION_AVANT,
   [ETAPE_ELEC_2]:CHAMPS_INFOS_ELECTRIQUES_2,
   [ETAPE_ROTATION_2]:CHAMPS_ROTATION_AVANT_2,
   "Information matériel au démontage":[
-    {id:"moteur_neuf",label:"Moteur neuf",type:"oui_non",required:true,condition:v=>v.essai_vide_avant!=="Non"},
+    {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,condition:v=>v.essai_vide_avant!=="Non"},
     {id:"ventilateur_present",label:"Présence d'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips",condition:siAncien},
     {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips",condition:siAncien},
@@ -262,18 +278,18 @@ const CHAMPS_POMPE={
     {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true},
     {id:"lignage",label:"Lignage",type:"choix",options:["Non","Poulie","Accouplement"],required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
-    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair"},
-    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois"],required:true,groupe:"delai_pair"},
-    {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:false,remplit:{telephone:"telephone",mail:"mail"}},
+    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair",condition:v=>v.delai_unite!==PAS_DE_DELAI},
+    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois",PAS_DE_DELAI],required:true,groupe:"delai_pair"},
+    {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:true,remplit:{telephone:"telephone",mail:"mail"}},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
-    {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:false,autreTexte:true},
-    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit"},
-    {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:false,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
-    {id:"type_moteur",label:"Type moteur",type:"text",required:false,groupe:"type_serie_moteur"},
-    {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:false,groupe:"type_serie_moteur"},
-    {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:false,autreTexte:true},
+    {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:true,autreTexte:true},
+    {id:"puissance",label:"Puissance",type:"text",required:true,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit"},
+    {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:true,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
+    {id:"type_moteur",label:"Type moteur",type:"text",required:true,groupe:"type_serie_moteur"},
+    {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:true,groupe:"type_serie_moteur"},
+    {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:true,autreTexte:true},
     {id:"marque_pompe",label:"Marque pompe",type:"select",options:["Grundfos","KSB","LOWARA","WILO","XYLEM","FYGT","SALMSON","SIHI","SEEPEX","Autre"],required:false,autreTexte:true},
     {id:"modele_pompe",label:"Modèle / Référence pompe",type:"text",required:false,groupe:"pompe_modele_serie"},
     {id:"numero_serie_pompe",label:"Numéro de série pompe",type:"text",required:false,groupe:"pompe_modele_serie"},
@@ -283,6 +299,7 @@ const CHAMPS_POMPE={
     {id:"temperature_fluide",label:"Température fluide",type:"number",required:false,unite:"°C",groupe:"fluide_temp"},
     {id:"tension",label:"Tension",type:"select",options:["230/400","400/690","Autre"],required:true,unite:"V",autreTexte:true},
     {id:"devis_necessaire",label:"Devis / bon de commande nécessaire avant remontage ?",type:"oui_non",required:true},
+    {id:"rapport_client",label:"Rapport client demandé ?",type:"oui_non",required:true},
     {id:"tech_entree",label:"Technicien",type:"technicien",required:true},
     {id:"demande_client",label:"Demande client",type:"text",required:true,dictee:true},
   ],
@@ -320,7 +337,7 @@ const CHAMPS_POMPE={
     {id:"nettoyage_hp_m",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true},
     {id:"etuvage_stator_m",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true},
     {id:"isol_masse_hp_m",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator_m",valeur:"Oui"}},
-    {id:"isol_enroul_min_m",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true},
+    {id:"isol_enroul_min_m",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true,groupe:"isol_enroul_pair_m"},{id:"isol_enroul_min_m_dar",label:"DAR enroulements",type:"number",unite:"DAR",required:false,groupe:"isol_enroul_pair_m"},
     {id:"tech_mesure_avant_m",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Rotation avant démontage pompe":[
@@ -344,7 +361,7 @@ const CHAMPS_POMPE={
     {id:"tech_mesure_avant_p",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Matériel au démontage moteur":[
-    {id:"moteur_neuf",label:"Moteur neuf",type:"oui_non",required:true},
+    {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true},
     {id:"ventilateur_present",label:"Présence d\'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips",condition:siAncien},
     {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips",condition:siAncien},
@@ -449,18 +466,18 @@ const CHAMPS_REDUCTEUR={
     {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true},
     {id:"lignage",label:"Lignage",type:"choix",options:["Non","Poulie","Accouplement"],required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
-    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair"},
-    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois"],required:true,groupe:"delai_pair"},
-    {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:false,remplit:{telephone:"telephone",mail:"mail"}},
+    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair",condition:v=>v.delai_unite!==PAS_DE_DELAI},
+    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois",PAS_DE_DELAI],required:true,groupe:"delai_pair"},
+    {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:true,remplit:{telephone:"telephone",mail:"mail"}},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
     {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
-    {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:false,autreTexte:true},
-    {id:"puissance",label:"Puissance",type:"text",required:false,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit"},
-    {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:false,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
-    {id:"type_moteur",label:"Type moteur",type:"text",required:false,groupe:"type_serie_moteur"},
-    {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:false,groupe:"type_serie_moteur"},
-    {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:false,autreTexte:true},
+    {id:"marque_moteur",label:"Marque moteur",type:"select",options:["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"],required:true,autreTexte:true},
+    {id:"puissance",label:"Puissance",type:"text",required:true,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit"},
+    {id:"vitesse",label:"Vitesse",type:"select",options:["1000","1500","3000","Autre"],required:true,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit"},
+    {id:"type_moteur",label:"Type moteur",type:"text",required:true,groupe:"type_serie_moteur"},
+    {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:true,groupe:"type_serie_moteur"},
+    {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:true,autreTexte:true},
     {id:"marque_reducteur",label:"Marque réducteur",type:"select",options:MARQUES_REDUCTEUR,required:false,autreTexte:true},
     {id:"numero_serie_reducteur",label:"N° de série réducteur",type:"text",required:false,groupe:"reducteur_serie_modele"},
     {id:"modele_reducteur",label:"Modèle / Référence réducteur",type:"text",required:false,groupe:"reducteur_serie_modele"},
@@ -469,6 +486,7 @@ const CHAMPS_REDUCTEUR={
     {id:"rapport_reduction",label:"Rapport de réduction",type:"text",required:false,orRequiredWith:"vitesse_sortie",orRequiredLabel:"Vitesse de sortie"},
     {id:"tension",label:"Tension",type:"select",options:["230/400","400/690","Autre"],required:true,unite:"V",autreTexte:true},
     {id:"devis_necessaire",label:"Devis / bon de commande nécessaire avant remontage ?",type:"oui_non",required:true},
+    {id:"rapport_client",label:"Rapport client demandé ?",type:"oui_non",required:true},
     {id:"tech_entree",label:"Technicien",type:"technicien",required:true},
     {id:"demande_client",label:"Demande client",type:"text",required:true,dictee:true},
   ],
@@ -506,7 +524,7 @@ const CHAMPS_REDUCTEUR={
     {id:"nettoyage_hp_m",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true},
     {id:"etuvage_stator_m",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true},
     {id:"isol_masse_hp_m",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator_m",valeur:"Oui"}},
-    {id:"isol_enroul_min_m",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true},
+    {id:"isol_enroul_min_m",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true,groupe:"isol_enroul_pair_m"},{id:"isol_enroul_min_m_dar",label:"DAR enroulements",type:"number",unite:"DAR",required:false,groupe:"isol_enroul_pair_m"},
     {id:"tech_mesure_avant_m",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Rotation avant démontage réducteur":[
@@ -521,7 +539,7 @@ const CHAMPS_REDUCTEUR={
     {id:"tech_mesure_avant_r",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Matériel au démontage moteur":[
-    {id:"moteur_neuf",label:"Moteur neuf",type:"oui_non",required:true},
+    {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true},
     {id:"ventilateur_present",label:"Présence d\'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips",condition:siAncien},
     {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips",condition:siAncien},
@@ -613,7 +631,7 @@ function today(){return new Date().toISOString().split("T")[0];}
 function estJourOuvre(date){const d=date.getDay();return d!==0&&d!==6;}
 function ajouterJoursOuvres(date,n){const d=new Date(date);let c=0;while(c<n){d.setDate(d.getDate()+1);if(estJourOuvre(d))c++;}return d;}
 function calculerEcheance(dateEntreeStr,valeur,unite){
-  if(!dateEntreeStr||!valeur)return null;
+  if(!dateEntreeStr||!valeur||unite===PAS_DE_DELAI)return null;
   const n=parseFloat(valeur);
   if(isNaN(n)||n<=0)return null;
   const base=new Date(dateEntreeStr+"T00:00:00");
@@ -914,7 +932,7 @@ function BoutonPhotoSkf({categorie,ficheId,cheminBase,photos=[],onPhotoAdded}){
     var slug=categorie.toLowerCase().replace(/[^a-z0-9]/g,"_");
     var path=(cheminBase||"photos")+"/"+slug+"."+ext;
     db.uploadPhoto(path,file).then(function(){
-      return db.post("fiche_photos",{fiche_id:ficheId,storage_path:path,nom_fichier:file.name,categorie_nom:categorie,etape:""});
+      return db.post("fiche_photos",{fiche_id:ficheId,storage_path:path,nom_fichier:file.name,categorie_nom:categorie,categorie_slug:slugCat(categorie),etape:""});
     }).then(function(rec){
       if(rec&&rec[0])onPhotoAdded(Object.assign({},rec[0],{url:db.photoUrl(path)}));
       setUpl(false);
@@ -956,18 +974,53 @@ function ChampGarnitureFixe({valeur,onChange}){
   </div>);
 }
 
-function SectionPhotos({etape,ficheId,cheminBase,categories,photos,onPhotoAdded}){
+function SectionPhotos({etape,ficheId,cheminBase,categories,photos,toutes,onPhotoAdded,onPhotoRemoved,tablePhotos="fiche_photos"}){
   const [uploading,setUploading]=useState(false);const [cat,setCat]=useState("");const [apercu,setApercu]=useState(null);const [errMsg,setErrMsg]=useState("");const inputRef=useRef(null);
+  const [aSupprimer,setASupprimer]=useState(null);const [suppression,setSuppression]=useState(false);
+  const [survol,zoneProps]=useDepotImages(fs=>deposer(fs));
   const photosEtape=photos.filter(p=>p.etape===etape);
+  // numéro suivant dans la catégorie : jamais un nom déjà pris (même après une suppression, même dans une autre étape)
+  async function envoyer(file,decalage){
+    const catObj=categories.find(c=>c.nom===cat)||{slug:slugCat(cat),nom:cat};
+    const memeCat=(toutes||photos).filter(p=>p.categorie_slug===catObj.slug||(p.nom_fichier||"").startsWith(catObj.slug+"_"));
+    const dernier=memeCat.reduce((m,p)=>{const k=parseInt(((p.nom_fichier||"").match(/_(\d+)\.[^.]+$/)||[])[1],10);return isNaN(k)?m:Math.max(m,k);},0);
+    const count=Math.max(memeCat.length,dernier)+1+decalage;
+    const ext=file.name.match(/\.[^.]+$/)?.[0]||".jpg";
+    const nomFichier=`${catObj.slug}_${count}${ext}`;
+    const path=cheminBase+"/"+nomFichier;
+    await db.uploadPhoto(path,file);
+    const photoData={fiche_id:ficheId||null,etape,categorie_slug:catObj.slug,categorie_nom:catObj.nom,nom_fichier:nomFichier,storage_path:path};
+    if(ficheId){
+      let rec=await db.post(tablePhotos,photoData);
+      // table sans les colonnes "etape" / "categorie_slug" (photos de chantier) : on enregistre l'essentiel
+      if(!(Array.isArray(rec)&&rec[0])&&tablePhotos!=="fiche_photos")rec=await db.post(tablePhotos,{fiche_id:ficheId,categorie_nom:catObj.nom,nom_fichier:nomFichier,storage_path:path});
+      if(!(Array.isArray(rec)&&rec[0])){await db.deleteFile(path);throw new Error("La photo n'a pas pu être rattachée à la fiche.");}
+    }
+    onPhotoAdded({...photoData,url:db.photoUrl(path)});
+  }
   async function handleFile(e){
     const file=e.target.files[0];if(!file||!cat)return;setUploading(true);setErrMsg("");
-    try{const catObj=categories.find(c=>c.nom===cat)||{slug:slugCat(cat),nom:cat};const count=photos.filter(p=>p.categorie_slug===catObj.slug).length+1;const ext=file.name.match(/\.[^.]+$/)?.[0]||".jpg";const nomFichier=`${catObj.slug}_${count}${ext}`;const path=cheminBase+"/"+nomFichier;await db.uploadPhoto(path,file);const photoData={fiche_id:ficheId||null,etape,categorie_slug:catObj.slug,categorie_nom:catObj.nom,nom_fichier:nomFichier,storage_path:path};if(ficheId)await db.post("fiche_photos",photoData);onPhotoAdded({...photoData,url:db.photoUrl(path)});setCat("");}catch(err){setErrMsg("Erreur upload : "+err.message);}
+    try{await envoyer(file,0);setCat("");}catch(err){setErrMsg("Erreur upload : "+err.message);}
     setUploading(false);if(inputRef.current)inputRef.current.value="";
   }
-  return(<div style={{background:"#F8F9FA",borderRadius:8,padding:"10px 12px",marginTop:6,marginBottom:14}}>
+  async function deposer(fs){
+    if(!cat){setErrMsg("Choisissez d'abord une catégorie, puis glissez la photo.");return;}
+    setUploading(true);setErrMsg("");
+    try{for(let i=0;i<fs.length;i++)await envoyer(fs[i],i);setCat("");}catch(err){setErrMsg("Erreur upload : "+err.message);}
+    setUploading(false);
+  }
+  async function confirmerSuppression(){
+    const p=aSupprimer;if(!p)return;setSuppression(true);setErrMsg("");
+    try{await supprimerPhotoEnBase(p,tablePhotos,ficheId);if(onPhotoRemoved)onPhotoRemoved(p);if(apercu===p)setApercu(null);setASupprimer(null);}
+    catch(err){setErrMsg("Erreur suppression : "+err.message);}
+    setSuppression(false);
+  }
+  return(<div {...zoneProps} style={{background:"#F8F9FA",borderRadius:8,padding:"10px 12px",marginTop:6,marginBottom:14,...styleDepot(survol)}}>
     <p style={{fontSize:11,fontWeight:600,color:"#6B7280",textTransform:"uppercase",letterSpacing:".05em",margin:"0 0 8px"}}>📷 Photos — {etape}</p>
-    {photosEtape.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>{photosEtape.map((p,i)=><div key={i} onClick={()=>setApercu(p)} style={{cursor:"pointer",position:"relative"}}><img src={p.url} alt={p.categorie_nom} style={{width:60,height:60,objectFit:"cover",borderRadius:5,border:"1.5px solid #E2E6EA",display:"block"}} onError={e=>e.target.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23eee'/%3E%3C/svg%3E"}/><div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",borderRadius:"0 0 4px 4px",padding:"2px 3px",fontSize:8,color:"#fff",textAlign:"center"}}>{p.categorie_nom}</div></div>)}</div>}
+    {photosEtape.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>{photosEtape.map((p,i)=><div key={i} onClick={()=>setApercu(p)} style={{cursor:"pointer",position:"relative"}}><CroixPhoto onClick={()=>setASupprimer(p)}/><img src={p.url} alt={p.categorie_nom} style={{width:60,height:60,objectFit:"cover",borderRadius:5,border:"1.5px solid #E2E6EA",display:"block"}} onError={e=>e.target.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23eee'/%3E%3C/svg%3E"}/><div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",borderRadius:"0 0 4px 4px",padding:"2px 3px",fontSize:8,color:"#fff",textAlign:"center"}}>{p.categorie_nom}</div></div>)}</div>}
+    <ConfirmerSuppressionPhoto photo={aSupprimer} occupe={suppression} onConfirmer={confirmerSuppression} onAnnuler={()=>setASupprimer(null)} styleBouton={S.p2} styleBoutonDanger={S.pDanger}/>
     <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><select value={cat} onChange={e=>setCat(e.target.value)} style={{...S.sel,flex:1,minWidth:130,fontSize:12}}><option value="">— Catégorie</option>{categories.map(c=><option key={c.nom}>{c.nom}</option>)}</select><button onClick={()=>{if(!cat){setErrMsg("Choisissez une catégorie");return;}inputRef.current?.click();}} style={{...S.p2,fontSize:12,padding:"6px 12px",opacity:cat?1:0.5,whiteSpace:"nowrap"}}>{uploading?"⏳…":"📷 Photo"}</button><input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{display:"none"}}/></div>
+    {avecSouris()&&<p style={{fontSize:10,color:"#9CA3AF",margin:"6px 0 0"}}>ou glissez-déposez des photos ici (après avoir choisi la catégorie)</p>}
     {errMsg&&<p style={{fontSize:11,color:"#D73A49",marginTop:4}}>{errMsg}</p>}
     {apercu&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}} onClick={()=>setApercu(null)}><img src={apercu.url} alt={apercu.categorie_nom} style={{maxWidth:"92vw",maxHeight:"82vh",objectFit:"contain",borderRadius:8}}/><p style={{color:"#fff",marginTop:10,fontSize:13}}>{apercu.categorie_nom} — {apercu.nom_fichier}</p><p style={{color:"rgba(255,255,255,0.5)",fontSize:11,marginTop:4}}>Appuyez pour fermer</p></div>}
   </div>);
@@ -1006,19 +1059,19 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   return <div style={{marginBottom:12}}>{lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>{manqueOr?"L'un des deux — "+c.label+" ou "+(c.orRequiredLabel||"l'autre champ")+" — est obligatoire":"Champ obligatoire"}</div>}</div>;
 }
 
-function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,champsSource}){
+function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,onPhotoRemoved,champsSource}){
   const width=useWidth();const champs=(champsSource||CHAMPS)[nom]||[];const rendus=[];const vus=new Set();
   for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(cc=><UnChamp key={cc.id} c={cc} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded}/>)}</div>);}else{vus.add(c.id);rendus.push(<UnChamp key={c.id} c={c} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded}/>);}}
-  rendus.push(<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom)} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})}/>);
+  rendus.push(<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom)} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>);
   return <>{rendus}</>;
 }
 
-function SectionEtape({nom,idx,total,actif,validees,v,nr,onChange,onNR,onValider,onSauvegarder,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,champsSource}){
+function SectionEtape({nom,idx,total,actif,validees,v,nr,onChange,onNR,onValider,onSauvegarder,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,onPhotoRemoved,champsSource}){
   const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
   function resume(){return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${(c.unitesChoix&&v[c.id+"__unite"])||c.unite?" "+((c.unitesChoix&&v[c.id+"__unite"])||c.unite):""}`).join(" · ");}
   if(estLock)return<div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
-  if(estVal&&!estAct)return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>✅</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}}</span></div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modification tracée dans l'historique.</div><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={cs2}/></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
-  return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{total||ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>{idx!==0&&<div style={S.nr} onClick={onNR}><input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/><div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché, les champs ne sont plus obligatoires</p></div></div>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={cs2}/></div>{!ok&&!nr&&<div style={{...S.alert,marginBottom:10}}>⚠ Des champs obligatoires (*) sont manquants.</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{(ok||nr)&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{!ok&&!nr&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ Remplissez les champs obligatoires (*) pour continuer</div>}</div>);
+  if(estVal&&!estAct)return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>✅</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}}</span></div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modification tracée dans l'historique.</div><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
+  return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{total||ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>{idx!==0&&<div style={S.nr} onClick={onNR}><input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/><div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché, les champs ne sont plus obligatoires</p></div></div>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/></div>{!ok&&!nr&&<div style={{...S.alert,marginBottom:10}}>⚠ Des champs obligatoires (*) sont manquants.</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{(ok||nr)&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{!ok&&!nr&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ Remplissez les champs obligatoires (*) pour continuer</div>}</div>);
 }
 
 function ModalIdent({techs,onConfirm}){
@@ -1796,6 +1849,8 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
   const [ajoutPhoto,setAjoutPhoto]=useState(false);
   const [catPhoto,setCatPhoto]=useState("");
   const [uploadEnCours,setUploadEnCours]=useState(false);
+  const [photoASuppr,setPhotoASuppr]=useState(null);const [supprEnCours,setSupprEnCours]=useState(false);
+  const [survolDepot,depotProps]=useDepotImages(fs=>deposerPhotos(fs));
   const fileRef=React.useRef();
   const ch=cheminFiche({client:f.client,de:f.de,materiel_lieu:f.materiel});
   const st=statutInfo(f.statut_chantier);
@@ -1826,20 +1881,31 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
     }catch(e){alert("Erreur: "+e.message);}
   }
 
+  async function envoyerFichierPhoto(file,i){
+    const ext=file.name.split(".").pop();
+    const slug=catPhoto.toLowerCase().replace(/[^a-z0-9]/g,"_");
+    const path=ch.chemin+"/"+slug+"_"+Date.now()+(i?"_"+i:"")+"."+ext;
+    await db.uploadPhoto(path,file);
+    const rec=await db.post("fiche_photos",{fiche_id:f.id,storage_path:path,nom_fichier:file.name,categorie_nom:catPhoto,categorie_slug:((categories||[]).find(c=>c.nom===catPhoto)||{}).slug||slugCat(catPhoto),etape:""});
+    if(!(rec&&rec[0])){await db.deleteFile(path);throw new Error("La photo n'a pas pu être rattachée à la fiche.");}
+    setPhotos(prev=>[...prev,{...rec[0],url:db.photoUrl(path)}]);
+  }
   async function uploadPhoto(e){
     const file=e.target.files[0];if(!file||!catPhoto)return;
     setUploadEnCours(true);
-    try{
-      const ext=file.name.split(".").pop();
-      const slug=catPhoto.toLowerCase().replace(/[^a-z0-9]/g,"_");
-      const path=ch.chemin+"/"+slug+"_"+Date.now()+"."+ext;
-      await db.uploadPhoto(path,file);
-      const rec=await db.post("fiche_photos",{fiche_id:f.id,storage_path:path,nom_fichier:file.name,categorie_nom:catPhoto,etape:""});
-      if(!(rec&&rec[0]))throw new Error("La photo n'a pas pu être rattachée à la fiche.");
-      setPhotos(prev=>[...prev,{...rec[0],url:db.photoUrl(path)}]);
-      setAjoutPhoto(false);setCatPhoto("");
-    }catch(err){alert("Erreur upload: "+err.message);}
+    try{await envoyerFichierPhoto(file,0);setAjoutPhoto(false);setCatPhoto("");}catch(err){alert("Erreur upload: "+err.message);}
     setUploadEnCours(false);
+  }
+  async function deposerPhotos(fs){
+    if(!ajoutPhoto||!catPhoto){alert("Ouvrez « Ajouter photo », choisissez une catégorie, puis glissez la photo.");return;}
+    setUploadEnCours(true);
+    try{for(let i=0;i<fs.length;i++)await envoyerFichierPhoto(fs[i],i);setAjoutPhoto(false);setCatPhoto("");}catch(err){alert("Erreur upload: "+err.message);}
+    setUploadEnCours(false);
+  }
+  async function supprimerUnePhoto(){
+    const p=photoASuppr;if(!p)return;setSupprEnCours(true);
+    try{await supprimerPhotoEnBase(p,"fiche_photos",f.id);setPhotos(prev=>prev.filter(x=>x!==p));setPhotoASuppr(null);}catch(err){alert("Erreur: "+err.message);}
+    setSupprEnCours(false);
   }
 
   async function handleZip(){
@@ -1888,8 +1954,8 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
       </div>
 
       {/* Ajout photo */}
-      {ajoutPhoto&&<div style={{background:"#F0FFF4",border:"1px solid #22863A",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
-        <div style={{fontSize:12,fontWeight:600,color:"#22863A",marginBottom:8}}>📷 Ajouter une photo</div>
+      {ajoutPhoto&&<div {...depotProps} style={{background:"#F0FFF4",border:"1px solid #22863A",borderRadius:8,padding:"10px 12px",marginBottom:10,...styleDepot(survolDepot)}}>
+        <div style={{fontSize:12,fontWeight:600,color:"#22863A",marginBottom:8}}>📷 Ajouter une photo{avecSouris()&&<span style={{fontWeight:400,color:"#6B7280"}}> — ou glissez-déposez la photo ici (après avoir choisi la catégorie)</span>}</div>
         <select value={catPhoto} onChange={e=>setCatPhoto(e.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
           <option value="">— Choisir une catégorie</option>
           {(categories||[]).map(c=><option key={c.nom} value={c.nom}>{c.nom}</option>)}
@@ -1921,9 +1987,11 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
 
       {/* Photos */}
       {loadingP&&<div style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:8}}>Chargement…</div>}
+      <ConfirmerSuppressionPhoto photo={photoASuppr} occupe={supprEnCours} onConfirmer={supprimerUnePhoto} onAnnuler={()=>setPhotoASuppr(null)} styleBouton={S.p2} styleBoutonDanger={S.pDanger}/>
       {photos.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(72px,1fr))",gap:6,marginTop:6}}>
         {photos.map((p,i)=>(
           <div key={i} style={{position:"relative",cursor:"pointer"}} onClick={()=>window.open(p.url,"_blank")}>
+            <CroixPhoto onClick={()=>setPhotoASuppr(p)}/>
             <img src={p.url} alt={p.categorie_nom||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA"}}/>
             {p.categorie_nom&&<div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:8,padding:"2px 3px",borderRadius:"0 0 6px 6px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.categorie_nom}</div>}
           </div>
@@ -2353,6 +2421,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
     try{await db.upsertChamp(ficheId,champId,valeur);}catch(e){}
   },[ficheId]);
   const onPhotoAdded=useCallback(p=>setPhotos(prev=>[...prev,p]),[]);
+  const onPhotoRemoved=useCallback(p=>setPhotos(prev=>prev.filter(x=>x!==p)),[]);
 
   async function changerStatut(newStatut){setStatutChantier(newStatut);if(ficheId){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});if(onFicheUpdated)onFicheUpdated(ficheId,{statut_chantier:newStatut});}}
 
@@ -2397,7 +2466,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
   async function save(idx){
     setSaving(true);setErreur(null);
     try{
-      let fid=ficheId;const newVal=[...new Set([...validees,idx])];const toutFini=newVal.length===etapesActives.length;const declencheDevis=etapesActives[idx]===ETAPE_DECLENCHE_DEVIS[typeMateriel||"Moteur"];
+      let fid=ficheId;const newVal=[...new Set([...validees,idx])];const toutFini=etapesActives.every((_,i)=>newVal.includes(i));const declencheDevis=etapesActives[idx]===ETAPE_DECLENCHE_DEVIS[typeMateriel||"Moteur"];
       let newSC=statutChantier;
       if(declencheDevis&&statutChantier==="A_demonter")newSC=v.devis_necessaire==="Non"?"A_remonter":"Devis";
       if(suiviDevisComplet(v)&&statutChantier==="Devis")newSC="A_remonter";
@@ -2434,7 +2503,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
     <div style={{padding:"16px 16px 0"}}>
       {flash==="saved_partiel"&&<div style={{...S.ok,background:"#EEF4FF",color:"#1B4F8A",border:"1px solid #D6E4F7"}}>💾 Données sauvegardées.</div>}{flash!==null&&flash!=="saved_partiel"&&<div style={S.ok}>✅ Étape "{etapesActives[flash]}" enregistrée.</div>}
       {erreur&&<div style={{...S.alert,marginBottom:14}}>{erreur}</div>}
-      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>setNrMap(p=>({...p,[i]:!p[i]}))} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} champsSource={champsActifs}/>)}
+      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>setNrMap(p=>({...p,[i]:!p[i]}))} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={champsActifs}/>)}
 
       <SectionMaterielCommander v={v} ficheId={ficheId} de={v.de} client={v.client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeMateriel}/>
       {onOuvrirCommandes&&<SectionCommandesLiees de={v.de} onOuvrirCommandes={onOuvrirCommandes}/>}
@@ -2731,6 +2800,15 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
         fid=Array.isArray(res)?res[0]&&res[0].id:res&&res.id;
         if(!fid)throw new Error("Impossible de creer la fiche");
         setFicheId(fid);
+        // photos prises avant le premier enregistrement : on les rattache maintenant à la fiche
+        for(var pp of photos){
+          if(pp.fiche_id)continue;
+          try{
+            var basePh={fiche_id:fid,categorie_nom:pp.categorie_nom,nom_fichier:pp.nom_fichier,storage_path:pp.storage_path};
+            var rPh=await db.post("fiches_chantier_photos",Object.assign({etape:pp.etape,categorie_slug:pp.categorie_slug},basePh));
+            if(!(Array.isArray(rPh)&&rPh[0]))await db.post("fiches_chantier_photos",basePh);
+          }catch(e){}
+        }
         onSaved(Object.assign({id:fid,type_equipement:typeEquipement,created_at:new Date().toISOString()},entete));
       }else{
         await db.patch("fiches_chantier","?id=eq."+fid,entete);
@@ -2858,7 +2936,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
           </div>
           {(estAct||estVal)&&<div style={{padding:"14px 16px"}}>
             {rendreChamps(champs)}
-            <SectionPhotos ficheId={ficheId} cheminBase={cheminBase} etape={nom} categories={categories} photos={photos} onPhotoAdded={function(p){setPhotos(function(prev){return prev.concat([p]);});}} tablePhotos="fiches_chantier_photos"/>
+            <SectionPhotos ficheId={ficheId} cheminBase={cheminBase} etape={nom} categories={categories} photos={photos} onPhotoAdded={function(p){setPhotos(function(prev){return prev.concat([p]);});}} onPhotoRemoved={function(p){setPhotos(function(prev){return prev.filter(function(x){return x!==p;});});}} tablePhotos="fiches_chantier_photos"/>
             <div style={{display:"flex",gap:8,marginTop:14}}>
               <button onClick={function(){sauvegarder(undefined);}} disabled={saving} style={{...S.p2,fontSize:13,padding:"9px 16px",flexShrink:0}}>{saving?"...":"Enregistrer"}</button>
               <button onClick={function(){sauvegarder(i);}} disabled={saving} style={{...S.p1,background:COULEUR_CHANTIER,fontSize:13,padding:"9px 16px",flex:1,justifyContent:"center"}}>{saving?"...":"Valider et continuer"}</button>
@@ -2874,6 +2952,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
 // Exposer les définitions pour pdfUtils
 if(typeof window!=="undefined"){
   window.__CHAMPS=CHAMPS;
+  window.__CHAMPS_AUTRE=CHAMPS_AUTRE;
   window.__CHAMPS_POMPE=CHAMPS_POMPE;
   window.__ETAPES=ETAPES;
   window.__ETAPES_POMPE=ETAPES_POMPE;

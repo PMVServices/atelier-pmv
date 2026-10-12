@@ -1,6 +1,7 @@
 import React, {useState, useRef} from "react";
 import {db} from "./supabase";
 import {genHtml, afficherApercu, telechargerZip} from "./pdfUtils";
+import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
 
 // Fiche chantier : liste en dossiers (client > N° DE > lieu) comme la fiche atelier, mais dans une autre couleur
 // (vert pétrole) pour ne jamais confondre les deux. Le formulaire lui-même (FicheChantier) reste dans App.js.
@@ -80,6 +81,8 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
   const [ajout,setAjout]=useState(false);const [cat,setCat]=useState("");
   const [occupe,setOccupe]=useState(null);const [erreur,setErreur]=useState(null);
   const [confP,setConfP]=useState(false);const [confF,setConfF]=useState(false);
+  const [photoASuppr,setPhotoASuppr]=useState(null);const [supprEnCours,setSupprEnCours]=useState(false);
+  const [survolDepot,depotProps]=useDepotImages(fs=>deposerPhotos(fs));
   const fileRef=useRef();
   const recup=f.statut_recuperation==="Récupéré";
   const type=f.type_equipement||"Autre";
@@ -107,20 +110,32 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
     }catch(e){echec(e);}
     setOccupe(null);
   }
+  async function envoyerFichier(file,i){
+    const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
+    const path=slug(f.client||"client")+"/"+(de||"de")+"/"+slug(type)+"/"+slug(cat.toLowerCase())+"_"+Date.now()+(i?"_"+i:"")+"."+ext;
+    await db.uploadPhoto(path,file);
+    // la table des photos de chantier n'a pas de colonne "etape"
+    const rec=await db.post("fiches_chantier_photos",{fiche_id:f.id,storage_path:path,nom_fichier:file.name,categorie_nom:cat});
+    if(!(rec&&rec[0])){await db.deleteFile(path);throw new Error("La photo n'a pas pu être rattachée à la fiche.");}
+    setPhotos(prev=>[...(prev||[]),{...rec[0],url:db.photoUrl(path)}]);
+  }
   async function envoyerPhoto(e){
     const file=e.target.files[0];if(!file||!cat)return;
     setOccupe("photo");setErreur(null);
-    try{
-      const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
-      const path=slug(f.client||"client")+"/"+(de||"de")+"/"+slug(type)+"/"+slug(cat.toLowerCase())+"_"+Date.now()+"."+ext;
-      await db.uploadPhoto(path,file);
-      const rec=await db.post("fiches_chantier_photos",{fiche_id:f.id,storage_path:path,nom_fichier:file.name,categorie_nom:cat,etape:""});
-      if(!(rec&&rec[0]))throw new Error("La photo n'a pas pu être rattachée à la fiche.");
-      setPhotos(prev=>[...(prev||[]),{...rec[0],url:db.photoUrl(path)}]);
-      setAjout(false);setCat("");
-    }catch(err){echec(err);}
+    try{await envoyerFichier(file,0);setAjout(false);setCat("");}catch(err){echec(err);}
     if(fileRef.current)fileRef.current.value="";
     setOccupe(null);
+  }
+  async function deposerPhotos(fs){
+    if(!ajout||!cat){setErreur("Ouvrez « Ajouter photo », choisissez une catégorie, puis glissez la photo.");return;}
+    setOccupe("photo");setErreur(null);
+    try{for(let i=0;i<fs.length;i++)await envoyerFichier(fs[i],i);setAjout(false);setCat("");}catch(err){echec(err);}
+    setOccupe(null);
+  }
+  async function supprimerUnePhoto(){
+    const p=photoASuppr;if(!p)return;setSupprEnCours(true);
+    try{await supprimerPhotoEnBase(p,"fiches_chantier_photos",f.id);setPhotos(prev=>(prev||[]).filter(x=>x!==p));setPhotoASuppr(null);}catch(err){echec(err);}
+    setSupprEnCours(false);
   }
   async function supprPhotos(){
     setOccupe("sp");try{await db.del("fiches_chantier_photos","?fiche_id=eq."+f.id);setPhotos([]);setConfP(false);}catch(e){echec(e);}setOccupe(null);
@@ -163,7 +178,8 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
         <button type="button" style={BTN_R} onClick={()=>setConfF(true)}>🗑 Suppr. fiche</button>
       </div>
       {erreur&&<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#D73A49",marginBottom:8}}>{erreur}</div>}
-      {ajout&&<div style={{background:TEINTE.fond,border:"1px solid "+TEINTE.bord,borderRadius:8,padding:"10px 12px",marginBottom:10}}>
+      {ajout&&<div {...depotProps} style={{background:TEINTE.fond,border:"1px solid "+TEINTE.bord,borderRadius:8,padding:"10px 12px",marginBottom:10,...styleDepot(survolDepot)}}>
+        {avecSouris()&&<div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>Choisissez la catégorie, puis glissez-déposez la photo ici (ou utilisez le bouton).</div>}
         <select value={cat} onChange={e=>setCat(e.target.value)} style={{...INP,marginBottom:8,fontSize:12}}>
           <option value="">— Choisir une catégorie</option>
           {(categories||[]).map(c=><option key={c.nom} value={c.nom}>{c.nom}</option>)}
@@ -184,8 +200,10 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
         <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>Irréversible : fiche, données et photos supprimées.</p>
         <div style={{display:"flex",gap:8}}><button type="button" style={{...BTN,background:"#D73A49"}} disabled={occupe==="sf"} onClick={supprFiche}>🗑 Oui, tout supprimer</button><button type="button" style={BTN_O} onClick={()=>setConfF(false)}>Annuler</button></div>
       </div>}
+      <ConfirmerSuppressionPhoto photo={photoASuppr} occupe={supprEnCours} onConfirmer={supprimerUnePhoto} onAnnuler={()=>setPhotoASuppr(null)} styleBouton={BTN_O} styleBoutonDanger={BTN_R}/>
       {photos&&photos.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(72px,1fr))",gap:6,marginTop:6}}>
         {photos.map((p,i)=>(<div key={p.id||i} style={{position:"relative",cursor:"pointer"}} onClick={()=>window.open(p.url,"_blank")}>
+          <CroixPhoto onClick={()=>setPhotoASuppr(p)}/>
           <img src={p.url} alt={p.categorie_nom||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA"}}/>
           {p.categorie_nom&&<div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:8,padding:"2px 3px",borderRadius:"0 0 6px 6px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.categorie_nom}</div>}
         </div>))}
