@@ -9,7 +9,9 @@ function deslug(de){return (de||"").replace(/-/g,"");}
 function chPdf(v){var c=slugP(v.client||"Client");var d=deslug(v.de||"DE");var m=slugP(v.materiel_lieu||v.type_moteur||"Materiel");return {client:c,de:d,mat:m};}
 function champVisiblePdf(c,v){if(!c.condition)return true;if(typeof c.condition==="function")return c.condition(v);return v[c.condition.champ]===c.condition.valeur;}
 
-export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
+export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts){
+  opts=opts||{};
+  function esc(x){return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
   var isPompe=(v._type||v.type_materiel)==="Pompe";
   var champs=champsData||(isPompe?window.__CHAMPS_POMPE:window.__CHAMPS)||{};
   var etapes=etapesData||(isPompe?window.__ETAPES_POMPE:window.__ETAPES)||[];
@@ -21,6 +23,17 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
     if(c.type==="ohm"){var p=val.split("_");return(p[0]||"")+(p[1]?" "+p[1]:"");}
     if(c.type==="joints"){try{var j=JSON.parse(val);return j.map(function(x){if(x.type==="VA"||x.type==="VS")return x.type+(x.int||"?");return x.int+"x"+x.ext+"x"+x.ep+" "+(x.type==="Double"?"DL":"SL");}).join(", ");}catch(e){return val;}}
     if(c.type==="oui_non")return val==="Oui"?"Oui":val==="Non"?"Non":val;
+    if(c.type==="materiel_liste"){
+      try{
+        var L=JSON.parse(val);var G=[["utilise","Utilisé"],["renouveler","À renouveler"],["non_renouveler","À ne pas renouveler"],["commander","À commander"]];
+        var out=[];
+        G.forEach(function(g){
+          var items=L.filter(function(x){return x.statut===g[0];});
+          if(items.length)out.push("<b>"+g[1]+"</b> : "+items.map(function(x){return esc(x.designation)+(x.reference?" ("+esc(x.reference)+")":"")+((x.quantite&&String(x.quantite)!=="1")?" ×"+esc(x.quantite):"");}).join(" ; "));
+        });
+        return out.length?out.join("<br>"):"—";
+      }catch(e){return val;}
+    }
     if(c.unite)return val+" "+c.unite;
     return val;
   }
@@ -30,11 +43,11 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
 
   var css="*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:9.5pt;color:#1A1A2E;}.page{max-width:210mm;margin:0 auto;padding:12mm;}.hdr{background:#1B4F8A;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}.ht{font-size:15pt;font-weight:bold;}.hs{font-size:8pt;opacity:.75;margin-top:2px;}.hd{font-size:18pt;font-weight:bold;color:#E8720C;text-align:right;}.hdate{font-size:8pt;opacity:.75;text-align:right;}table{width:100%;border-collapse:collapse;margin-bottom:8px;}td{padding:5px 7px;border:.4px solid #DEE2E6;vertical-align:top;}tr:nth-child(even) td{background:#F8F9FA;}.lbl{font-weight:bold;font-size:9.5pt;width:22%;}.val{font-size:9.5pt;width:28%;}.sec td{background:#1B4F8A;color:#fff;font-weight:bold;padding:6px 8px;}.sn{margin-right:6px;}.st{float:right;font-size:8pt;opacity:.8;font-weight:normal;}.nr{background:#FFF8E1;color:#E8720C;font-style:italic;font-size:9pt;padding:4px 8px;}.sub td{background:#D6E4F7;color:#1B4F8A;font-weight:bold;padding:5px 8px;}.ft{border-top:.5px solid #DEE2E6;margin-top:10px;padding-top:5px;font-size:7pt;color:#6B7280;text-align:center;}.pg{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;}.pi img{width:80px;height:80px;object-fit:cover;border-radius:4px;}.pi p{font-size:7pt;color:#6B7280;margin-top:2px;text-align:center;}.comment{background:#F8F9FA;border:.5px solid #DEE2E6;border-radius:4px;padding:8px;margin-top:6px;font-size:9pt;}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}";
 
-  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><style>"+css+"</style></head><body><div class='page'>";
+  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><style>"+(opts.couleur?css.split("#1B4F8A").join(opts.couleur):css)+"</style></head><body><div class='page'>";
 
   // Header
   var statLabel=sc||"";
-  html+="<div class='hdr'><div><div class='ht'>FICHE D'ENTRETIEN / EXPERTISE</div><div class='hs'>"+ch.client+" / "+ch.de+" / "+ch.mat+"</div></div><div><div class='hd'>"+ch.de+"</div><div class='hdate'>"+now+(statLabel?" · "+statLabel:"")+"</div></div></div>";
+  html+="<div class='hdr'><div><div class='ht'>"+(opts.titre||"FICHE D'ENTRETIEN / EXPERTISE")+"</div><div class='hs'>"+ch.client+" / "+ch.de+" / "+ch.mat+"</div></div><div><div class='hd'>"+ch.de+"</div><div class='hdate'>"+now+(statLabel?" · "+statLabel:"")+"</div></div></div>";
 
   // Sections par étape
   etapes.forEach(function(nomEtape,etapeIdx){
@@ -56,8 +69,8 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
     }
 
     // Afficher les champs 2 par 2
-    var champs2=champsAvecVal.filter(function(c){return c.type!=="textarea";});
-    var champsTA=champsAvecVal.filter(function(c){return c.type==="textarea";});
+    var champs2=champsAvecVal.filter(function(c){return c.type!=="textarea"&&c.type!=="materiel_liste";});
+    var champsTA=champsAvecVal.filter(function(c){return c.type==="textarea"||c.type==="materiel_liste";});
 
     for(var i=0;i<champs2.length;i+=2){
       var c1=champs2[i];
@@ -128,13 +141,13 @@ export async function telechargerHtml(html,nomFichier){
 }
 
 var _apercuOverlay=null;
-export function afficherApercu(html,nomFichier){
+export function afficherApercu(html,nomFichier,couleur){
   // Ferme un aperçu déjà ouvert (ex: double-appel de l'effet React en StrictMode) au lieu d'empiler.
   if(_apercuOverlay&&_apercuOverlay.parentNode)document.body.removeChild(_apercuOverlay);
   var overlay=document.createElement("div");
   overlay.style.cssText="position:fixed;inset:0;background:#fff;z-index:99999;display:flex;flex-direction:column;";
   var barre=document.createElement("div");
-  barre.style.cssText="background:#1B4F8A;color:#fff;padding:10px 14px;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;";
+  barre.style.cssText="background:"+(couleur||"#1B4F8A")+";color:#fff;padding:10px 14px;display:flex;justify-content:flex-end;gap:8px;flex-shrink:0;";
   var boutonStyle="background:rgba(255,255,255,0.15);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;";
   var dl=document.createElement("button");
   dl.textContent="⬇ Télécharger";
@@ -181,11 +194,11 @@ export function lancerImpression(html){
   iframe.srcdoc=html;
 }
 
-export function imprimerFiche(v,photos,sc,comm,pieces,nrMap,champsData,etapesData){
-  lancerImpression(genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData));
+export function imprimerFiche(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts){
+  lancerImpression(genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts));
 }
 
-export async function telechargerZip(photos,valeurs,nomDossier){
+export async function telechargerZip(photos,valeurs,nomDossier,opts){
   if(!photos)photos=[];
   try{
     if(!window.JSZip){await new Promise(function(res,rej){var s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js";s.onload=res;s.onerror=rej;document.head.appendChild(s);});}
@@ -194,7 +207,7 @@ export async function telechargerZip(photos,valeurs,nomDossier){
     await Promise.all(photos.map(async function(p){try{var r=await fetch(p.url);var blob=await r.blob();zip.file(p.nom_fichier||p.storage_path.split("/").pop(),blob);}catch(e){}}));
     // PDF via fenêtre d'impression
     if(valeurs&&Object.keys(valeurs).length>0){
-      var html=genHtml(valeurs,photos,"A_demonter","",[]);
+      var html=opts?genHtml(valeurs,photos,opts.statut||"","",[],{},opts.champsData,opts.etapesData,opts):genHtml(valeurs,photos,"A_demonter","",[]);
       lancerImpression(html);
       zip.file(nomDossier+"_fiche.html",new Blob([html],{type:"text/html"}));
     }
