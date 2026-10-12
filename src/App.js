@@ -3,7 +3,7 @@ import {genHtml, imprimerFiche, telechargerZip, apercuRapport, afficherApercu, t
 import {exporterRapportDocx} from "./rapportDocx";
 import {SUPA_URL,SUPA_KEY,H,db} from "./supabase";
 import {NoticeActivation} from "./Activation";
-import PageStock from "./Stock";
+import PageStock, {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
@@ -4433,6 +4433,14 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
     setLignesCat(a=>a.concat(nouvelles));
     maj({sels:[],autreCap:false,texte:"",qty:1,di:"",de:"",ep:"",vvDi:"",gmMobile:null,gmFixe:null,gmTexteM:"",gmTexteF:"",gmDiam:""});
   }
+  // Lignes issues du scan d'étiquettes : elles rejoignent la demande comme les autres catégories
+  function ajouterScan(lignes){
+    if(!lignes.length)return;
+    const nouvelles=lignes.map(l=>({id:idRef.current++,cat:l.cat,designation:l.designation,qty:l.qty,type:l.type}));
+    setPanier(p=>p.concat(nouvelles));
+    setDerniere({nom:"Scan d'étiquettes",lignes:nouvelles});
+    setEtape("more");
+  }
   function validerCat(){
     setDerniere({nom:nomCategorieMat(cat),lignes:lignesCat});
     setPanier(p=>p.concat(lignesCat));setLignesCat([]);setEtape("more");
@@ -4488,6 +4496,7 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
     corps=(<div className="mat-ecran">
       <div className="mat-fil"><button type="button" className={"mat-puce mat-puce--"+typeDefaut} onClick={()=>setEtape("type")} aria-label="Changer le type par défaut">{TYPES_DEMANDE[typeDefaut].label} <small>changer</small></button></div>
       <h2 className="mat-h2">Quelle catégorie ?</h2>
+      <button type="button" className="mat-btn mat-btn--s mat-btn--large" onClick={()=>setEtape("scan")}>📷 Scanner une étiquette (QR code)</button>
       <div className="mat-cats">{CATEGORIES_MATERIEL.map(c=>{const k=panier.filter(l=>l.cat===c.nom).length;return(<button type="button" key={c.id} className="mat-cat" onClick={()=>ouvrirCat(c.id)}><IcoMat nom={c.id} taille={38}/><span>{c.nom}</span>{k>0&&<span className="mat-cat-n" aria-label={k+" dans la demande"}>{k}</span>}</button>);})}</div>
       {n>0&&<div className="mat-panier"><span><strong>{n}</strong> article{n>1?"s":""} dans la demande</span><button type="button" className="mat-btn" onClick={()=>setEtape("recap")}>Voir et envoyer</button></div>}
     </div>);
@@ -4509,6 +4518,8 @@ function PageDemandeMateriel({techs,sessionTech,onRetour,onVoirCommandes,onEnvoy
           {lignesCat.map(l=>ligneListe(l,{retirer:id=>setLignesCat(a=>a.filter(x=>x.id!==id))}))}
           <button type="button" className="mat-btn mat-btn--p mat-btn--large" onClick={validerCat}>Valider {nomCategorieMat(cat)}</button></div>}
     </div>);
+  }else if(etape==="scan"){
+    corps=<ScanDemande typeDefaut={typeDefaut} onRetour={()=>setEtape("cat")} onTermine={ajouterScan}/>;
   }else if(etape==="more"){
     corps=(<div className="mat-ecran">
       <div className="mat-ok"><h2 className="mat-h2">{derniere.nom} validé</h2>{derniere.lignes.map(l=>ligneListe(l))}</div>

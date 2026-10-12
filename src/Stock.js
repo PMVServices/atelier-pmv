@@ -1018,6 +1018,91 @@ function SessionScan({mode:modeInit,articles,techs,qui,setQui,onFermer,onChange,
   </div>);
 }
 
+// ─── Demande de matériel : identifier le matériel voulu en scannant son étiquette (QR code) ───────────────────────
+// Rend à l'assistant "Matériel à commander" les lignes scannées : [{cat, designation, qty, type}]. Même reconnaissance
+// que les sorties de stock : référence imprimée sur l'étiquette, ou code fabricant associé à un article.
+export function ScanDemande({typeDefaut,onTermine,onRetour}){
+  const [articles,setArticles]=useState(null); // null = chargement, false = stock indisponible
+  const [lignes,setLignes]=useState([]); // [{designation,cat,detail,qty,type}]
+  const [message,setMessage]=useState(null);
+  const [saisie,setSaisie]=useState("");
+  const articlesRef=useRef([]);articlesRef.current=articles||[];
+  useEffect(()=>{
+    let a=false;
+    appel("GET","stock_articles?select=id,reference,dimensions&order=reference&limit=2000").then(r=>{if(!a)setArticles(r.ok&&Array.isArray(r.data)?r.data:false);});
+    return()=>{a=true;};
+  },[]);
+  const ajouter=useCallback((designation,cat,detail)=>{
+    setLignes(ls=>{
+      const i=ls.findIndex(l=>l.designation===designation);
+      if(i>=0)return ls.map((l,k)=>k===i?{...l,qty:l.qty+1}:l);
+      return [{designation,cat,detail:detail||"",qty:1,type:typeDefaut}].concat(ls);
+    });
+    setMessage({texte:"✓ "+designation,type:"ok"});
+    bip();
+  },[typeDefaut]);
+  const ajouterArticle=useCallback(a=>ajouter(designationDemande(a),familleDe(a.reference),a.dimensions),[ajouter]);
+  const traiter=useCallback(async brut=>{
+    const code=String(brut||"").trim();
+    if(!code)return;
+    let a=articlesRef.current.find(x=>cle(x.reference)===cle(code));
+    if(!a){
+      const r=await appel("GET","stock_codes?code=eq."+encodeURIComponent(code)+"&select=article_id");
+      if(r.ok&&Array.isArray(r.data)&&r.data[0])a=articlesRef.current.find(x=>x.id===r.data[0].article_id);
+    }
+    if(a)ajouterArticle(a);
+    else setMessage({texte:"Étiquette inconnue : "+code,type:"err",code});
+  },[ajouterArticle]);
+  const vuRef=useRef({code:"",t:0});
+  const codeCamera=useCallback(code=>{
+    const c=String(code||"").trim();
+    if(articles===null)return; // liste du stock pas encore chargée : l'étiquette sera relue dès qu'elle l'est
+    const v=vuRef.current;
+    const memePresentation=c===v.code&&Date.now()-v.t<2500;
+    vuRef.current={code:c,t:Date.now()};
+    if(!memePresentation)traiter(c);
+  },[traiter,articles]);
+  const qc=cle(saisie);
+  const sugg=qc?(articles||[]).filter(a=>cle(a.reference).includes(qc)||cle(a.dimensions).includes(qc)).slice(0,5):[];
+  function entrerSaisie(){
+    const exact=(articles||[]).find(a=>cle(a.reference)===qc);
+    if(exact){ajouterArticle(exact);setSaisie("");}
+    else if(sugg.length===1){ajouterArticle(sugg[0]);setSaisie("");}
+    else if(qc){traiter(saisie);setSaisie("");}
+  }
+  const majQte=(d,delta)=>setLignes(ls=>ls.map(l=>l.designation===d?{...l,qty:Math.max(1,l.qty+delta)}:l));
+  const basculerType=d=>setLignes(ls=>ls.map(l=>l.designation===d?{...l,type:l.type==="commander"?"renouveler":"commander"}:l));
+  const retirer=d=>setLignes(ls=>ls.filter(l=>l.designation!==d));
+  const nb=lignes.reduce((s,l)=>s+l.qty,0);
+  return(<div className="stk" style={{padding:0,maxWidth:"none"}}><style>{CSS_STOCK}</style>
+    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
+      <button type="button" className="stk-btn stk-btn--s" onClick={onRetour}>‹ Catégories</button>
+      <h2 style={{margin:0,fontSize:19}}>📷 Scanner une étiquette</h2>
+    </div>
+    {articles===false&&<div className="stk-alerte">Le stock n'est pas encore activé, donc les étiquettes ne peuvent pas être reconnues. Revenez aux catégories pour choisir le matériel.</div>}
+    {articles!==false&&<div style={{display:"flex",flexDirection:"column",gap:10}}>
+      <ScanneurCode integre continu onCode={codeCamera}/>
+      {message&&<div className={"stk-msg "+message.type}><span>{message.texte}</span>{message.type==="err"&&<button type="button" className="stk-btn stk-btn--s" onClick={()=>{ajouter(message.code,"Autre","");}}>Ajouter comme texte libre</button>}</div>}
+      <div>
+        <input className="stk-champ" value={saisie} onChange={e=>setSaisie(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")entrerSaisie();}} placeholder="⌨ Ou taper une référence (ou douchette)" autoComplete="off"/>
+        {sugg.length>0&&<div className="stk-sugg" style={{marginTop:6}}>{sugg.map(a=><button type="button" key={a.id} className="stk-carte" onClick={()=>{ajouterArticle(a);setSaisie("");}}><div><div className="stk-ref">{a.reference}</div><div className="stk-sub">{a.dimensions||""}</div></div><div className="stk-sub">Ajouter</div></button>)}</div>}
+      </div>
+      {lignes.length===0
+        ?<p className="stk-aide" style={{textAlign:"center",padding:"10px 0"}}>Cadrez l'étiquette du matériel : elle s'ajoute à la liste. Présentez-la de nouveau pour ajouter une 2e pièce, ou touchez + . Touchez le type pour passer de « À commander » à « À renouveler ».</p>
+        :<div className="stk-lignes">{lignes.map(l=>(<div key={l.designation} className="stk-ligne flash">
+          <div style={{minWidth:0}}>
+            <div className="stk-ref">{l.designation}</div>
+            <div className="stk-sub">{[l.cat,l.detail].filter(Boolean).join(" · ")}</div>
+            <button type="button" className="stk-btn stk-btn--s" style={{marginTop:6}} onClick={()=>basculerType(l.designation)} aria-label={"Changer le type de "+l.designation}>{l.type==="commander"?"À commander":"À renouveler"} ⇄</button>
+          </div>
+          <div className="stk-qs stk-qs--s"><button type="button" onClick={()=>majQte(l.designation,-1)} aria-label="Diminuer">−</button><input type="text" inputMode="numeric" value={l.qty} onChange={e=>{const n=parseInt(e.target.value.replace(/\D/g,""),10);setLignes(ls=>ls.map(x=>x.designation===l.designation?{...x,qty:isNaN(n)||n<1?1:n}:x));}} aria-label={"Quantité "+l.designation}/><button type="button" onClick={()=>majQte(l.designation,1)} aria-label="Augmenter">+</button></div>
+          <button type="button" className="stk-rm" onClick={()=>retirer(l.designation)} aria-label={"Retirer "+l.designation}>✕</button>
+        </div>))}</div>}
+      <button type="button" className="stk-btn stk-btn--p" disabled={!lignes.length} onClick={()=>onTermine(lignes.map(l=>({cat:l.cat,designation:l.designation,qty:l.qty,type:l.type})))}>{lignes.length?"Ajouter à la demande — "+nb+" pièce"+(nb>1?"s":""):"Rien à ajouter"}</button>
+    </div>}
+  </div>);
+}
+
 // ─── Remise au stock maximum (démarrage : évite une longue liste "à renouveler" tant que les quantités ne sont pas fiables) ──
 function RemiseMax({liste,libelle,qui,onFermer,onFait}){
   const aRemonter=liste.filter(a=>a.stock_maxi!=null&&(a.quantite||0)<a.stock_maxi);
