@@ -7,6 +7,7 @@ import PageStock, {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
 import PageCalendrier from "./Calendrier";
+import {LectureCtx, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
@@ -15,10 +16,9 @@ const LOGO_B64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgM
 // LOGO_B64 moved to pdfUtils.js
 // LOGO_B64 is in pdfUtils.js;
 
-const PIN_CODE="3739",PIN_KEY="pmv_pin_ok";
-// Deux niveaux d'accès : le code habituel ouvre l'appli en mode technicien (restreint), le code administrateur ouvre tout.
-// Barrière d'interface seulement : la base reste accessible à qui connaît la clé de l'appli.
-const ADMIN_CODE="2401",ROLE_KEY="pmv_role";
+// Accès par personne (voir Acces.js) : plus de code à chaque ouverture, l'appli demande qui ouvre.
+// Ce code administrateur ne sert plus qu'à créer le premier administrateur, tant qu'aucune personne n'est enregistrée.
+const ADMIN_CODE="2401";
 // Suivi des commandes fournisseurs (colonnes, AR PDF, relances, statistiques, dossier surveillé) : désactivé.
 // Tout le code et toutes les données (table commandes_fournisseurs…) sont conservés : pour le remettre, passer à true.
 // Les demandes de matériel (à commander / à renouveler) vivent dans l'onglet Matériel, avec les pièces des fiches atelier.
@@ -745,25 +745,6 @@ const S={
   nr:{border:"1.5px solid #E2E6EA",borderRadius:8,padding:"8px 14px",display:"flex",alignItems:"center",gap:10,marginBottom:14,cursor:"pointer"},
 };
 
-function ModalPin({onSuccess,onAnnuler,seulAdmin,titre="Entrez le code PIN"}){
-  const [s,setS]=useState("");const [err,setErr]=useState(false);
-  function tap(c){if(s.length>=4)return;const n=s+c;setS(n);if(n.length===4){if(n===ADMIN_CODE){localStorage.setItem(PIN_KEY,"1");onSuccess("admin");}else if(n===PIN_CODE&&!seulAdmin){localStorage.setItem(PIN_KEY,"1");onSuccess("tech");}else{setErr(true);setTimeout(()=>{setS("");setErr(false);},800);}}}
-  const touches=["1","2","3","4","5","6","7","8","9","","0","⌫"];
-  return(<div style={{position:"fixed",inset:0,background:"#1B4F8A",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999}}>
-    <div style={{background:"#fff",borderRadius:16,padding:"32px 28px",width:300,textAlign:"center",boxShadow:"0 8px 40px rgba(0,0,0,0.3)"}}>
-      <img src={LOGO_B64} alt="PMV Services" style={{height:60,marginBottom:12,objectFit:"contain"}}/>
-      <p style={{fontSize:13,color:"#6B7280",margin:"0 0 20px"}}>{titre}</p>
-      <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:24}}>
-        {[0,1,2,3].map(i=><div key={i} style={{width:16,height:16,borderRadius:"50%",background:s.length>i?(err?"#D73A49":"#1B4F8A"):"#E2E6EA",transition:"background 0.15s"}}/>)}
-      </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
-        {touches.map((t,i)=>t===""?<div key={i}/>:<button key={i} onClick={()=>t==="⌫"?setS(ss=>ss.slice(0,-1)):tap(t)} style={{padding:"14px",fontSize:18,fontWeight:600,borderRadius:10,border:"1.5px solid #E2E6EA",background:t==="⌫"?"#F5F6F8":"#fff",cursor:"pointer",color:t==="⌫"?"#6B7280":"#1A1A2E"}}>{t}</button>)}
-      </div>
-      {err&&<p style={{color:"#D73A49",fontSize:13,marginTop:12,fontWeight:600}}>Code incorrect</p>}
-      {onAnnuler&&<button onClick={onAnnuler} style={{marginTop:16,background:"none",border:"none",color:"#6B7280",fontSize:13,cursor:"pointer",textDecoration:"underline"}}>Annuler</button>}
-    </div>
-  </div>);
-}
 
 function ChampClient({valeur,onChange,clients,onAddClient}){
   const [q,setQ]=useState(valeur||"");const [ouvert,setOuvert]=useState(false);const [modeAutre,setModeAutre]=useState(false);const ref=useRef(null);
@@ -1661,7 +1642,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
     </button>}
 
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:14,marginBottom:24}}>
-      {NAV_ITEMS.filter(n=>n.id!=="dashboard"&&(admin||!n.admin)).map(n=>{
+      {navPourRole(admin?"admin":"tech").filter(n=>n.id!=="dashboard").map(n=>{
         const sep=n.label.indexOf(" ");const icone=n.label.slice(0,sep);const texte=n.label.slice(sep+1);
         return(<button key={n.id} onClick={()=>onNaviguer(n.id)} style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:14,padding:"24px 12px",minHeight:118,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",boxShadow:"0 2px 6px rgba(0,0,0,0.06)"}}>
           <span style={{fontSize:38,lineHeight:1}}>{icone}</span>
@@ -1827,11 +1808,12 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
 }
 function CarteKanban({f,s,urgence,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging}){
   const [ouvert,setOuvert]=useState(false);
+  const lecture=React.useContext(LectureCtx);
   return(<div
-    draggable={true}
-    onDragStart={e=>onDragStart(e,f.id)}
-    onTouchStart={()=>onTouchStart(null,f.id)}
-    onTouchEnd={e=>onTouchEnd(e,f.id)}
+    draggable={!lecture}
+    onDragStart={e=>{if(lecture){e.preventDefault();return;}onDragStart(e,f.id);}}
+    onTouchStart={()=>{if(!lecture)onTouchStart(null,f.id);}}
+    onTouchEnd={e=>{if(!lecture)onTouchEnd(e,f.id);}}
     style={{background:isDragging?"#EEF4FF":"#F8F9FA",border:"1px solid "+(isDragging?"#1B4F8A":"#E2E6EA"),borderRadius:8,marginBottom:8,cursor:"grab",opacity:isDragging?0.6:1,transition:"opacity .15s,border-color .15s",userSelect:"none"}}>
     {urgence&&<div style={{height:4,borderRadius:"8px 8px 0 0",background:urgence.color}}/>}
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer"}} onClick={()=>setOuvert(!ouvert)}>
@@ -1847,10 +1829,10 @@ function CarteKanban({f,s,urgence,onOuvrirFiche,onStatutChange,onDragStart,onTou
       <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{f.materiel||"Moteur"}</div>
       <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>Entrée le {fmt(f.created_at)}</div>
       {urgence&&<div style={{fontSize:11,fontWeight:600,color:urgence.color,background:urgence.bg,borderRadius:6,padding:"5px 8px",marginBottom:8}}>{urgence.label} — échéance le {urgence.echeance}</div>}
-      <select value={f.statut_chantier||"A_demonter"} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
+      <select value={f.statut_chantier||"A_demonter"} disabled={lecture} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
         {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
       </select>
-      <button onClick={()=>onOuvrirFiche(f)} style={{width:"100%",fontSize:11,padding:"5px",borderRadius:6,border:"1px solid #1B4F8A",background:"#EEF4FF",color:"#1B4F8A",cursor:"pointer",fontWeight:600}}>📂 Ouvrir la fiche</button>
+      <button onClick={()=>onOuvrirFiche(f)} style={{width:"100%",fontSize:11,padding:"5px",borderRadius:6,border:"1px solid #1B4F8A",background:"#EEF4FF",color:"#1B4F8A",cursor:"pointer",fontWeight:600}}>{lecture?"👁 Voir l'aperçu":"📂 Ouvrir la fiche"}</button>
     </div>}
   </div>);
 }
@@ -1859,6 +1841,7 @@ function CarteKanban({f,s,urgence,onOuvrirFiche,onStatutChange,onDragStart,onTou
 
 // ─── FICHE ITEM (niveau 3 : Lieu/Identification) ────────────────────────
 function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupliquer}){
+  const lecture=React.useContext(LectureCtx);
   const [ouvert,setOuvert]=useState(false);
   const [photos,setPhotos]=useState([]);
   const [loadingP,setLoadingP]=useState(false);
@@ -1957,18 +1940,18 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
       {/* Statut */}
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,padding:"6px 10px",background:"#F8F9FA",borderRadius:6}}>
         <span style={{fontSize:12,fontWeight:600,color:"#6B7280",flexShrink:0}}>Statut :</span>
-        <select value={f.statut_chantier||"A_demonter"} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,flex:1,fontSize:12}}>
+        <select value={f.statut_chantier||"A_demonter"} disabled={lecture} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,flex:1,fontSize:12}}>
           {STATUTS_CHANTIER.map(st2=><option key={st2.id} value={st2.id}>{st2.label}</option>)}
         </select>
       </div>
 
       {/* Actions */}
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-        <button onClick={()=>onOpen(f)} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>📝 Ouvrir fiche</button><button onClick={()=>{onApercu(f);}} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>👁 Aperçu</button><button onClick={()=>onDupliquer&&onDupliquer(f)} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📋 Dupliquer</button>
+        {!lecture&&<button onClick={()=>onOpen(f)} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>📝 Ouvrir fiche</button>}<button onClick={()=>{onApercu(f);}} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>👁 Aperçu</button>{!lecture&&<button onClick={()=>onDupliquer&&onDupliquer(f)} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📋 Dupliquer</button>}
         <button onClick={handleZip} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>📥 ZIP + PDF</button>
-        <button onClick={()=>setAjoutPhoto(!ajoutPhoto)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>📷 Ajouter photo</button>
-        <button onClick={()=>setConfirmSupprPhotos(true)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#E8720C",borderColor:"#E8720C"}}>🗑 Suppr. photos</button>
-        <button onClick={()=>setConfirmSupprFiche(true)} style={{...S.pDanger,fontSize:12,padding:"6px 12px"}}>🗑 Suppr. fiche</button>
+        {!lecture&&<button onClick={()=>setAjoutPhoto(!ajoutPhoto)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>📷 Ajouter photo</button>}
+        {!lecture&&<button onClick={()=>setConfirmSupprPhotos(true)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#E8720C",borderColor:"#E8720C"}}>🗑 Suppr. photos</button>}
+        {!lecture&&<button onClick={()=>setConfirmSupprFiche(true)} style={{...S.pDanger,fontSize:12,padding:"6px 12px"}}>🗑 Suppr. fiche</button>}
       </div>
 
       {/* Ajout photo */}
@@ -2009,7 +1992,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
       {photos.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(72px,1fr))",gap:6,marginTop:6}}>
         {photos.map((p,i)=>(
           <div key={i} style={{position:"relative",cursor:"pointer"}} onClick={()=>window.open(p.url,"_blank")}>
-            <CroixPhoto onClick={()=>setPhotoASuppr(p)}/>
+            {!lecture&&<CroixPhoto onClick={()=>setPhotoASuppr(p)}/>}
             <img src={p.url} alt={p.categorie_nom||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA"}}/>
             {p.categorie_nom&&<div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:8,padding:"2px 3px",borderRadius:"0 0 6px 6px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.categorie_nom}</div>}
           </div>
@@ -2061,6 +2044,7 @@ function DossierClient({client,fiches,onOpen,onApercu,onDelete,onStatutChange,ca
 
 // ─── PAGE ACCUEIL ────────────────────────────────────────────────────────
 function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,categories,onDupliquer}){
+  const lecture=React.useContext(LectureCtx);
   const [loading,setLoading]=useState(true);const [q,setQ]=useState("");const [fs,setFs]=useState("Tous");
   useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));},[]);
   async function onStatutChange(ficheId,newStatut){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});setFiches(prev=>prev.map(f=>f.id===ficheId?{...f,statut_chantier:newStatut}:f));}
@@ -2083,7 +2067,7 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
         </div>
         {devisCount>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>⚠ {devisCount} devis en attente</span>}
       </div>
-      <button style={S.p1} onClick={onNew}>+ Nouvelle fiche</button>
+      {!lecture&&<button style={S.p1} onClick={onNew}>+ Nouvelle fiche</button>}
     </div>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16,display:"flex",gap:10,flexWrap:"wrap"}}>
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={{...S.inp,flex:1,minWidth:160}}/>
@@ -2414,6 +2398,7 @@ const CHAMPS_AUTRE=(()=>{
   return {...CHAMPS,"Entrée":E};
 })();
 function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed}){
+  const lecture=React.useContext(LectureCtx);
   const isPompe=typeMateriel==="Pompe";
   const isReducteur=typeMateriel==="Moto-réducteur";
   const champsActifs=isPompe?CHAMPS_POMPE:isReducteur?CHAMPS_REDUCTEUR:typeMateriel==="Autre"?CHAMPS_AUTRE:CHAMPS;
@@ -2524,6 +2509,12 @@ const onChange=useCallback((id,val)=>setV(p=>{
   }
 
   const prog=Math.round((validees.length/etapesActives.length)*100);const chem=cheminFiche(v);const st=statutInfo(statutChantier);
+
+  if(lecture)return(<div style={{maxWidth:800,margin:"0 auto",padding:"40px 16px",textAlign:"center",color:"#6B7280"}}>
+    {!apercu&&"Chargement de l'aperçu…"}
+    {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";onRetour();}}/>}
+    <div style={{marginTop:16}}><button style={S.p2} onClick={onRetour}>← Retour à la liste</button></div>
+  </div>);
 
   return(<div style={{maxWidth:800,margin:"0 auto",paddingBottom:40}}>
     {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";}}/>}
@@ -2935,7 +2926,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(deAff||"de")+"/"+typeEquipement.replace(/[^a-z0-9]/gi,"_");
 
   return(<div style={{paddingBottom:80}}>
-    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<1430?52:56,zIndex:90}}>
+    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<1360?52:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div style={{minWidth:0,flex:largeur<600?"1 1 100%":"0 1 auto"}}>
           <p style={{margin:0,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:largeur<600?"nowrap":"normal"}}>{(v.ch_client||"Client")+" / "+(deAff||"DE")+" / "+(v.ch_eq_nom||typeEquipement)}</p>
@@ -5082,23 +5073,38 @@ function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel,p
   </div>);
 }
 
+const TOUS_PROFILS=["admin","tech","commercial"],PROFILS_INTERNES=["admin","tech"];
 const NAV_ITEMS=[
-  {id:"dashboard",label:"🏠 Tableau de bord"},
-  {id:"accueil",label:"📁 Fiche Atelier"},{id:"chantier",label:"🏗 Fiche Chantier"},
-  {id:"planning",label:"📋 Planning"},
-  {id:"rapport",label:"📧 Rapport"},
-  {id:"suivi",label:"🔧 Matériel"},
-  ...(SUIVI_COMMANDES?[{id:"commandes",label:"📦 Commandes"}]:[]),
-  {id:"stock",label:"🗃 Stock"},
-  {id:"calendrier",label:"🗓 Calendrier"},
-  {id:"stats",label:"📊 Stats",admin:true},
+  {id:"dashboard",label:"🏠 Tableau de bord",roles:PROFILS_INTERNES},
+  {id:"accueil",label:"📁 Fiche Atelier",roles:TOUS_PROFILS},{id:"chantier",label:"🏗 Fiche Chantier",roles:TOUS_PROFILS},
+  {id:"planning",label:"📋 Planning",roles:TOUS_PROFILS},
+  {id:"rapport",label:"📧 Rapport",roles:TOUS_PROFILS},
+  {id:"suivi",label:"🔧 Matériel",roles:PROFILS_INTERNES},
+  ...(SUIVI_COMMANDES?[{id:"commandes",label:"📦 Commandes",roles:PROFILS_INTERNES}]:[]),
+  {id:"stock",label:"🗃 Stock",roles:PROFILS_INTERNES},
+  {id:"calendrier",label:"🗓 Calendrier",roles:TOUS_PROFILS},
+  {id:"stats",label:"📊 Stats",roles:["admin"]},
 ];
+// Ordre des onglets du profil Commercial ("devis" : futur suivi de devis clients, pas encore construit)
+const ORDRE_COMMERCIAL=["calendrier","devis","accueil","chantier","planning","rapport"];
+const PAGES_COMMERCIAL=["calendrier","devis","accueil","chantier","planning","rapport","fiche"];
+function navPourRole(role){
+  const l=NAV_ITEMS.filter(n=>n.roles.includes(role));
+  return role==="commercial"?l.sort((a,b)=>ORDRE_COMMERCIAL.indexOf(a.id)-ORDRE_COMMERCIAL.indexOf(b.id)):l;
+}
+function pageAutorisee(page,role){
+  if(role==="admin")return true;
+  if(role==="commercial")return PAGES_COMMERCIAL.includes(page);
+  return page!=="stats"&&page!=="acces";
+}
 
 // Mode "Stock seul" (adresse /stock/, utilisée par l'icône PMV Stock du téléphone) : une seule page, sans menu.
 const MODE_STOCK=typeof window!=="undefined"&&(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search));
 
 export default function App(){
-  const [pinOk,setPinOk]=useState(()=>localStorage.getItem(PIN_KEY)==="1");
+  const [personnes,setPersonnes]=useState(null);const [erreurAcces,setErreurAcces]=useState(null);
+  const [moiId,setMoiId]=useState(()=>{try{return sessionStorage.getItem(CLE_SESSION)||null;}catch(e){return null;}});
+  const [changerPers,setChangerPers]=useState(false);const [menuPersonne,setMenuPersonne]=useState(false);
   const [page,setPage]=useState(()=>loadDraft()?"fiche":"dashboard");const [sessionTech,setSessionTech]=useState(()=>loadDraft()?.sessionTech||null);const [ficheOuverte,setFicheOuverte]=useState(()=>{const d=loadDraft();return d?{id:d.ficheId,de:d.v?.de,client:d.v?.client,materiel_lieu:d.v?.materiel_lieu,type_materiel:d.typeMateriel,statut_chantier:d.statutChantier,etape_active:d.actif,etapes_validees:d.validees}:null;});const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState(()=>loadDraft()?.typeMateriel||"Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);const [rapportFicheId,setRapportFicheId]=useState(null);const [seedValeurs,setSeedValeurs]=useState(null);
 
   useEffect(()=>{
@@ -5122,7 +5128,7 @@ export default function App(){
     setTypeMat(type);
     setPage("fiche");
   }
-  function askIdent(fn){setDemandeIdent(true);setPending(()=>fn);}
+  function askIdent(fn){if(moi&&moi.initiales){fn(moi.initiales);return;}setDemandeIdent(true);setPending(()=>fn);}
   // Case "Entretien en atelier" de la fiche chantier : nouvelle fiche atelier préremplie (même mécanisme que "Dupliquer")
   function ouvrirAtelierDepuisChantier(seed,type){
     const aller=()=>{setSeedValeurs(seed);setFicheOuverte(null);setTypeMat(type);setPage("fiche");};
@@ -5156,44 +5162,57 @@ export default function App(){
   function voirMaterielCommandes(){setPage("suivi");}
 
   const width=useWidth();
-  const isMobile=width<1430; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
+  const isMobile=width<1360; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
   const [menuOuvert,setMenuOuvert]=useState(false);
-  const [role,setRole]=useState(()=>localStorage.getItem(ROLE_KEY)==="admin"?"admin":"tech");
-  const admin=role==="admin";
-  const [demandeAdmin,setDemandeAdmin]=useState(false);
-  function entrer(r){setRole(r);try{localStorage.setItem(ROLE_KEY,r);}catch(e){}}
-  useEffect(()=>{if(!admin&&page==="stats")setPage("dashboard");},[admin,page]);
+  // Accès par personne : la liste vient de la base ; le profil de la personne choisie décide de ce qu'elle voit
+  const chargerAcces=()=>{setErreurAcces(null);lirePersonnes().then(r=>{if(r.liste)setPersonnes(r.liste);else setErreurAcces(r.erreur);});};
+  useEffect(()=>{chargerAcces();},[]);
+  const moi=personnes&&moiId?(personnes.find(p=>p.id===moiId)||null):null;
+  const role=moi?moi.profil:"tech";
+  const admin=role==="admin",commercial=role==="commercial";
+  function choisirPersonne(p){
+    if(p.initiales)setSessionTech(p.initiales);else if(moiId&&moiId!==p.id)setSessionTech(null);
+    setMoiId(p.id);setChangerPers(false);setMenuPersonne(false);
+    try{sessionStorage.setItem(CLE_SESSION,p.id);localStorage.setItem(CLE_DERNIERE,p.id);}catch(e){}
+  }
+  // une page interdite au profil (ex. tableau de bord pour le Commercial) renvoie vers sa page d'accueil
+  useEffect(()=>{if(moi&&!pageAutorisee(page,role))setPage(role==="commercial"?"calendrier":"dashboard");},[role,page,moi]);
   // la liste des fiches sert aussi au tableau de bord et à l'onglet Rapport : on la charge dès l'ouverture de l'appli
   useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{if(Array.isArray(d))setFiches(prev=>prev.length?prev:d);}).catch(()=>{});},[]);
   useEffect(()=>{
-    if(!pinOk)return undefined;
+    if(!moiId)return undefined;
     verifierResumeQuotidien();
     const auRetour=()=>{if(!document.hidden)verifierResumeQuotidien();};
     document.addEventListener("visibilitychange",auRetour);
     const t=setInterval(verifierResumeQuotidien,30*60*1000);
     return()=>{document.removeEventListener("visibilitychange",auRetour);clearInterval(t);};
-  },[pinOk]);
-  if(!pinOk)return <ModalPin onSuccess={r=>{entrer(r);setPinOk(true);}}/>;
-  if(demandeAdmin&&!admin)return <ModalPin seulAdmin titre="Code administrateur" onAnnuler={()=>setDemandeAdmin(false)} onSuccess={r=>{entrer(r);setDemandeAdmin(false);}}/>;
-  const boutonRole=(compact)=><button onClick={admin?()=>entrer("tech"):()=>setDemandeAdmin(true)} title={admin?"Mode administrateur : toucher pour repasser en mode technicien":"Accès administrateur"} style={{background:admin?"rgba(255,255,255,0.25)":"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:12,cursor:"pointer",whiteSpace:"nowrap"}}>{admin?(compact?"🔓":"🔓 Admin"):"🔒"}</button>;
+  },[moiId]);
+  if(personnes===null)return <EcranChargement erreur={erreurAcces} onRetour={chargerAcces}/>;
+  if(personnes.length===0)return <EcranPremierDemarrage codeAdmin={ADMIN_CODE} logo={LOGO_B64} onCree={p=>{setPersonnes([p]);choisirPersonne(p);}}/>;
+  if(!moi||changerPers)return <EcranQui personnes={personnes} derniereId={(()=>{try{return localStorage.getItem(CLE_DERNIERE);}catch(e){return null;}})()} logo={LOGO_B64} titre={changerPers?"Changer de personne":undefined} onChoisir={choisirPersonne} onAnnuler={moi&&changerPers?()=>setChangerPers(false):undefined}/>;
+  const fenetrePersonne=menuPersonne&&<MenuPersonne moi={moi} onChanger={()=>{setMenuPersonne(false);setChangerPers(true);}} onAcces={()=>{setMenuPersonne(false);setMenuOuvert(false);setPage("acces");}} onFermer={()=>setMenuPersonne(false)}/>;
+  const chipPersonne=(compact)=><button onClick={()=>setMenuPersonne(true)} title={nomComplet(moi)+" — "+PROFILS[role].label+" (toucher pour changer de personne)"} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis"}}>{PROFILS[role].icone}{compact?"":" "+nomCourt(moi)}</button>;
   if(MODE_STOCK){
     return(<div style={S.app}>
       <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
         <img src={LOGO_B64} alt="PMV" style={{height:30,objectFit:"contain",borderRadius:4,flexShrink:0}}/>
         <span style={{color:"#fff",fontWeight:700,fontSize:16,marginLeft:10}}>Stock</span>
-        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{boutonRole(true)}<a href="/" style={{color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a></span>
+        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{chipPersonne(true)}<a href="/" style={{color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a></span>
       </div>
-      <PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>
+      {commercial
+        ?<div style={{maxWidth:520,margin:"40px auto",padding:"0 16px",textAlign:"center",color:"#6B7280",fontSize:14}}>Le stock n'est pas accessible avec le profil Commercial.<div style={{marginTop:12}}><button onClick={()=>setChangerPers(true)} style={S.p1}>🔁 Changer de personne</button></div></div>
+        :<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
+      {fenetrePersonne}
     </div>);
   }
 
-  const navItems=NAV_ITEMS.filter(n=>admin||!n.admin);
+  const navItems=navPourRole(role);
 
-  return(<div style={S.app}>
+  return(<LectureCtx.Provider value={commercial}><div style={S.app}>
     {/* ── HEADER ── */}
     <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
       {/* Logo */}
-      <img src={LOGO_B64} alt="PMV" style={{height:isMobile?30:40,objectFit:"contain",borderRadius:4,cursor:"pointer",flexShrink:0}} onClick={()=>{setPage("dashboard");setMenuOuvert(false);}}/>
+      <img src={LOGO_B64} alt="PMV" style={{height:isMobile?30:40,objectFit:"contain",borderRadius:4,cursor:"pointer",flexShrink:0}} onClick={()=>{setPage(commercial?"calendrier":"dashboard");setMenuOuvert(false);}}/>
 
       {/* Onglets — masqués sur mobile */}
       {!isMobile&&<div style={{display:"flex",alignItems:"center",gap:4,flex:1,justifyContent:"center"}}>
@@ -5209,12 +5228,8 @@ export default function App(){
 
       {/* Droite */}
       <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:"auto",flexShrink:0}}>
-        {!isMobile&&boutonRole(false)}
-        <BadgeStockage onClick={()=>setPage("stockage")}/>
-        {!isMobile&&sessionTech&&<>
-          <span title={sessionTech} style={{background:"rgba(255,255,255,0.2)",padding:"3px 10px",borderRadius:5,fontSize:12,fontWeight:700,color:"#fff",maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{sessionTech}</span>
-          <button style={{background:"transparent",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 8px",borderRadius:5,fontSize:11,cursor:"pointer"}} onClick={()=>setSessionTech(null)}>↩</button>
-        </>}
+        {!isMobile&&chipPersonne(false)}
+        {!commercial&&<BadgeStockage onClick={()=>setPage("stockage")}/>}
         {/* Hamburger mobile */}
         {isMobile&&<button onClick={()=>setMenuOuvert(o=>!o)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",width:36,height:36,borderRadius:8,cursor:"pointer",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
           {menuOuvert?"✕":"☰"}
@@ -5232,22 +5247,19 @@ export default function App(){
           {n.id==="commandes"&&badgeCommandes>0&&<span style={{background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeCommandes}</span>}
         </button>
       ))}
-      <button onClick={()=>{if(admin)entrer("tech");else setDemandeAdmin(true);setMenuOuvert(false);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,width:"100%",background:admin?"rgba(255,255,255,0.12)":"transparent",color:"#fff",border:"none",borderTop:"1px solid rgba(255,255,255,0.2)",padding:"14px 20px",fontSize:15,cursor:"pointer",textAlign:"left"}}>
-        <span>{admin?"🔓 Mode administrateur":"🔒 Accès administrateur"}</span>
-        <span style={{fontSize:12,opacity:0.85}}>{admin?"Repasser en technicien":"Saisir le code"}</span>
+      <button onClick={()=>{setMenuPersonne(true);setMenuOuvert(false);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,width:"100%",background:"rgba(255,255,255,0.12)",color:"#fff",border:"none",borderTop:"1px solid rgba(255,255,255,0.2)",padding:"14px 20px",fontSize:15,cursor:"pointer",textAlign:"left"}}>
+        <span style={{minWidth:0,overflowWrap:"anywhere"}}>{PROFILS[role].icone} {nomComplet(moi)}<span style={{display:"block",fontSize:12,opacity:0.85}}>{PROFILS[role].label}</span></span>
+        <span style={{fontSize:12,opacity:0.85,whiteSpace:"nowrap"}}>Changer</span>
       </button>
-      {sessionTech&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 20px",borderTop:"1px solid rgba(255,255,255,0.2)"}}>
-        <span style={{color:"#fff",fontSize:13}}>👤 {sessionTech}</span>
-        <button onClick={()=>{setSessionTech(null);setMenuOuvert(false);}} style={{background:"rgba(255,255,255,0.2)",border:"none",color:"#fff",padding:"5px 12px",borderRadius:6,fontSize:12,cursor:"pointer"}}>↩ Changer</button>
-      </div>}
     </div>}
 
+    {fenetrePersonne}
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
     {page==="dashboard"&&<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Autre"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
-    {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
+    {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{if(commercial)setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
     {page==="suivi"&&(admin
@@ -5260,7 +5272,8 @@ export default function App(){
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
       :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
     {page==="stock"&&<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
-    {page==="calendrier"&&<PageCalendrier admin={admin} sessionTech={sessionTech} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
+    {page==="calendrier"&&<PageCalendrier admin={admin} sessionTech={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="stats"&&admin&&<PageStats fiches={fiches} pieces={pieces}/>}
-  </div>);
+    {page==="acces"&&admin&&<PageAcces personnes={personnes} techs={techs} moi={moi} onEnregistre={l=>setPersonnes(l)} onRetour={()=>setPage("dashboard")}/>}
+  </div></LectureCtx.Provider>);
 }

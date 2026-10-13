@@ -1,4 +1,5 @@
-import React, {useState, useRef} from "react";
+import React, {useState, useRef, useContext} from "react";
+import {LectureCtx} from "./Acces";
 import {db} from "./supabase";
 import {genHtml, afficherApercu, telechargerZip} from "./pdfUtils";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
@@ -76,6 +77,7 @@ async function chargerFiche(f){
 
 // ── Liste en dossiers ──
 function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,onSupprimee}){
+  const lecture=useContext(LectureCtx);
   const [ouvert,setOuvert]=useState(false);
   const [photos,setPhotos]=useState(null);
   const [ajout,setAjout]=useState(false);const [cat,setCat]=useState("");
@@ -168,14 +170,14 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
     </div>
     {ouvert&&<div style={{padding:"10px 12px",background:"#fff",borderRadius:"0 0 8px 8px",border:"1px solid #E2E6EA",borderTop:"none"}}>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
-        <button type="button" style={BTN} onClick={()=>onOuvrir(f)}>📝 Ouvrir fiche</button>
+        {!lecture&&<button type="button" style={BTN} onClick={()=>onOuvrir(f)}>📝 Ouvrir fiche</button>}
         <button type="button" style={BTN_O} disabled={occupe==="apercu"} onClick={apercu}>{occupe==="apercu"?"…":"👁 Aperçu"}</button>
-        <button type="button" style={BTN_O} onClick={()=>onDupliquer(f)}>📋 Dupliquer</button>
+        {!lecture&&<button type="button" style={BTN_O} onClick={()=>onDupliquer(f)}>📋 Dupliquer</button>}
         <button type="button" style={BTN_O} disabled={occupe==="zip"} onClick={zip}>{occupe==="zip"?"…":"📥 ZIP + PDF"}</button>
-        <button type="button" style={BTN_O} onClick={basculerRecup}>{recup?"↩ Remettre en attente":"✅ Marquer récupéré"}</button>
-        <button type="button" style={BTN_O} onClick={()=>setAjout(!ajout)}>📷 Ajouter photo</button>
-        <button type="button" style={{...BTN_O,color:"#E8720C",borderColor:"#E8720C"}} onClick={()=>setConfP(true)}>🗑 Suppr. photos</button>
-        <button type="button" style={BTN_R} onClick={()=>setConfF(true)}>🗑 Suppr. fiche</button>
+        {!lecture&&<button type="button" style={BTN_O} onClick={basculerRecup}>{recup?"↩ Remettre en attente":"✅ Marquer récupéré"}</button>}
+        {!lecture&&<button type="button" style={BTN_O} onClick={()=>setAjout(!ajout)}>📷 Ajouter photo</button>}
+        {!lecture&&<button type="button" style={{...BTN_O,color:"#E8720C",borderColor:"#E8720C"}} onClick={()=>setConfP(true)}>🗑 Suppr. photos</button>}
+        {!lecture&&<button type="button" style={BTN_R} onClick={()=>setConfF(true)}>🗑 Suppr. fiche</button>}
       </div>
       {erreur&&<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#D73A49",marginBottom:8}}>{erreur}</div>}
       {ajout&&<div {...depotProps} style={{background:TEINTE.fond,border:"1px solid "+TEINTE.bord,borderRadius:8,padding:"10px 12px",marginBottom:10,...styleDepot(survolDepot)}}>
@@ -203,7 +205,7 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
       <ConfirmerSuppressionPhoto photo={photoASuppr} occupe={supprEnCours} onConfirmer={supprimerUnePhoto} onAnnuler={()=>setPhotoASuppr(null)} styleBouton={BTN_O} styleBoutonDanger={BTN_R}/>
       {photos&&photos.length>0&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(72px,1fr))",gap:6,marginTop:6}}>
         {photos.map((p,i)=>(<div key={p.id||i} style={{position:"relative",cursor:"pointer"}} onClick={()=>window.open(p.url,"_blank")}>
-          <CroixPhoto onClick={()=>setPhotoASuppr(p)}/>
+          {!lecture&&<CroixPhoto onClick={()=>setPhotoASuppr(p)}/>}
           <img src={p.url} alt={p.categorie_nom||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA"}}/>
           {p.categorie_nom&&<div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",color:"#fff",fontSize:8,padding:"2px 3px",borderRadius:"0 0 6px 6px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.categorie_nom}</div>}
         </div>))}
@@ -244,6 +246,7 @@ function ChDossierClient({client,fiches,...reste}){
 }
 
 export function ListeChantier({fiches,setFiches,loading,categories,champsPour,etapes,onNouvelle,onOuvrir,onDupliquer}){
+  const lecture=useContext(LectureCtx);
   const [q,setQ]=useState("");const [filtre,setFiltre]=useState("tous");
   const qq=q.trim().toLowerCase();
   const filtrees=fiches.filter(f=>{
@@ -261,7 +264,7 @@ export function ListeChantier({fiches,setFiches,loading,categories,champsPour,et
         <h1 style={{fontSize:22,fontWeight:800,margin:0,color:COULEUR_CHANTIER}}>Fiches chantier</h1>
         <p style={{fontSize:13,color:"#6B7280",margin:"3px 0 0"}}>{new Set(fiches.map(f=>f.client||"Sans client")).size} client{new Set(fiches.map(f=>f.client||"Sans client")).size>1?"s":""} · {fiches.length} fiche{fiches.length>1?"s":""}</p>
       </div>
-      <button type="button" style={{...BTN,fontSize:14,padding:"9px 18px"}} onClick={onNouvelle}>+ Nouvelle fiche</button>
+      {!lecture&&<button type="button" style={{...BTN,fontSize:14,padding:"9px 18px"}} onClick={onNouvelle}>+ Nouvelle fiche</button>}
     </div>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16,display:"flex",gap:10,flexWrap:"wrap",alignItems:"center"}}>
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={{...INP,flex:1,minWidth:160}}/>

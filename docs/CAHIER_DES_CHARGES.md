@@ -27,8 +27,8 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 
 - **Aucun débordement horizontal** à 320, 360, 390, 768, 900, 1280 et 1366 px de large, dans les deux rôles (technicien et administrateur), avec et sans technicien choisi.
   Sur iPhone, un seul élément trop large dézoome toute la page.
-- En-tête : barre d'onglets complète seulement à partir de **1430 px** ; en dessous, menu ☰. Chaque nouvel onglet élargit la barre : après en avoir ajouté un, remesurer le pire cas (administrateur + technicien au long nom) et ajuster ce seuil (`isMobile` et le décalage de l'en-tête de fiche chantier dans `App.js`).
-  Le bouton de rôle (🔒 / 🔓 Admin) est dans le menu ☰ sur téléphone/tablette ; l'en-tête de `/stock/` n'a que l'icône.
+- En-tête : barre d'onglets complète seulement à partir de **1360 px** ; en dessous, menu ☰. Chaque nouvel onglet élargit la barre : après en avoir ajouté un, remesurer le pire cas (administrateur au nom très long) et ajuster ce seuil (`isMobile` et le décalage de l'en-tête de fiche chantier dans `App.js`).
+  La pastille de la personne connectée est dans l'en-tête (ordinateur), la ligne « personne » en haut du menu ☰ (téléphone / tablette) ; l'en-tête de `/stock/` n'a que l'icône.
   Le badge de stockage se compacte sous 380 px (« Gérer » masqué) puis 340 px (barre masquée).
   Le nom du technicien dans l'en-tête est tronqué (110 px max) avec le nom complet en info-bulle.
 - Une règle globale `@media (pointer: coarse)` agrandit boutons et champs (≈ 44-47 px) sur écran tactile : en tenir compte pour tout élément placé dans l'en-tête ou dans une ligne serrée.
@@ -50,23 +50,34 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
    const e=[...document.querySelectorAll("div")].find(d=>d.style.position==="sticky"&&d.style.top==="0px"&&d.querySelector("img"));
    ({W,pageDebordante:document.documentElement.scrollWidth>W,entete:e.getBoundingClientRect().width+" / "+e.scrollWidth})
    ```
-4. Cas le plus chargé de l'en-tête (PC) : administrateur + technicien choisi avec un long nom, au seuil de la barre complète (1430 px) et un pixel en dessous.
+4. Cas le plus chargé de l'en-tête (PC) : administrateur + technicien choisi avec un long nom, au seuil de la barre complète (1360 px) et un pixel en dessous.
 5. Remettre le navigateur de test dans son état initial (rôle, brouillon, taille de fenêtre) et ne laisser aucune donnée de test dans la base.
 
 ## 4. Accès et rôles
 
-- Deux codes seulement : **technicien** (restreint) et **administrateur** (tout). Pas de comptes personnels ni de SSO (décision de l'utilisateur).
-- Le rôle est mémorisé sur l'appareil. Bouton 🔒 / 🔓 : dans l'en-tête sur grand écran, dans le menu ☰ sur téléphone/tablette, icône seule dans `/stock/`.
-- Limite assumée et à rappeler si on la remet en cause : barrière d'interface uniquement, la base reste accessible avec la clé anonyme.
+- **Plus de code** : à chaque ouverture, l'appli demande « Qui ouvre l'application ? » (liste Nom Prénom, recherche si plus de 6 personnes, bouton « Continuer : <dernière personne> »). Le **profil de la personne** choisie décide de ce qu'elle voit : Administrateur, Technicien ou Commercial. Le choix est gardé pour la session (un rechargement ne redemande pas), la fermeture de l'appli le redemande.
+- **Changer de personne** : pastille de la personne dans l'en-tête (ordinateur) ou ligne en haut du menu ☰ (téléphone / tablette) → fenêtre « Changer de personne » ; l'administrateur y trouve aussi « Gérer les accès ». Même mécanisme dans l'écran /stock/.
+- **Liste des personnes** : base `parametres_app`, clé `acces_personnes` (JSON : id, nom, prénom, profil, initiales). Gérée dans l'écran « Accès » (administrateur) : ajout un par un ou par lot (« Nom Prénom » par ligne), changement de profil, initiales (celles des techniciens existants, pour préremplir « qui a fait la fiche »), retrait ; au moins un administrateur doit rester, on ne peut pas se retirer soi-même.
+- **Première utilisation** (aucune personne enregistrée) : écran qui demande le code administrateur historique (une seule fois, constante `ADMIN_CODE` de `App.js`) puis le nom et le prénom du premier administrateur.
+- Une personne qui a des initiales n'a plus à les donner à chaque nouvelle fiche ; l'ancienne pastille « initiales du technicien » de l'en-tête a disparu.
+- **Limite à rappeler** : sans code, l'accès repose sur le choix du nom ; quiconque ouvre l'adresse du site peut se choisir. Barrière d'interface uniquement, la base reste accessible avec la clé publique de l'appli. Le dépôt GitHub est public.
 
-| Zone | Technicien | Administrateur |
-|---|---|---|
-| Onglet Stats | non | oui |
-| Onglet Matériel | « Mes demandes » en lecture seule (par personne choisie), aucune action | traitement complet des demandes (à commander / commandé…), origines, alerte mail |
-| Stock | seulement Sortie / Entrée + opérateur | tout : inventaire, niveaux, catalogue, À renouveler, import Excel, étiquettes, recherche, outils, derniers mouvements |
-| Tableau de bord | sans le bloc de traitement | complet |
-| Demande de matériel | oui | oui |
-| Fiches atelier / chantier, planning, rapports | oui | oui |
+| Zone | Technicien | Administrateur | Commercial |
+|---|---|---|---|
+| Tableau de bord | sans le bloc de traitement | complet | non (arrive sur Calendrier) |
+| Fiche Atelier / Fiche Chantier | création et modification | idem | **lecture seule** : liste, aperçu, ZIP + PDF ; ni création, ni modification, ni photos, ni suppression, ni statut |
+| Planning | déplacement des cartes, statuts | idem | lecture seule (carte → aperçu) |
+| Rapport | oui | oui | oui |
+| Calendrier | oui | oui + stock de départ | oui |
+| Suivi de devis clients | non | oui (à construire) | oui (à construire) |
+| Matériel | « Mes demandes » en lecture seule | traitement complet, origines, alerte mail | non |
+| Stock | Sortie / Entrée + opérateur | tout | non |
+| Stats | non | oui | non |
+| Accès | non | oui | non |
+| Demande de matériel | oui | oui | non |
+
+- Ordre des onglets du Commercial : Calendrier, Devis (quand il existera), Fiche Atelier, Fiche Chantier, Planning, Rapport. Son accueil est le Calendrier.
+- Le Commercial ne voit pas la jauge de stockage de l'en-tête.
 
 ## 5. Fiche Atelier
 
