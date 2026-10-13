@@ -1622,6 +1622,16 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
     setExportBusy(null);
   }
 
+  // l'export a déjà été fait ailleurs : on retire simplement la notification (même marqueur que l'export)
+  async function dejaExporte(f){
+    setExportBusy(f.id);
+    try{
+      await db.upsert("fiche_valeurs",{fiche_id:f.id,champ_id:"__export_nas",valeur:"fait"},"fiche_id,champ_id");
+      setDelaisMap(p=>({...p,[f.id]:{...p[f.id],__export_nas:"fait"}}));
+    }catch(e){}
+    setExportBusy(null);
+  }
+
   const ligneFiche=(f,detail)=>(
     <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #F3D9A8",borderRadius:6,padding:"8px 10px",marginBottom:6}}>
       <div style={{fontSize:12,minWidth:0}}>
@@ -1702,11 +1712,14 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
     </>)}
 
     {fichesAExporter.length>0&&section("📦 Fiches terminées à exporter ("+fichesAExporter.length+")","#0D9488","#F0FDFA",<>
-      <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>Téléchargez le ZIP puis déposez-le sur le NAS depuis l'ordinateur.</div>
+      <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>Téléchargez le ZIP puis déposez-le sur le NAS depuis l'ordinateur. Si c'est déjà fait, touchez « Déjà fait » pour retirer la fiche de cette liste.</div>
       {fichesAExporter.map(f=>(
         <div key={f.id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"#fff",border:"1px solid #99F6E4",borderRadius:6,padding:"8px 10px",marginBottom:6}}>
           <div style={{fontSize:12,minWidth:0}}><strong>{f.de}</strong> — {f.client||"—"}</div>
-          <button onClick={()=>exporterFiche(f)} disabled={exportBusy===f.id} style={{...S.p1,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap",opacity:exportBusy===f.id?0.6:1}}>{exportBusy===f.id?"⏳ …":"📦 Exporter en ZIP"}</button>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"flex-end"}}>
+            <button onClick={()=>dejaExporte(f)} disabled={exportBusy===f.id} style={{...S.p2,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap",opacity:exportBusy===f.id?0.6:1}}>✓ Déjà fait</button>
+            <button onClick={()=>exporterFiche(f)} disabled={exportBusy===f.id} style={{...S.p1,fontSize:11,padding:"5px 10px",whiteSpace:"nowrap",opacity:exportBusy===f.id?0.6:1}}>{exportBusy===f.id?"⏳ …":"📦 Exporter en ZIP"}</button>
+          </div>
         </div>
       ))}
     </>)}
