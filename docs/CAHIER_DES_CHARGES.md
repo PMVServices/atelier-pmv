@@ -70,7 +70,7 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 | Planning | déplacement des cartes, statuts | idem | lecture seule (carte → aperçu) |
 | Rapport | oui | oui | oui |
 | Calendrier | oui | oui + stock de départ | oui |
-| Suivi clients (devis) | non | non | oui, **lui seul** |
+| Suivi clients (relance devis + prospection) | non | non | oui, **lui seul** |
 | Matériel | « Mes demandes » en lecture seule | traitement complet, origines, alerte mail | non |
 | Stock | Sortie / Entrée + opérateur | tout | non |
 | Stats | non | oui | non |
@@ -130,13 +130,30 @@ Modèle de référence : le rapport « DE7591 Rapport d'entretien » de PMV (7 p
 - **Compteur de stock** (en haut de la page, pour l'édition choisie) : grands et petits restants sur le stock de départ, avec barre (orange sous 20 %, rouge au-delà du stock). Stock de départ de l'édition en cours : **100 grands et 180 petits** ; modifiable par l'administrateur (« Stock de départ »), rangé dans `parametres_app` (clé `calendrier_stock_<édition>` = « grands,petits »). Une autre édition sans stock saisi affiche seulement les quantités données ; « Toutes » masque le compteur. Le formulaire annonce le stock restant après l'enregistrement et prévient si on dépasse le stock.
 - Liste : barre de recherche (client, contact, date, mois, mots dans le désordre, sans accents), filtre par édition, regroupement par client avec totaux grands / petits, date et personne qui a noté, suppression d'une ligne avec confirmation.
 
-## 6 quater. Suivi clients — devis (profil Commercial uniquement)
+## 6 quater. Suivi clients — relance devis et prospection (profil Commercial uniquement)
 
-- Table Supabase `suivi_devis` (SQL dans `SQL_SUIVI_DEVIS`, `src/SuiviClients.js`, à coller une fois ; tant qu'elle manque, l'onglet affiche l'écran d'activation). Visible et chargé **uniquement pour le profil Commercial**.
+- Onglet « Suivi clients » à **deux sous-onglets** : **Relance devis** (ouvert par défaut) et **Prospection**. Chaque sous-onglet porte une pastille rouge = nombre de relances en retard. À l'ouverture, la page tombe sur Prospection seulement s'il n'y a aucune relance de devis en retard mais au moins une relance de prospect.
+- Tables Supabase `suivi_devis` et `suivi_prospects` : **un seul SQL à coller** (`SQL_SUIVI_CLIENTS` = `SQL_SUIVI_DEVIS` + `SQL_PROSPECTS`, `src/SuiviClients.js`, rejouable sans risque). Tant qu'une table manque, le sous-onglet concerné affiche l'écran d'activation. Visible et chargé **uniquement pour le profil Commercial**.
+
+### Relance devis
+
 - Une ligne = un devis : **N° de DE** (normalisé « DE1234 » ; si une fiche atelier ou chantier porte ce DE, son client est proposé), **client** (liste des clients existante, ajout possible), **contact** (carnet de contacts existant ; ajout d'une nouvelle personne avec son numéro et son mail ; téléphone et mail repris du carnet), objet, montant HT, date du devis, statut (À envoyer, Envoyé — en attente, Accepté, Refusé, Sans suite), commentaire, historique.
 - **Relance** : soit une **date précise**, soit un **délai** (jours, semaines ou mois à partir de la date du devis, ex. 8 semaines), soit aucune. Quand la date est atteinte ou dépassée, la ligne passe en rouge (orange le jour même), l'onglet affiche une pastille avec le nombre de relances à faire et le tableau de bord du Commercial liste ces relances (visible aussi sur téléphone).
 - « ✓ Relancé » : note facultative, la prochaine relance reprend le même délai (modifiable) ; chaque relance et chaque changement de statut est gardé dans l'historique de la ligne.
 - Tableau interactif (ordinateur) ou cartes (téléphone) : recherche, filtre par statut, tri (relance, client, date, montant), statut modifiable directement, appel téléphonique et mail de relance préremplis en un geste, export CSV de la liste affichée, indicateurs (à relancer, en attente avec montant total, acceptés avec taux de réponses positives, refusés).
+
+### Prospection
+
+- Deux listes dans le même tableau (filtre par tuile ou par « Afficher ») : **À démarcher** (entreprises à aller voir : nom, secteur d'activité, potentiel de travail, contact facultatif) et **Démarchés** (entreprise déjà contactée : contact, téléphone, mail, date du démarchage, **relance par date ou par délai**, 4 semaines proposées). Boutons « ➕ À démarcher » et « ➕ Déjà démarché ».
+- **Nom d'entreprise** : proposé à partir de la liste des clients existante ; un nom qui n'y figure pas porte l'étiquette **Prospect** (sinon « Client »). Un prospect n'est PAS ajouté à la liste des clients des fiches.
+- Contact : carnet de contacts existant (ajout possible avec téléphone et mail) ; téléphone et mail repris du carnet. Secteur : suggestions tirées des secteurs déjà saisis.
+- Statuts : À démarcher → **Démarché** (bouton « ✓ Démarché » : note + date ou délai de relance) → Devenu client / Pas intéressé. « ✓ Relancé » : note + prochaine relance (mêmes règles que les devis) ; tout est gardé dans l'historique. Repasser un prospect en « À démarcher » efface sa relance.
+- Relance : même code couleur que les devis (rouge en retard, orange aujourd'hui, jaune sous 7 jours, vert au-delà) ; seuls les prospects « Démarché » sont suivis. Recherche, tri (relance, entreprise, secteur, dernier ajouté), export CSV, appel et mail de relance préremplis. Tableau à partir de 1000 px, cartes en dessous.
+
+### Notifications du Commercial
+
+- Calculées à l'ouverture de l'appli (et au chargement de la page) en comparant les dates de relance à la date du jour ; aucune notification poussée, aucun mail, rien quand l'appli est fermée.
+- Où elles apparaissent : pastille rouge sur l'onglet « Suivi clients » (devis + prospects en retard ou à faire aujourd'hui), pastille sur chaque sous-onglet, bloc « Relances à faire » du tableau de bord (devis et prospects, avec appel et mail en un geste), lignes rouges ou orange dans les tableaux, bouton « prospects à démarcher » sur le tableau de bord.
 
 ## 7. Matériel à commander
 

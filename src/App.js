@@ -7,7 +7,7 @@ import PageStock, {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
 import PageCalendrier from "./Calendrier";
-import {useSuiviDevis, PageSuiviClients, DashboardCommercial} from "./SuiviClients";
+import {useSuiviClients, PageSuiviClients, DashboardCommercial} from "./SuiviClients";
 import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
@@ -5201,7 +5201,7 @@ export default function App(){
   const admin=role==="admin",commercial=role==="commercial";
   const demanderQui=useCallback(cb=>setDemandeQui({cb}),[]);
   const ctxPersonne=React.useMemo(()=>({moi,demander:demanderQui}),[moi,demanderQui]);
-  const suivi=useSuiviDevis(commercial&&!!moi); // suivi des devis clients : chargé seulement pour le profil Commercial
+  const suivi=useSuiviClients(commercial&&!!moi); // suivi clients (devis + prospection) : chargé seulement pour le profil Commercial
   function choisirPersonne(p){
     if(p.initiales)setSessionTech(p.initiales);else if(moiId&&moiId!==p.id)setSessionTech(null);
     setMoiId(p.id);setChangerPers(false);setMenuPersonne(false);
@@ -5259,7 +5259,7 @@ export default function App(){
             {n.label}
             {n.id==="planning"&&devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{devisCount}</span>}
             {admin&&n.id==="suivi"&&badgeMateriel>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeMateriel}</span>}
-            {n.id==="devis"&&suivi.aRelancer.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#D73A49",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{suivi.aRelancer.length}</span>}
+            {n.id==="devis"&&suivi.nbAlertes>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#D73A49",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{suivi.nbAlertes}</span>}
             {n.id==="commandes"&&badgeCommandes>0&&<span style={{position:"absolute",top:-4,right:-4,background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeCommandes}</span>}
           </button>
         ))}
@@ -5283,7 +5283,7 @@ export default function App(){
           <span>{n.label}</span>
           {n.id==="planning"&&devisCount>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{devisCount}</span>}
           {admin&&n.id==="suivi"&&badgeMateriel>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeMateriel}</span>}
-          {n.id==="devis"&&suivi.aRelancer.length>0&&<span style={{background:"#D73A49",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{suivi.aRelancer.length}</span>}
+          {n.id==="devis"&&suivi.nbAlertes>0&&<span style={{background:"#D73A49",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{suivi.nbAlertes}</span>}
           {n.id==="commandes"&&badgeCommandes>0&&<span style={{background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeCommandes}</span>}
         </button>
       ))}
@@ -5313,7 +5313,7 @@ export default function App(){
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
       :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
     {page==="stock"&&<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
-    {page==="devis"&&commercial&&<PageSuiviClients suivi={suivi} fiches={fiches} par={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
+    {page==="devis"&&commercial&&<PageSuiviClients suivi={suivi} fiches={fiches} clients={clients} par={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="calendrier"&&<PageCalendrier admin={admin} sessionTech={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="stats"&&admin&&<PageStats fiches={fiches} pieces={pieces}/>}
     {page==="acces"&&admin&&<PageAcces personnes={personnes} techs={techs} moi={moi} onEnregistre={l=>setPersonnes(l)} onRetour={()=>setPage("dashboard")}/>}
