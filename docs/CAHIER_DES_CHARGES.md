@@ -27,7 +27,7 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 
 - **Aucun débordement horizontal** à 320, 360, 390, 768, 900, 1280 et 1366 px de large, dans les deux rôles (technicien et administrateur), avec et sans technicien choisi.
   Sur iPhone, un seul élément trop large dézoome toute la page.
-- En-tête : barre d'onglets complète seulement à partir de **1360 px** ; en dessous, menu ☰. Chaque nouvel onglet élargit la barre : après en avoir ajouté un, remesurer le pire cas (administrateur au nom très long) et ajuster ce seuil (`isMobile` et le décalage de l'en-tête de fiche chantier dans `App.js`).
+- En-tête : barre d'onglets complète seulement à partir de **1400 px** ; en dessous, menu ☰. Chaque nouvel onglet élargit la barre : après en avoir ajouté un, remesurer le pire cas (administrateur au nom très long) et ajuster ce seuil (`isMobile` et le décalage de l'en-tête de fiche chantier dans `App.js`).
   La pastille de la personne connectée est dans l'en-tête (ordinateur), la ligne « personne » en haut du menu ☰ (téléphone / tablette) ; l'en-tête de `/stock/` n'a que l'icône.
   Le badge de stockage se compacte sous 380 px (« Gérer » masqué) puis 340 px (barre masquée).
   Le nom du technicien dans l'en-tête est tronqué (110 px max) avec le nom complet en info-bulle.
@@ -50,7 +50,7 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
    const e=[...document.querySelectorAll("div")].find(d=>d.style.position==="sticky"&&d.style.top==="0px"&&d.querySelector("img"));
    ({W,pageDebordante:document.documentElement.scrollWidth>W,entete:e.getBoundingClientRect().width+" / "+e.scrollWidth})
    ```
-4. Cas le plus chargé de l'en-tête (PC) : administrateur + technicien choisi avec un long nom, au seuil de la barre complète (1360 px) et un pixel en dessous.
+4. Cas le plus chargé de l'en-tête (PC) : administrateur + technicien choisi avec un long nom, au seuil de la barre complète (1400 px) et un pixel en dessous.
 5. Remettre le navigateur de test dans son état initial (rôle, brouillon, taille de fenêtre) et ne laisser aucune donnée de test dans la base.
 
 ## 4. Accès et rôles
@@ -70,14 +70,15 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 | Planning | déplacement des cartes, statuts | idem | lecture seule (carte → aperçu) |
 | Rapport | oui | oui | oui |
 | Calendrier | oui | oui + stock de départ | oui |
-| Suivi clients (relance devis + prospection) | non | non | oui, **lui seul** |
-| Matériel | « Mes demandes » en lecture seule | traitement complet, origines, alerte mail | non |
+| Suivi clients (relance devis, prospection, RDV, devis refusés) | non | non | oui, **lui seul** |
+| Clients (fiche client, lecture seule) | non | oui | oui |
+| Matériel | « Mes demandes » en lecture seule | traitement complet, origines, alertes mail (matériel + résumé du commercial) | non |
 | Stock | Sortie / Entrée + opérateur | tout | non |
 | Stats | non | oui | non |
 | Accès | non | oui | non |
 | Demande de matériel | oui | oui | non |
 
-- Ordre des onglets du Commercial : Tableau de bord, **Suivi clients**, Calendrier, Fiche Atelier, Fiche Chantier, Planning, Rapport. Son accueil est son tableau de bord.
+- Ordre des onglets du Commercial : Tableau de bord, **Suivi clients**, **Clients**, Calendrier, Fiche Atelier, Fiche Chantier, Planning, Rapport. Son accueil est son tableau de bord.
 - Le Commercial ne voit pas la jauge de stockage de l'en-tête.
 
 ## 5. Fiche Atelier
@@ -130,17 +131,30 @@ Modèle de référence : le rapport « DE7591 Rapport d'entretien » de PMV (7 p
 - **Compteur de stock** (en haut de la page, pour l'édition choisie) : grands et petits restants sur le stock de départ, avec barre (orange sous 20 %, rouge au-delà du stock). Stock de départ de l'édition en cours : **100 grands et 180 petits** ; modifiable par l'administrateur (« Stock de départ »), rangé dans `parametres_app` (clé `calendrier_stock_<édition>` = « grands,petits »). Une autre édition sans stock saisi affiche seulement les quantités données ; « Toutes » masque le compteur. Le formulaire annonce le stock restant après l'enregistrement et prévient si on dépasse le stock.
 - Liste : barre de recherche (client, contact, date, mois, mots dans le désordre, sans accents), filtre par édition, regroupement par client avec totaux grands / petits, date et personne qui a noté, suppression d'une ligne avec confirmation.
 
-## 6 quater. Suivi clients — relance devis et prospection (profil Commercial uniquement)
+## 6 quater. Suivi clients — relance devis, prospection, RDV, devis refusés (profil Commercial uniquement)
 
-- Onglet « Suivi clients » à **deux sous-onglets** : **Relance devis** (ouvert par défaut) et **Prospection**. Chaque sous-onglet porte une pastille rouge = nombre de relances en retard. À l'ouverture, la page tombe sur Prospection seulement s'il n'y a aucune relance de devis en retard mais au moins une relance de prospect.
-- Tables Supabase `suivi_devis` et `suivi_prospects` : **un seul SQL à coller** (`SQL_SUIVI_CLIENTS` = `SQL_SUIVI_DEVIS` + `SQL_PROSPECTS`, `src/SuiviClients.js`, rejouable sans risque). Tant qu'une table manque, le sous-onglet concerné affiche l'écran d'activation. Visible et chargé **uniquement pour le profil Commercial**.
+- Onglet « Suivi clients » à **quatre sous-onglets** : **Relance devis** (ouvert par défaut), **Prospection**, **RDV**, **Devis refusés**. Les trois premiers portent une pastille rouge (relances en retard / RDV d'aujourd'hui ou passés non clôturés). À l'ouverture, la page tombe sur le premier sous-onglet qui a une alerte (devis, puis RDV, puis prospection), sinon sur Relance devis.
+- Tables Supabase `suivi_devis`, `suivi_prospects` et `suivi_rdv` : **un seul SQL à coller** (`SQL_SUIVI_CLIENTS` = `SQL_SUIVI_DEVIS` + `SQL_PROSPECTS` + `SQL_RDV`, `src/SuiviClients.js`, rejouable sans risque, met aussi à jour une base qui avait l'ancienne version : colonne `motif_refus`). Tant qu'une table manque (ou que la colonne `motif_refus` manque), le sous-onglet concerné affiche l'écran d'activation. Visible et chargé pour le Commercial ; chargé aussi pour l'administrateur (fiche client, lecture seule).
 
 ### Relance devis
 
 - Une ligne = un devis : **N° de DE** (normalisé « DE1234 » ; si une fiche atelier ou chantier porte ce DE, son client est proposé), **client** (liste des clients existante, ajout possible), **contact** (carnet de contacts existant ; ajout d'une nouvelle personne avec son numéro et son mail ; téléphone et mail repris du carnet), objet, montant HT, date du devis, statut (À envoyer, Envoyé — en attente, Accepté, Refusé, Sans suite), commentaire, historique.
 - **Relance** : soit une **date précise**, soit un **délai** (jours, semaines ou mois à partir de la date du devis, ex. 8 semaines), soit aucune. Quand la date est atteinte ou dépassée, la ligne passe en rouge (orange le jour même), l'onglet affiche une pastille avec le nombre de relances à faire et le tableau de bord du Commercial liste ces relances (visible aussi sur téléphone).
 - « ✓ Relancé » : note facultative, la prochaine relance reprend le même délai (modifiable) ; chaque relance et chaque changement de statut est gardé dans l'historique de la ligne.
-- Tableau interactif (ordinateur) ou cartes (téléphone) : recherche, filtre par statut, tri (relance, client, date, montant), statut modifiable directement, appel téléphonique et mail de relance préremplis en un geste, export CSV de la liste affichée, indicateurs (à relancer, en attente avec montant total, acceptés avec taux de réponses positives, refusés).
+- Tableau interactif (à partir de 1000 px) ou cartes (téléphone, tablette portrait) : recherche, filtre par statut, tri (relance, client, date, montant), statut modifiable directement, appel téléphonique et mail de relance préremplis en un geste, export CSV de la liste affichée, indicateurs (à relancer, en attente avec montant total, acceptés avec taux de réponses positives, refusés).
+- **Lien avec les fiches** : si une fiche atelier porte le même N° de DE, un lien « 📂 fiche atelier » l'ouvre (lecture seule) et le retour ramène au même sous-onglet ; le nom du client ouvre sa fiche client.
+- Les devis **Refusé** et **Sans suite** ne figurent plus dans « Relance devis » (la tuile « Refusés » renvoie vers leur sous-onglet).
+
+### Devis refusés
+
+- Passer un devis en Refusé ou Sans suite (liste déroulante du statut) ouvre une fenêtre qui demande le **motif** (obligatoire : prix trop élevé, délai trop long, concurrent retenu, pas de budget / projet reporté, projet abandonné, plus de réponse, autre) et une précision facultative ; le tout va dans l'historique et la colonne `motif_refus`. Le formulaire d'un devis propose aussi le motif.
+- Sous-onglet : liste (tableau ≥ 1000 px, cartes sinon), puces de filtre par motif avec effectifs, recherche, nombre de devis et montant refusé, « ↩ Remettre en suivi » (statut Envoyé, relance dans 4 semaines), modification, suppression.
+
+### RDV
+
+- Table `suivi_rdv` : date, heure, entreprise (client ou prospect, même champ que la prospection), contact (carnet), téléphone, mail, lieu (lien vers la carte), objet, statut (Prévu, Fait, Annulé), compte rendu.
+- Tuiles : À venir (dont aujourd'hui), À clôturer (prévu mais date passée), Faits, Annulés ; « ✓ Fait » demande un compte rendu facultatif. Ouvert par défaut sur « À clôturer » s'il y en a. Un RDV d'aujourd'hui ou passé non clôturé compte dans la pastille de l'onglet.
+- Le tableau de bord du Commercial liste les RDV d'aujourd'hui, de demain et à clôturer.
 
 ### Prospection
 
@@ -152,8 +166,15 @@ Modèle de référence : le rapport « DE7591 Rapport d'entretien » de PMV (7 p
 
 ### Notifications du Commercial
 
-- Calculées à l'ouverture de l'appli (et au chargement de la page) en comparant les dates de relance à la date du jour ; aucune notification poussée, aucun mail, rien quand l'appli est fermée.
-- Où elles apparaissent : pastille rouge sur l'onglet « Suivi clients » (devis + prospects en retard ou à faire aujourd'hui), pastille sur chaque sous-onglet, bloc « Relances à faire » du tableau de bord (devis et prospects, avec appel et mail en un geste), lignes rouges ou orange dans les tableaux, bouton « prospects à démarcher » sur le tableau de bord.
+- Dans l'appli : calculées à l'ouverture (et au chargement de la page) en comparant les dates à la date du jour ; aucune notification poussée, rien quand l'appli est fermée.
+- Où elles apparaissent : pastille rouge sur l'onglet « Suivi clients » (devis + prospects en retard ou à faire aujourd'hui + RDV d'aujourd'hui ou passés), pastille sur chaque sous-onglet, blocs « Relances à faire » et « Rendez-vous » du tableau de bord (avec appel en un geste), lignes rouges ou orange dans les tableaux, bouton « prospects à démarcher ».
+- **Résumé du matin par mail** (voir § 9) : relances de devis et de prospection en retard ou du jour, RDV d'aujourd'hui, de demain et passés à clôturer, relances des 7 prochains jours, nombre d'entreprises à démarcher.
+
+## 6 quinquies. Clients (profils Commercial et Administrateur, lecture seule)
+
+- Onglet « Clients » : liste de tous les clients (liste des clients des fiches + noms rencontrés dans devis, fiches, calendriers, prospection, RDV), recherche par nom ou N° de DE, filtre (tous / suivi en cours / prospects seulement), 60 par page ; étiquette Client ou Prospect ; dernière activité.
+- **Fiche d'un client** : tout ce que l'appli sait de lui, sans saisie supplémentaire (elle « s'approvisionne » toute seule) : contacts (carnet rattaché à la société, contacts des devis, des fiches atelier et chantier, des calendriers, de la prospection et des RDV, avec téléphone et mail et l'origine de chaque contact), devis suivis (statut, relance, motif de refus, lien vers la fiche atelier), fiches atelier (ouverture en lecture seule, retour sur la fiche client), fiches chantier, calendriers remis, prospection, rendez-vous.
+- Rapprochement par **nom de client identique** (sans accents ni majuscules) ; les contacts du carnet sont rattachés par la société (même règle que l'onglet Calendrier). Aucune table de plus : `src/Clients.js` lit les données existantes. Le nom d'un client dans le suivi clients (devis, RDV, prospection) ouvre sa fiche.
 
 ## 7. Matériel à commander
 
@@ -174,6 +195,7 @@ Modèle de référence : le rapport « DE7591 Rapport d'entretien » de PMV (7 p
 - Réglages (Matériel > Alerte mail, mode administrateur) : activé, jours (défaut lun-ven), heure (défaut 07:30), adresse, service, modèle, clé publique — saisis par l'utilisateur lui-même.
 - Envoi par la première ouverture de l'appli après l'heure réglée, une fois par jour tous appareils confondus, seulement s'il y a quelque chose à signaler (à commander / à renouveler / stock sous le minimum). Aucun mail si personne n'ouvre l'appli ce jour-là.
 - Bouton « Envoyer le résumé maintenant » pour tester.
+- **Résumé du matin du Commercial** (`src/ResumeCommercial.js`) : second résumé, **à une autre adresse** (réglage « Résumé du matin pour le commercial », page Matériel, administrateur), mêmes règles (un seul par jour, jours et heure réglables, première ouverture de l'appli après l'heure, tous appareils et tous profils confondus, rien si rien à faire), **même compte EmailJS** que l'alerte matériel (service, modèle, clé publique à renseigner une fois dans le bloc des alertes matériel). Clés `parametres_app` : `resume_commercial_actif`, `_adresse`, `_jours`, `_heure`, `_dernier`. Contenu : relances de devis et de prospection à faire, RDV d'aujourd'hui et de demain, RDV passés à clôturer, relances des 7 jours, nombre d'entreprises à démarcher. Aucun mail si personne n'ouvre l'appli ce jour-là.
 
 ## 10. Contacts
 

@@ -8,6 +8,8 @@ import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
 import PageCalendrier from "./Calendrier";
 import {useSuiviClients, PageSuiviClients, DashboardCommercial} from "./SuiviClients";
+import PageClients, {ouvrirClient} from "./Clients";
+import {PanneauResumeCommercial, verifierResumeCommercial} from "./ResumeCommercial";
 import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
@@ -2952,7 +2954,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(deAff||"de")+"/"+typeEquipement.replace(/[^a-z0-9]/gi,"_");
 
   return(<div style={{paddingBottom:80}}>
-    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<1360?52:56,zIndex:90}}>
+    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<1400?52:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div style={{minWidth:0,flex:largeur<600?"1 1 100%":"0 1 auto"}}>
           <p style={{margin:0,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:largeur<600?"nowrap":"normal"}}>{(v.ch_client||"Client")+" / "+(deAff||"DE")+" / "+(v.ch_eq_nom||typeEquipement)}</p>
@@ -5066,6 +5068,7 @@ function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel,p
   if(disponible===false)return <NoticeTablesMateriel onVerifier={recharger}/>;
   return(<div>
     <PanneauAlerteMail/>
+    <PanneauResumeCommercial/>
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
       {[["tous","Tout ("+(demandes.length+pAct.length)+")"],["commander","À commander ("+nC+")"],["renouveler","À renouveler ("+nR+")"],["historique","Historique"]].map(([id,lib])=>(
         <button key={id} onClick={()=>setFiltre(id)} style={{border:"1.5px solid "+(filtre===id?"#1B4F8A":"#D1D5DB"),background:filtre===id?"#EEF4FF":"#fff",color:filtre===id?"#1B4F8A":"#4B5563",borderRadius:20,padding:"6px 14px",fontSize:12,fontWeight:600,cursor:"pointer"}}>{lib}</button>
@@ -5110,11 +5113,12 @@ const NAV_ITEMS=[
   {id:"stock",label:"🗃 Stock",roles:PROFILS_INTERNES},
   {id:"calendrier",label:"🗓 Calendrier",roles:TOUS_PROFILS},
   {id:"devis",label:"📞 Suivi clients",roles:["commercial"]},
+  {id:"clients",label:"👥 Clients",roles:["admin","commercial"]},
   {id:"stats",label:"📊 Stats",roles:["admin"]},
 ];
 // Ordre des onglets du profil Commercial (le suivi clients passe avant tout le reste)
-const ORDRE_COMMERCIAL=["dashboard","devis","calendrier","accueil","chantier","planning","rapport"];
-const PAGES_COMMERCIAL=["dashboard","devis","calendrier","accueil","chantier","planning","rapport","fiche"];
+const ORDRE_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport"];
+const PAGES_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","fiche"];
 function navPourRole(role){
   const l=NAV_ITEMS.filter(n=>n.roles.includes(role));
   return role==="commercial"?l.sort((a,b)=>ORDRE_COMMERCIAL.indexOf(a.id)-ORDRE_COMMERCIAL.indexOf(b.id)):l;
@@ -5122,7 +5126,7 @@ function navPourRole(role){
 function pageAutorisee(page,role){
   if(role==="admin")return true;
   if(role==="commercial")return PAGES_COMMERCIAL.includes(page);
-  return page!=="stats"&&page!=="acces"&&page!=="devis";
+  return page!=="stats"&&page!=="acces"&&page!=="devis"&&page!=="clients";
 }
 
 // Mode "Stock seul" (adresse /stock/, utilisée par l'icône PMV Stock du téléphone) : une seule page, sans menu.
@@ -5134,6 +5138,7 @@ export default function App(){
   const [moiId,setMoiId]=useState(()=>{try{return sessionStorage.getItem(CLE_SESSION)||null;}catch(e){return null;}});
   const [changerPers,setChangerPers]=useState(false);const [menuPersonne,setMenuPersonne]=useState(false);
   const [demandeQui,setDemandeQui]=useState(null); // {cb} : « qui utilise l'application ? » demandé par une fiche
+  const [retourFiche,setRetourFiche]=useState("accueil"); // page où revenir en quittant une fiche ouverte depuis le suivi clients ou la fiche client
   const [page,setPage]=useState(()=>loadDraft()?"fiche":"dashboard");const [sessionTech,setSessionTech]=useState(()=>loadDraft()?.sessionTech||null);const [ficheOuverte,setFicheOuverte]=useState(()=>{const d=loadDraft();return d?{id:d.ficheId,de:d.v?.de,client:d.v?.client,materiel_lieu:d.v?.materiel_lieu,type_materiel:d.typeMateriel,statut_chantier:d.statutChantier,etape_active:d.actif,etapes_validees:d.validees}:null;});const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState(()=>loadDraft()?.typeMateriel||"Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);const [rapportFicheId,setRapportFicheId]=useState(null);const [seedValeurs,setSeedValeurs]=useState(null);
 
   useEffect(()=>{
@@ -5144,6 +5149,7 @@ export default function App(){
   },[]);
 
   function onAddClient(nom){setClients(prev=>[...prev,nom].sort());}
+  function ouvrirFicheDepuis(fiche,retour){setRetourFiche(retour);setFicheOuverte(fiche);setPage("fiche");}
   async function dupliquerFiche(f){
     const type=f.type_materiel||"Moteur";
     const idsIdentite=champsIdentitePour(type);
@@ -5191,7 +5197,7 @@ export default function App(){
   function voirMaterielCommandes(){setPage("suivi");}
 
   const width=useWidth();
-  const isMobile=width<1360; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
+  const isMobile=width<1400; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
   const [menuOuvert,setMenuOuvert]=useState(false);
   // Accès par personne : la liste vient de la base ; le profil de la personne choisie décide de ce qu'elle voit
   const chargerAcces=()=>{setErreurAcces(null);lirePersonnes().then(r=>{if(r.liste)setPersonnes(r.liste);else setErreurAcces(r.erreur);});};
@@ -5201,7 +5207,7 @@ export default function App(){
   const admin=role==="admin",commercial=role==="commercial";
   const demanderQui=useCallback(cb=>setDemandeQui({cb}),[]);
   const ctxPersonne=React.useMemo(()=>({moi,demander:demanderQui}),[moi,demanderQui]);
-  const suivi=useSuiviClients(commercial&&!!moi); // suivi clients (devis + prospection) : chargé seulement pour le profil Commercial
+  const suivi=useSuiviClients((commercial||admin)&&!!moi); // suivi clients (devis, prospection, rendez-vous) : chargé pour le Commercial et l'administrateur (fiche client)
   function choisirPersonne(p){
     if(p.initiales)setSessionTech(p.initiales);else if(moiId&&moiId!==p.id)setSessionTech(null);
     setMoiId(p.id);setChangerPers(false);setMenuPersonne(false);
@@ -5213,10 +5219,11 @@ export default function App(){
   useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{if(Array.isArray(d))setFiches(prev=>prev.length?prev:d);}).catch(()=>{});},[]);
   useEffect(()=>{
     if(!moiId)return undefined;
-    verifierResumeQuotidien();
-    const auRetour=()=>{if(!document.hidden)verifierResumeQuotidien();};
+    const verifier=()=>{verifierResumeQuotidien();verifierResumeCommercial();};
+    verifier();
+    const auRetour=()=>{if(!document.hidden)verifier();};
     document.addEventListener("visibilitychange",auRetour);
-    const t=setInterval(verifierResumeQuotidien,30*60*1000);
+    const t=setInterval(verifier,30*60*1000);
     return()=>{document.removeEventListener("visibilitychange",auRetour);clearInterval(t);};
   },[moiId]);
   if(!pinOk)return <EcranCode code={PIN_CODE} logo={LOGO_B64} onSucces={()=>setPinOk(true)}/>;
@@ -5299,7 +5306,7 @@ export default function App(){
     {page==="dashboard"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Autre"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
-    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
+    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{if(commercial)setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
@@ -5313,7 +5320,8 @@ export default function App(){
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
       :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
     {page==="stock"&&<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
-    {page==="devis"&&commercial&&<PageSuiviClients suivi={suivi} fiches={fiches} clients={clients} par={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
+    {page==="clients"&&(admin||commercial)&&<PageClients clients={clients} fiches={fiches} suivi={suivi} onOuvrirFiche={fi=>ouvrirFicheDepuis(fi,"clients")}/>}
+    {page==="devis"&&commercial&&<PageSuiviClients onOuvrirFiche={fi=>ouvrirFicheDepuis(fi,"devis")} onOuvrirClient={nom=>ouvrirClient(nom,setPage)} suivi={suivi} fiches={fiches} clients={clients} par={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="calendrier"&&<PageCalendrier admin={admin} sessionTech={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="stats"&&admin&&<PageStats fiches={fiches} pieces={pieces}/>}
     {page==="acces"&&admin&&<PageAcces personnes={personnes} techs={techs} moi={moi} onEnregistre={l=>setPersonnes(l)} onRetour={()=>setPage("dashboard")}/>}
