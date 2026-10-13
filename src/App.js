@@ -7,7 +7,7 @@ import PageStock, {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
 import PageCalendrier from "./Calendrier";
-import {LectureCtx, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE} from "./Acces";
+import {LectureCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
@@ -16,8 +16,9 @@ const LOGO_B64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgM
 // LOGO_B64 moved to pdfUtils.js
 // LOGO_B64 is in pdfUtils.js;
 
-// Accès par personne (voir Acces.js) : plus de code à chaque ouverture, l'appli demande qui ouvre.
-// Ce code administrateur ne sert plus qu'à créer le premier administrateur, tant qu'aucune personne n'est enregistrée.
+// Accès : le code de l'appareil (PIN_CODE) n'est demandé qu'une seule fois par appareil ; ensuite l'appli demande seulement qui ouvre (voir Acces.js).
+// ADMIN_CODE ne sert plus qu'à créer le premier administrateur, tant qu'aucune personne n'est enregistrée.
+const PIN_CODE="3739";
 const ADMIN_CODE="2401";
 // Suivi des commandes fournisseurs (colonnes, AR PDF, relances, statistiques, dossier surveillé) : désactivé.
 // Tout le code et toutes les données (table commandes_fournisseurs…) sont conservés : pour le remettre, passer à true.
@@ -5102,6 +5103,7 @@ function pageAutorisee(page,role){
 const MODE_STOCK=typeof window!=="undefined"&&(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search));
 
 export default function App(){
+  const [pinOk,setPinOk]=useState(()=>{try{return localStorage.getItem(CLE_PIN)==="1";}catch(e){return false;}});
   const [personnes,setPersonnes]=useState(null);const [erreurAcces,setErreurAcces]=useState(null);
   const [moiId,setMoiId]=useState(()=>{try{return sessionStorage.getItem(CLE_SESSION)||null;}catch(e){return null;}});
   const [changerPers,setChangerPers]=useState(false);const [menuPersonne,setMenuPersonne]=useState(false);
@@ -5187,6 +5189,7 @@ export default function App(){
     const t=setInterval(verifierResumeQuotidien,30*60*1000);
     return()=>{document.removeEventListener("visibilitychange",auRetour);clearInterval(t);};
   },[moiId]);
+  if(!pinOk)return <EcranCode code={PIN_CODE} logo={LOGO_B64} onSucces={()=>setPinOk(true)}/>;
   if(personnes===null)return <EcranChargement erreur={erreurAcces} onRetour={chargerAcces}/>;
   if(personnes.length===0)return <EcranPremierDemarrage codeAdmin={ADMIN_CODE} logo={LOGO_B64} onCree={p=>{setPersonnes([p]);choisirPersonne(p);}}/>;
   if(!moi||changerPers)return <EcranQui personnes={personnes} derniereId={(()=>{try{return localStorage.getItem(CLE_DERNIERE);}catch(e){return null;}})()} logo={LOGO_B64} titre={changerPers?"Changer de personne":undefined} onChoisir={choisirPersonne} onAnnuler={moi&&changerPers?()=>setChangerPers(false):undefined}/>;

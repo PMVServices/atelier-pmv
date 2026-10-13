@@ -14,6 +14,7 @@ export const LectureCtx=React.createContext(false); // vrai pour le profil Comme
 
 const CLE="acces_personnes";
 const CACHE="pmv_acces_cache";
+export const CLE_PIN="pmv_pin_ok";            // appareil déverrouillé (code demandé une seule fois par appareil)
 export const CLE_SESSION="pmv_moi";            // personne choisie pour cette ouverture (sessionStorage)
 export const CLE_DERNIERE="pmv_derniere_personne"; // dernière personne sur cet appareil (localStorage)
 
@@ -42,8 +43,8 @@ export async function ecrirePersonnes(liste){
   try{localStorage.setItem(CACHE,JSON.stringify(liste));}catch(e){}
 }
 
-const OVERLAY={position:"fixed",inset:0,background:"#1B4F8A",display:"flex",alignItems:"center",justifyContent:"center",zIndex:999,padding:16,overflowY:"auto"};
-const CARTE={background:"#fff",borderRadius:16,padding:"26px 22px",width:"100%",maxWidth:400,boxShadow:"0 8px 40px rgba(0,0,0,0.3)",boxSizing:"border-box"};
+const OVERLAY={position:"fixed",inset:0,background:"#1B4F8A",display:"flex",zIndex:999,padding:8,overflowY:"auto",boxSizing:"border-box"};
+const CARTE={background:"#fff",borderRadius:16,padding:"26px 22px",width:"100%",maxWidth:400,boxShadow:"0 8px 40px rgba(0,0,0,0.3)",boxSizing:"border-box",margin:"auto"};
 const INP={width:"100%",padding:"10px 12px",borderRadius:8,border:"1.5px solid #D1D5DB",fontSize:15,boxSizing:"border-box",background:"#fff"};
 const LBL={display:"block",fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase",letterSpacing:".04em",marginBottom:4};
 const BTN1={background:"#1B4F8A",color:"#fff",border:"none",padding:"10px 18px",borderRadius:8,fontWeight:700,fontSize:14,cursor:"pointer"};
@@ -56,6 +57,32 @@ export function EcranChargement({erreur,onRetour}){
   </div></div>);
 }
 
+// ── code de l'appareil (une seule fois par appareil) ───────────────────
+export function EcranCode({code,logo,onSucces}){
+  const [s,setS]=useState("");const [err,setErr]=useState(false);
+  function tap(c){
+    if(s.length>=4)return;
+    const n=s+c;setS(n);
+    if(n.length===4){
+      if(n===code){try{localStorage.setItem(CLE_PIN,"1");}catch(e){}onSucces();}
+      else{setErr(true);setTimeout(()=>{setS("");setErr(false);},800);}
+    }
+  }
+  const touches=["1","2","3","4","5","6","7","8","9","","0","⌫"];
+  return(<div style={OVERLAY}><div style={{...CARTE,maxWidth:300,textAlign:"center",padding:"28px 24px"}}>
+    {logo&&<img src={logo} alt="PMV Services" style={{height:56,marginBottom:10,objectFit:"contain"}}/>}
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 6px"}}>Code de l'appareil</p>
+    <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 16px"}}>Demandé une seule fois sur cet appareil.</p>
+    <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:20}}>
+      {[0,1,2,3].map(i=><div key={i} style={{width:16,height:16,borderRadius:"50%",background:s.length>i?(err?"#D73A49":"#1B4F8A"):"#E2E6EA",transition:"background 0.15s"}}/>)}
+    </div>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
+      {touches.map((t,i)=>t===""?<div key={i}/>:<button key={i} type="button" onClick={()=>t==="⌫"?setS(ss=>ss.slice(0,-1)):tap(t)} style={{padding:"14px",fontSize:18,fontWeight:600,borderRadius:10,border:"1.5px solid #E2E6EA",background:t==="⌫"?"#F5F6F8":"#fff",cursor:"pointer",color:t==="⌫"?"#6B7280":"#1A1A2E"}}>{t}</button>)}
+    </div>
+    {err&&<p style={{color:"#D73A49",fontSize:13,marginTop:12,fontWeight:600}}>Code incorrect</p>}
+  </div></div>);
+}
+
 // ── « Qui ouvre l'application ? » ──────────────────────────────────────
 export function EcranQui({personnes,derniereId,onChoisir,onAnnuler,titre,logo}){
   const [q,setQ]=useState("");
@@ -63,23 +90,23 @@ export function EcranQui({personnes,derniereId,onChoisir,onAnnuler,titre,logo}){
   const mots=norm(q).split(" ").filter(Boolean);
   const liste=tri.filter(p=>{const h=norm(nomComplet(p));return mots.every(m=>h.includes(m));});
   const derniere=personnes.find(p=>p.id===derniereId);
-  return(<div style={OVERLAY}><div style={CARTE}>
-    <div style={{textAlign:"center",marginBottom:14}}>
-      {logo&&<img src={logo} alt="PMV Services" style={{height:54,objectFit:"contain",marginBottom:8}}/>}
-      <div style={{fontSize:18,fontWeight:800,color:"#1A1A2E"}}>{titre||"Qui ouvre l'application ?"}</div>
+  return(<div style={OVERLAY}><div style={{...CARTE,maxWidth:760,padding:"14px 12px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:12}}>
+      {logo&&<img src={logo} alt="PMV Services" style={{height:38,objectFit:"contain"}}/>}
+      <div style={{fontSize:19,fontWeight:800,color:"#1A1A2E"}}>{titre||"Qui ouvre l'application ?"}</div>
     </div>
-    {derniere&&!q&&<button type="button" onClick={()=>onChoisir(derniere)} style={{...BTN1,width:"100%",background:"#22863A",marginBottom:12,textAlign:"left"}}>
-      Continuer : {nomComplet(derniere)}<div style={{fontSize:11,fontWeight:400,opacity:0.9}}>{PROFILS[derniere.profil].label}</div>
+    {derniere&&!q&&<button type="button" onClick={()=>onChoisir(derniere)} style={{...BTN1,width:"100%",background:"#22863A",marginBottom:10,textAlign:"left",minHeight:54}}>
+      Continuer : {nomComplet(derniere)}<span style={{fontSize:12,fontWeight:400,opacity:0.9}}> · {PROFILS[derniere.profil].label}</span>
     </button>}
-    {tri.length>6&&<input type="search" value={q} onChange={e=>setQ(e.target.value)} placeholder="Rechercher un nom…" style={{...INP,marginBottom:10}} autoComplete="off"/>}
-    <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:"46vh",overflowY:"auto"}}>
-      {liste.map(p=>(<button key={p.id} type="button" onClick={()=>onChoisir(p)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,background:"#F8F9FA",border:"1.5px solid #E2E6EA",borderRadius:10,padding:"11px 14px",cursor:"pointer",textAlign:"left",color:"#1A1A2E",fontSize:15}}>
-        <span style={{fontWeight:600,overflowWrap:"anywhere"}}>{nomComplet(p)}</span>
-        <span style={{fontSize:11,color:"#6B7280",whiteSpace:"nowrap"}}>{PROFILS[p.profil].icone} {PROFILS[p.profil].label}</span>
+    {tri.length>24&&<input type="search" value={q} onChange={e=>setQ(e.target.value)} placeholder="Rechercher un nom…" style={{...INP,marginBottom:10}} autoComplete="off"/>}
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(132px,1fr))",gap:8}}>
+      {liste.map(p=>(<button key={p.id} type="button" onClick={()=>onChoisir(p)} title={PROFILS[p.profil].label} style={{display:"flex",alignItems:"center",gap:8,background:"#F3F6FA",border:"1.5px solid #D6E0EE",borderRadius:10,padding:"6px 8px",minHeight:52,cursor:"pointer",textAlign:"left",color:"#1A1A2E",fontSize:14,fontWeight:600,lineHeight:1.2,overflowWrap:"anywhere"}}>
+        <span style={{flex:"none",fontSize:15}}>{PROFILS[p.profil].icone}</span>
+        <span style={{minWidth:0}}>{nomComplet(p)}</span>
       </button>))}
-      {liste.length===0&&<div style={{textAlign:"center",fontSize:13,color:"#9CA3AF",padding:12}}>Aucun nom ne correspond.</div>}
     </div>
-    {onAnnuler&&<div style={{textAlign:"center",marginTop:14}}><button type="button" onClick={onAnnuler} style={{background:"none",border:"none",color:"#6B7280",fontSize:13,cursor:"pointer",textDecoration:"underline"}}>Annuler</button></div>}
+    {liste.length===0&&<div style={{textAlign:"center",fontSize:13,color:"#9CA3AF",padding:12}}>Aucun nom ne correspond.</div>}
+    {onAnnuler&&<div style={{textAlign:"center",marginTop:12}}><button type="button" onClick={onAnnuler} style={{background:"none",border:"none",color:"#6B7280",fontSize:13,cursor:"pointer",textDecoration:"underline"}}>Annuler</button></div>}
   </div></div>);
 }
 

@@ -55,12 +55,13 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 
 ## 4. Accès et rôles
 
-- **Plus de code** : à chaque ouverture, l'appli demande « Qui ouvre l'application ? » (liste Nom Prénom, recherche si plus de 6 personnes, bouton « Continuer : <dernière personne> »). Le **profil de la personne** choisie décide de ce qu'elle voit : Administrateur, Technicien ou Commercial. Le choix est gardé pour la session (un rechargement ne redemande pas), la fermeture de l'appli le redemande.
+- **Code de l'appareil** (`PIN_CODE` dans `App.js`) : demandé **une seule fois par appareil**, puis mémorisé (`pmv_pin_ok`) ; ensuite l'appli demande seulement qui ouvre.
+- **« Qui ouvre l'application ? »** à chaque ouverture : tous les noms (Nom Prénom) visibles d'un coup en boutons larges (grille, sans défilement interne tant que la liste tient à l'écran, recherche au-delà de 24 personnes), bouton « Continuer : <dernière personne> » en tête. Le **profil de la personne** choisie décide de ce qu'elle voit : Administrateur, Technicien ou Commercial. Le choix est gardé pour la session (un rechargement ne redemande pas), la fermeture de l'appli le redemande.
 - **Changer de personne** : pastille de la personne dans l'en-tête (ordinateur) ou ligne en haut du menu ☰ (téléphone / tablette) → fenêtre « Changer de personne » ; l'administrateur y trouve aussi « Gérer les accès ». Même mécanisme dans l'écran /stock/.
 - **Liste des personnes** : base `parametres_app`, clé `acces_personnes` (JSON : id, nom, prénom, profil, initiales). Gérée dans l'écran « Accès » (administrateur) : ajout un par un ou par lot (« Nom Prénom » par ligne), changement de profil, initiales (celles des techniciens existants, pour préremplir « qui a fait la fiche »), retrait ; au moins un administrateur doit rester, on ne peut pas se retirer soi-même.
 - **Première utilisation** (aucune personne enregistrée) : écran qui demande le code administrateur historique (une seule fois, constante `ADMIN_CODE` de `App.js`) puis le nom et le prénom du premier administrateur.
 - Une personne qui a des initiales n'a plus à les donner à chaque nouvelle fiche ; l'ancienne pastille « initiales du technicien » de l'en-tête a disparu.
-- **Limite à rappeler** : sans code, l'accès repose sur le choix du nom ; quiconque ouvre l'adresse du site peut se choisir. Barrière d'interface uniquement, la base reste accessible avec la clé publique de l'appli. Le dépôt GitHub est public.
+- **Limite à rappeler** : le code de l'appareil protège l'entrée, mais il est commun et visible dans le code du site ; ensuite l'accès repose sur le choix du nom. Barrière d'interface uniquement, la base reste accessible avec la clé publique de l'appli. Le dépôt GitHub est public.
 
 | Zone | Technicien | Administrateur | Commercial |
 |---|---|---|---|
