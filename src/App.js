@@ -1568,6 +1568,7 @@ function PageStats({fiches,pieces}){
 
 // ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
 function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemandeMateriel,onVoirMateriel,onOuvrirFiche,onNaviguer}){
+  const telephone=useWidth()<600; // sur téléphone : raccourcis seulement, les notifications restent sur tablette et ordinateur
   const [delaisMap,setDelaisMap]=useState({});
   const [exportBusy,setExportBusy]=useState(null);
   useEffect(()=>{
@@ -1659,6 +1660,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
       })}
     </div>
 
+    {!telephone&&<>
     {rienASignaler&&<div style={{textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
 
     {(nbMat>0||listeDEReco.length>0)&&section("🔧 Matériel ("+(nbMat+piecesAReco.length)+")","#1B4F8A","#EEF4FF",<>
@@ -1708,6 +1710,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
         </div>
       ))}
     </>)}
+    </>}
   </div>);
 }
 

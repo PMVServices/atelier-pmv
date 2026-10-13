@@ -34,6 +34,7 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 - Une règle globale `@media (pointer: coarse)` agrandit boutons et champs (≈ 44-47 px) sur écran tactile : en tenir compte pour tout élément placé dans l'en-tête ou dans une ligne serrée.
 - Fiche chantier/atelier : champs courts rangés par deux seulement à partir de 600 px (`grilleCols`, `useWidth`) ; une colonne en dessous.
   Colonnes de cartes : 1 colonne < 600 px, 2 colonnes de 600 à 899 px, le nombre prévu au-delà.
+- **Tableau de bord** : sur téléphone (moins de 600 px) seuls le bouton « Matériel à commander » et les raccourcis s'affichent ; les notifications (matériel, fiches urgentes, à faire rapidement, devis en attente, commandes, fiches à exporter) s'affichent sur tablette et ordinateur.
 - Pas de texte coupé sans solution (retour à la ligne, défilement dans son propre bloc ou points de suspension).
 
 ### Contrôle avant chaque livraison (obligatoire pour toute modification visible)
