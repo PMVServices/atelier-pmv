@@ -14,8 +14,9 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
   opts=opts||{};
   function esc(x){return String(x).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
   var isPompe=(v._type||v.type_materiel)==="Pompe";
-  var champs=champsData||(isPompe?window.__CHAMPS_POMPE:(v.type_materiel_libre?window.__CHAMPS_AUTRE:window.__CHAMPS))||{};
-  var etapes=etapesData||(isPompe?window.__ETAPES_POMPE:window.__ETAPES)||[];
+  var typeFiche=v._type||v.type_materiel;
+  var champs=champsData||(window.__champsPour?window.__champsPour(typeFiche,v):(isPompe?window.__CHAMPS_POMPE:(v.type_materiel_libre?window.__CHAMPS_AUTRE:window.__CHAMPS)))||{};
+  var etapes=etapesData||(window.__etapesPour?window.__etapesPour(typeFiche,v):(isPompe?window.__ETAPES_POMPE:window.__ETAPES))||[];
 
   // Helpers
   function fmt(id,c){

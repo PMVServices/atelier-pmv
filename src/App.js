@@ -53,6 +53,7 @@ const ETAPE_DECLENCHE_DEVIS={
   "Pompe":"Mécanique pompe au démontage",
   "Moto-réducteur":"Mécanique réducteur au démontage",
   "Autre":"Information matériel au démontage", // même déroulement que le moteur
+  "Ventilateur":"Ventilateur au démontage",
 };
 // Étape de suivi devis/commande, insérée dynamiquement juste après l'étape ci-dessus
 // uniquement quand "Devis / bon de commande nécessaire avant remontage ?" = Oui.
@@ -102,6 +103,7 @@ function champsIdentitePour(typeMateriel){
   if(typeMateriel==="Pompe")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_POMPE);
   if(typeMateriel==="Moto-réducteur")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_REDUCTEUR);
   if(typeMateriel==="Autre")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_AUTRE);
+  if(typeMateriel==="Ventilateur")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_VENTILATEUR);
   return CHAMPS_IDENTITE_COMMUN;
 }
 
@@ -693,7 +695,7 @@ function detecterPieces(v,typeMat){
   if((v.etat_roulement_ar&&mauvais.includes(v.etat_roulement_ar))||v.roulement_ar_change==="Oui")pieces.push({designation:"Roulement arrière moteur",reference:(v.type_roulement_ar||"").replace("Autre:","").trim()});
   ajouterJoints("joint_av","Joint à lèvres avant moteur");
   ajouterJoints("joint_ar","Joint à lèvres arrière moteur");
-  if(v.etat_ventilateur&&mauvais.includes(v.etat_ventilateur))pieces.push({designation:"Ventilateur",reference:v.taille_ventilateur||""});
+  if(v.etat_ventilateur&&mauvais.includes(v.etat_ventilateur))pieces.push({designation:typeMat==="Ventilateur"?"Ventilateur de refroidissement du moteur":"Ventilateur",reference:v.taille_ventilateur||""});
   if(v.etat_bobinage&&mauvais.includes(v.etat_bobinage))pieces.push({designation:"Bobinage stator",reference:""});
   if(v.etat_rotor&&mauvais.includes(v.etat_rotor))pieces.push({designation:"Rotor",reference:""});
   // Spécifique pompe
@@ -711,6 +713,20 @@ function detecterPieces(v,typeMat){
     ajouterJoints("joint_av_p","Joint à lèvres avant pompe");
     ajouterJoints("joint_ar_p","Joint à lèvres arrière pompe");
     if(v.remplacement_jc==="Oui")pieces.push({designation:"Joint de corps",reference:v.matiere_taille_jc||""});
+  }
+  // Spécifique ventilateur
+  if(typeMat==="Ventilateur"){
+    const refRoue=(v.roue_ref_neuve||[v.turbine_diametre&&"Ø"+v.turbine_diametre,v.turbine_hauteur&&"H"+v.turbine_hauteur,v.helice_diametre&&"Ø"+v.helice_diametre,v.rotor_diametre&&"Ø"+v.rotor_diametre].filter(Boolean).join(" ")).trim();
+    if((v.etat_roue&&ETATS_ROUE_A_CHANGER.includes(v.etat_roue))||v.roue_remplacement==="Oui")pieces.push({designation:"Roue / hélice du ventilateur",reference:refRoue});
+    if((v.etat_roulement_av_v&&mauvais.includes(v.etat_roulement_av_v))||v.roulement_av_v_change==="Oui")pieces.push({designation:"Roulement côté entraînement ventilateur",reference:(v.type_roulement_av_v||"").replace("Autre:","").trim()});
+    if((v.etat_roulement_ar_v&&mauvais.includes(v.etat_roulement_ar_v))||v.roulement_ar_v_change==="Oui")pieces.push({designation:"Roulement côté opposé ventilateur",reference:(v.type_roulement_ar_v||"").replace("Autre:","").trim()});
+    ajouterJoints("joint_av_v","Joint à lèvres côté entraînement ventilateur");
+    ajouterJoints("joint_ar_v","Joint à lèvres côté opposé ventilateur");
+    if(v.courroies_changees==="Oui"||(v.etat_courroies&&["Usées","Fissurées","HS"].includes(v.etat_courroies)))pieces.push({designation:"Courroies",reference:[v.nb_courroies&&v.nb_courroies+" ×",(v.profil_courroie||"").replace("Autre:","")].filter(Boolean).join(" ").trim()});
+    if(v.etat_poulie_moteur&&mauvais.includes(v.etat_poulie_moteur))pieces.push({designation:"Poulie moteur",reference:v.diam_poulie_moteur?"Ø"+v.diam_poulie_moteur:""});
+    if(v.etat_poulie_vent&&mauvais.includes(v.etat_poulie_vent))pieces.push({designation:"Poulie ventilateur",reference:v.diam_poulie_vent?"Ø"+v.diam_poulie_vent:""});
+    if(v.accouplement_change==="Oui"||(v.etat_accouplement&&mauvais.includes(v.etat_accouplement)))pieces.push({designation:"Accouplement / élastique",reference:v.type_accouplement||""});
+    if(v.silentblocs_changes==="Oui"||(v.etat_silentblocs&&["Durcis","Écrasés","HS"].includes(v.etat_silentblocs)))pieces.push({designation:"Silentblocs / amortisseurs",reference:""});
   }
   // Spécifique réducteur
   if(typeMat==="Moto-réducteur"){
@@ -1599,6 +1615,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
         db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at"),
       ]);
       const valeurs={};(Array.isArray(valRows)?valRows:[]).forEach(r=>{valeurs[r.champ_id]=r.valeur;});
+      valeurs._type=f.type_materiel||"Moteur";
       const photos=(Array.isArray(photoRows)?photoRows:[]).map(p=>({...p,url:db.photoUrl(p.storage_path)}));
       await telechargerZip(photos,valeurs,(f.de||"fiche")+"_"+(f.client||""));
       await db.upsert("fiche_valeurs",{fiche_id:f.id,champ_id:"__export_nas",valeur:"fait"},"fiche_id,champ_id");
@@ -1924,7 +1941,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
     // Télécharger même sans photos — on passe les valeurs pour le PDF
     const vals=await db.get("fiche_valeurs","?fiche_id=eq."+f.id+"&order=created_at");
     const v=Array.isArray(vals)?Object.fromEntries(vals.map(r=>[r.champ_id,r.valeur])):{};
-    v.de=f.de;v.client=f.client;v.materiel_lieu=f.materiel;
+    v.de=f.de;v.client=f.client;v.materiel_lieu=f.materiel;v._type=f.type_materiel||"Moteur";
     await telechargerZip(phots,v,ch.chemin.replace(/\//g,"_")||f.de);
   }
 
@@ -2087,7 +2104,7 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
 }
 
 function PageChoix({onChoisir,onRetour}){
-  const mats=[{id:"Moteur",emoji:"⚙️",desc:"Moteur électrique seul"},{id:"Pompe",emoji:"💧",desc:"Corps de pompe + moteur"},{id:"Moto-réducteur",emoji:"🔧",desc:"Moto-réducteur complet"},{id:"Autre",titre:"Autre matériel",emoji:"🧰",desc:"Ventilateur, treuil, compresseur… même fiche que le moteur, le type est saisi à la main"}];
+  const mats=[{id:"Moteur",emoji:"⚙️",desc:"Moteur électrique seul"},{id:"Pompe",emoji:"💧",desc:"Corps de pompe + moteur"},{id:"Moto-réducteur",emoji:"🔧",desc:"Moto-réducteur complet"},{id:"Ventilateur",emoji:"🌀",desc:"Ventilateur seul ou avec son moteur (centrifuge, hélicoïde, VMC…)"},{id:"Autre",titre:"Autre matériel",emoji:"🧰",desc:"Treuil, compresseur… même fiche que le moteur, le type est saisi à la main"}];
   return(<div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px"}}><button style={{...S.p2,marginBottom:20}} onClick={onRetour}>← Retour</button><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>Nouvelle fiche — quel matériel ?</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>{mats.map(m=><div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}><div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div><p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.titre||m.id}</p><p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>{m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}</div>)}</div></div>);
 }
 
@@ -2401,14 +2418,243 @@ const CHAMPS_AUTRE=(()=>{
   E.splice(i<0?E.length:i,0,{id:"type_materiel_libre",label:"Type de matériel",type:"text",required:true,note:"à saisir : ventilateur, treuil, compresseur…"});
   return {...CHAMPS,"Entrée":E};
 })();
+// ═══════════════════════════════════════════════════
+// FICHE VENTILATEUR
+// ═══════════════════════════════════════════════════
+// Un ventilateur arrive soit seul, soit avec son moteur. L'étape « Entrée » fixe le type, ce qui est reçu et l'entraînement ;
+// la suite de la fiche s'adapte : pas d'étapes moteur si on ne reçoit que le ventilateur, ni si le moteur est neuf.
+// Un moteur reçu seul se traite avec la fiche Moteur. Le rapport client n'existe pas encore pour le ventilateur.
+const TYPES_VENTILATEUR=["Centrifuge (turbine / roue à aubes)","Hélicoïde","Hélico-centrifuge","Tangentiel","Moto-turbine","VMC","Soufflante","Surpresseur","Autre"];
+const TYPES_VENT_A_TURBINE=["Centrifuge (turbine / roue à aubes)","Hélico-centrifuge","Moto-turbine","VMC","Soufflante","Surpresseur","Autre"];
+const MARQUES_VENTILATEUR=["Soler & Palau","Nicotra Gebhardt","Ziehl-Abegg","ebm-papst","Helios","Systemair","France Air","Aldes","Unelvent","Autre"];
+const MATIERES_VENTILATEUR=["Acier","Acier galvanisé","Inox","Aluminium","Fonte","Plastique (PP)","Composite / fibre","Autre"];
+const ENTRAINEMENTS_VENTILATEUR=["Direct (roue sur l'arbre du moteur)","Poulies et courroies","Accouplement","Moteur intégré au ventilateur","Autre"];
+const SENS_ROTATION_VENTILATEUR=["Horaire (vu côté moteur)","Anti-horaire (vu côté moteur)","Horaire (vu côté aspiration)","Anti-horaire (vu côté aspiration)","Réversible","Non repéré"];
+const ETATS_ROUE_VENTILATEUR=["RAS","Encrassée","Corrodée","Usée / érodée","Voilée / déformée","Pale(s) cassée(s)","HS"];
+const ETATS_ROUE_A_CHANGER=["Corrodée","Usée / érodée","Voilée / déformée","Pale(s) cassée(s)","HS"];
+const PROFILS_COURROIE=["SPZ","SPA","SPB","SPC","XPZ","XPA","Z","A","B","C","Poly-V","Crantée","Autre"];
+// Le type choisi décide des champs de description proposés (« Autre » : les dimensions de turbine, les plus courantes)
+const typeVent=v=>{const t=String(v.type_ventilateur||"");return t.startsWith("Autre")?"Autre":t;};
+const siVentTurbine=v=>TYPES_VENT_A_TURBINE.includes(typeVent(v));
+const siVentHelice=v=>typeVent(v)==="Hélicoïde";
+const siVentTangentiel=v=>typeVent(v)==="Tangentiel";
+const siVentEnsemble=v=>v.recu_ventilateur!=="Ventilateur seul";
+const siVentNeuf=v=>v.ventilateur_neuf==="Oui";
+const siVentAncien=v=>v.ventilateur_neuf!=="Oui";
+const siVentPaliers=v=>siVentAncien(v)&&v.paliers_propres==="Oui";
+const siVentPoulies=v=>siVentAncien(v)&&String(v.entrainement||"").startsWith("Poulies");
+const siVentAccouplement=v=>siVentAncien(v)&&String(v.entrainement||"").startsWith("Accouplement");
+const siVentEssaiAvant=v=>v.essai_vide_avant_v==="Oui";
+const CHAMPS_IDENTITE_VENTILATEUR=["type_ventilateur","recu_ventilateur","entrainement","marque_ventilateur","type_ventilateur_plaque","numero_serie_ventilateur","vitesse_ventilateur","puissance_ventilateur","puissance_ventilateur__unite","debit_ventilateur","pression_ventilateur","sens_rotation","orientation_refoulement","turbine_diametre","turbine_hauteur","turbine_arbre","turbine_matiere","nb_aubes","type_aubes","nb_pales","longueur_pale","helice_diametre","pas_pales","helice_alesage","helice_matiere","rotor_longueur","rotor_diametre","rotor_pales","rotor_matiere","rotor_arbre","grille","grille_diametre","entraxe_fixation","montage_ventilateur","caisson","caisson_longueur","caisson_largeur","caisson_hauteur"];
+
+function etapesVentilateurPour(v){
+  const seul=v&&v.recu_ventilateur==="Ventilateur seul";
+  const moteurNeuf=v&&v.moteur_neuf_debut==="Oui";
+  const e=["Entrée","Description du ventilateur"];
+  if(!seul){e.push("Infos électriques");if(!moteurNeuf)e.push("Rotation avant démontage moteur");}
+  e.push("Rotation avant démontage ventilateur");
+  if(!seul&&!moteurNeuf)e.push("Matériel au démontage moteur");
+  e.push("Ventilateur au démontage","Essais après remontage");
+  return e;
+}
+
+const CHAMPS_VENTILATEUR={
+  "Entrée":[
+    {id:"date_entree",label:"Date d'entrée",type:"date",required:true,groupe:"entree_de"},
+    {id:"client",label:"Client",type:"client",required:true},
+    {id:"depose_nos_soins",label:"Déposé par nos soins",type:"oui_non",required:true,groupe:"depose_pair"},
+    {id:"depose_technicien",label:"Par qui",type:"technicien",required:true,groupe:"depose_pair",condition:{champ:"depose_nos_soins",valeur:"Oui"}},
+    {id:"enleve_nos_soins",label:"Enlevé par nos soins",type:"oui_non",required:true,groupe:"enleve_pair"},
+    {id:"enleve_technicien",label:"Par qui",type:"technicien",required:true,groupe:"enleve_pair",condition:{champ:"enleve_nos_soins",valeur:"Oui"}},
+    {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
+    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair",condition:v=>v.delai_unite!==PAS_DE_DELAI},
+    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois",PAS_DE_DELAI],required:true,groupe:"delai_pair"},
+    {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:true,remplit:{telephone:"telephone",mail:"mail"}},
+    {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
+    {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
+    {id:"materiel_lieu",label:"Matériel / Identification lieux",type:"text",required:true},
+    {id:"type_ventilateur",label:"Type de ventilateur",type:"select",options:TYPES_VENTILATEUR,required:true,autreTexte:true,note:"décide des champs de la description"},
+    {id:"recu_ventilateur",label:"Ce qui est reçu",type:"choix",options:["Moteur + ventilateur","Ventilateur seul"],required:true,note:"un moteur reçu seul se traite avec la fiche Moteur"},
+    {id:"entrainement",label:"Entraînement",type:"select",options:ENTRAINEMENTS_VENTILATEUR,required:true,autreTexte:true},
+    {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true,condition:siVentEnsemble},
+    {id:"marque_moteur",label:"Marque moteur",type:"select",options:MARQUES_MOTEUR,required:true,autreTexte:true,condition:siVentEnsemble},
+    {id:"puissance",label:"Puissance moteur",type:"text",required:true,unite:"kW",unitesChoix:UNITES_PUISSANCE,groupe:"puiss_vit",condition:siVentEnsemble},
+    {id:"vitesse",label:"Vitesse moteur",type:"select",options:["1000","1500","3000","Autre"],required:true,unite:"tr/mn",autreTexte:true,groupe:"puiss_vit",condition:siVentEnsemble},
+    {id:"type_moteur",label:"Type moteur",type:"text",required:true,groupe:"type_serie_moteur",condition:siVentEnsemble},
+    {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:true,groupe:"type_serie_moteur",condition:siVentEnsemble},
+    {id:"fixation",label:"Fixation moteur",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:true,autreTexte:true,condition:siVentEnsemble},
+    {id:"tension",label:"Tension",type:"select",options:["230/400","400/690","Autre"],required:true,unite:"V",autreTexte:true,condition:siVentEnsemble},
+    {id:"devis_necessaire",label:"Devis / bon de commande nécessaire avant remontage ?",type:"oui_non",required:true},
+    {id:"rapport_client",label:"Rapport client demandé ?",type:"oui_non",required:true},
+    {id:"tech_entree",label:"Technicien",type:"technicien",required:true},
+    {id:"demande_client",label:"Demande client",type:"text",required:true,dictee:true},
+  ],
+  "Description du ventilateur":[
+    {id:"marque_ventilateur",label:"Marque du ventilateur",type:"select",options:MARQUES_VENTILATEUR,required:false,autreTexte:true},
+    {id:"type_ventilateur_plaque",label:"Plaque — type / modèle",type:"text",required:false,groupe:"vent_plaque_1"},
+    {id:"numero_serie_ventilateur",label:"Plaque — numéro de série",type:"text",required:false,groupe:"vent_plaque_1"},
+    {id:"vitesse_ventilateur",label:"Plaque — vitesse",type:"text",unite:"tr/mn",required:false,groupe:"vent_plaque_2"},
+    {id:"puissance_ventilateur",label:"Plaque — puissance",type:"text",unite:"kW",unitesChoix:UNITES_PUISSANCE,required:false,groupe:"vent_plaque_2"},
+    {id:"debit_ventilateur",label:"Plaque — débit",type:"text",unite:"m³/h",required:false,groupe:"vent_plaque_3"},
+    {id:"pression_ventilateur",label:"Plaque — pression",type:"text",unite:"Pa",required:false,groupe:"vent_plaque_3"},
+    {id:"sens_rotation",label:"Sens de rotation",type:"select",options:SENS_ROTATION_VENTILATEUR,required:true,autreTexte:true},
+    {id:"orientation_refoulement",label:"Orientation de la sortie / du refoulement",type:"text",required:false,note:"ex : RD 90, LG 180, vers le haut",condition:siVentTurbine},
+    // turbine / roue à aubes (centrifuge, hélico-centrifuge, moto-turbine, VMC, soufflante, surpresseur, autre)
+    {id:"turbine_diametre",label:"Turbine — diamètre",type:"number",unite:"mm",required:false,groupe:"turb_dim1",condition:siVentTurbine},
+    {id:"turbine_hauteur",label:"Turbine — hauteur",type:"number",unite:"mm",required:false,groupe:"turb_dim1",condition:siVentTurbine},
+    {id:"turbine_arbre",label:"Turbine — taille d'arbre (alésage)",type:"number",unite:"mm",required:false,groupe:"turb_dim2",condition:siVentTurbine},
+    {id:"turbine_matiere",label:"Turbine — matière",type:"select",options:MATIERES_VENTILATEUR,required:false,autreTexte:true,groupe:"turb_dim2",condition:siVentTurbine},
+    {id:"nb_aubes",label:"Turbine — nombre d'aubes",type:"number",required:false,groupe:"turb_dim3",condition:siVentTurbine},
+    {id:"type_aubes",label:"Turbine — forme des aubes",type:"select",options:["Courbées vers l'avant","Inclinées vers l'arrière","Radiales","Profil aile","Autre"],required:false,autreTexte:true,groupe:"turb_dim3",condition:siVentTurbine},
+    // hélice (hélicoïde)
+    {id:"nb_pales",label:"Hélice — nombre de pales",type:"number",required:false,groupe:"hel_dim1",condition:siVentHelice},
+    {id:"longueur_pale",label:"Hélice — longueur des pales",type:"number",unite:"mm",required:false,groupe:"hel_dim1",condition:siVentHelice},
+    {id:"helice_diametre",label:"Hélice — diamètre hors tout",type:"number",unite:"mm",required:false,groupe:"hel_dim2",condition:siVentHelice},
+    {id:"pas_pales",label:"Hélice — pas / inclinaison des pales",type:"text",unite:"°",required:false,groupe:"hel_dim2",condition:siVentHelice},
+    {id:"helice_alesage",label:"Hélice — alésage du moyeu",type:"number",unite:"mm",required:false,groupe:"hel_dim3",condition:siVentHelice},
+    {id:"helice_matiere",label:"Hélice — matière",type:"select",options:MATIERES_VENTILATEUR,required:false,autreTexte:true,groupe:"hel_dim3",condition:siVentHelice},
+    // tangentiel
+    {id:"rotor_longueur",label:"Rotor — longueur",type:"number",unite:"mm",required:false,groupe:"rot_dim1",condition:siVentTangentiel},
+    {id:"rotor_diametre",label:"Rotor — diamètre",type:"number",unite:"mm",required:false,groupe:"rot_dim1",condition:siVentTangentiel},
+    {id:"rotor_pales",label:"Rotor — nombre de pales",type:"number",required:false,groupe:"rot_dim2",condition:siVentTangentiel},
+    {id:"rotor_matiere",label:"Rotor — matière",type:"select",options:MATIERES_VENTILATEUR,required:false,autreTexte:true,groupe:"rot_dim2",condition:siVentTangentiel},
+    {id:"rotor_arbre",label:"Rotor — taille d'axe / d'arbre",type:"number",unite:"mm",required:false,condition:siVentTangentiel},
+    // fixation, protection, caisson
+    {id:"grille",label:"Grille de protection",type:"oui_non",required:false,groupe:"vent_grille"},
+    {id:"grille_diametre",label:"Diamètre de la grille",type:"number",unite:"mm",required:false,groupe:"vent_grille",condition:{champ:"grille",valeur:"Oui"}},
+    {id:"entraxe_fixation",label:"Entraxe de fixation",type:"text",unite:"mm",required:false,note:"ex : 4 trous, 200 × 200"},
+    {id:"montage_ventilateur",label:"Montage",type:"select",options:["Sur pattes / châssis","Sur bride / virole","Suspendu","Sur silentblocs","Sur plaque avec le moteur","Autre"],required:false,autreTexte:true},
+    {id:"caisson",label:"Dans un caisson",type:"oui_non",required:true},
+    {id:"caisson_longueur",label:"Caisson — longueur",type:"number",unite:"mm",required:false,groupe:"caisson_dim",condition:{champ:"caisson",valeur:"Oui"}},
+    {id:"caisson_largeur",label:"Caisson — largeur",type:"number",unite:"mm",required:false,groupe:"caisson_dim",condition:{champ:"caisson",valeur:"Oui"}},
+    {id:"caisson_hauteur",label:"Caisson — hauteur",type:"number",unite:"mm",required:false,groupe:"caisson_dim",condition:{champ:"caisson",valeur:"Oui"}},
+    {id:"description_libre",label:"Autres caractéristiques / particularités",type:"text",required:false,dictee:true},
+  ],
+  // moteur : on reprend les étapes de la fiche Pompe (mêmes champs, mêmes mesures) ; « moteur neuf » dès les infos électriques
+  "Infos électriques":[CHAMP_MOTEUR_NEUF_DEBUT,...CHAMPS_POMPE["Infos électriques"].map(masquerSiMoteurNeufDebut)],
+  "Rotation avant démontage moteur":CHAMPS_POMPE["Rotation avant démontage moteur"],
+  "Rotation avant démontage ventilateur":[
+    {id:"essai_vide_avant_v",label:"Essai en marche possible",type:"select",options:["Oui","Non"],required:true},
+    {id:"essai_vide_avant_v_pourquoi",label:"Pourquoi essai en marche impossible",type:"text",required:true,dictee:true,condition:{champ:"essai_vide_avant_v",valeur:"Non"}},
+    {id:"sens_constate_avant",label:"Sens de rotation constaté",type:"select",options:["Correct","Inversé","Non vérifiable"],required:true,condition:siVentEssaiAvant},
+    {id:"bruit_avant_v",label:"Bruit constaté",type:"select",options:["RAS","Roulements","Frottement","Balourd / vibrations","Courroies","Sifflement","Autre"],required:true,autreTexte:true,condition:siVentEssaiAvant},
+    {id:"int_p1_avant_v",label:"Intensité Phase 1",type:"mesure",unite:"A",required:false,groupe:"int_avant_v",condition:v=>siVentEnsemble(v)&&siVentEssaiAvant(v)},
+    {id:"int_p2_avant_v",label:"Intensité Phase 2",type:"mesure",unite:"A",required:false,groupe:"int_avant_v",condition:v=>siVentEnsemble(v)&&siVentEssaiAvant(v)},
+    {id:"int_p3_avant_v",label:"Intensité Phase 3",type:"mesure",unite:"A",required:false,groupe:"int_avant_v",condition:v=>siVentEnsemble(v)&&siVentEssaiAvant(v)},
+    {id:"vib_v_av_mms_avant",label:"Vibration palier côté entraînement — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_v_avant",condition:siVentEssaiAvant},
+    {id:"vib_v_av_ge_avant",label:"Vibration palier côté entraînement — GE",type:"mesure",unite:"GE",required:false,groupe:"vib_v_avant",condition:siVentEssaiAvant},
+    {id:"vib_v_ar_mms_avant",label:"Vibration palier côté opposé — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_v_arriere",condition:siVentEssaiAvant},
+    {id:"vib_v_ar_ge_avant",label:"Vibration palier côté opposé — GE",type:"mesure",unite:"GE",required:false,groupe:"vib_v_arriere",condition:siVentEssaiAvant},
+    {id:"balourd_constate",label:"Balourd constaté",type:"select",options:["Non","Léger","Important"],required:true,condition:siVentEssaiAvant},
+    {id:"debit_avant_v",label:"Débit mesuré",type:"mesure",unite:"m³/h",required:false,condition:siVentEssaiAvant},
+    {id:"tech_mesure_avant_v",label:"Qui a mesuré",type:"technicien",required:true},
+  ],
+  "Matériel au démontage moteur":CHAMPS_POMPE["Matériel au démontage moteur"].map(c=>
+    c.id==="ventilateur_present"?{...c,label:"Ventilateur de refroidissement du moteur — présence"}
+    :c.id==="etat_ventilateur"?{...c,label:"État ventilateur de refroidissement"}
+    :c.id==="taille_ventilateur"?{...c,label:"Taille ventilateur de refroidissement"}:c),
+  "Ventilateur au démontage":[
+    {id:"ventilateur_neuf",label:"Ventilateur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,note:"« Oui » = ventilateur changé, rien à démonter"},
+    // roue / hélice / rotor
+    {id:"etat_roue",label:"État de la roue / hélice / rotor",type:"select",options:ETATS_ROUE_VENTILATEUR,required:true,condition:siVentAncien},
+    {id:"nettoyage_roue",label:"Nettoyage fait",type:"oui_non",required:true,groupe:"roue_actions",condition:siVentAncien},
+    {id:"equilibrage_necessaire",label:"Équilibrage nécessaire",type:"oui_non",required:true,groupe:"roue_actions",condition:siVentAncien},
+    {id:"roue_remplacement",label:"Roue / hélice à remplacer",type:"oui_non",required:true,groupe:"roue_rempl",condition:siVentAncien},
+    {id:"roue_ref_neuve",label:"Référence / dimensions de la roue de remplacement",type:"text",required:false,groupe:"roue_rempl",condition:v=>siVentAncien(v)&&v.roue_remplacement==="Oui"},
+    {id:"jeu_helice",label:"Jeu hélice / virole",type:"number",unite:"mm",required:false,condition:v=>siVentAncien(v)&&siVentHelice(v)},
+    // arbre et fixation de la roue
+    {id:"fixation_roue",label:"Fixation de la roue sur l'arbre",type:"select",options:["Clavette","Cône / frette","Vis de pression","Bague de serrage","Autre"],required:false,autreTexte:true,condition:siVentAncien},
+    {id:"etat_arbre_v",label:"État visuel de l'arbre",type:"select",options:["OK","Marqué","Faussé","HS"],required:true,groupe:"arbre_v",condition:siVentAncien},
+    {id:"mesure_arbre_v",label:"Mesure de l'arbre (portée)",type:"number",unite:"mm",required:false,groupe:"arbre_v",condition:siVentAncien},
+    {id:"etat_clavette",label:"Clavette",type:"select",options:["RAS","Usée","HS","Absente"],required:false,condition:siVentAncien},
+    // paliers propres au ventilateur
+    {id:"paliers_propres",label:"Ventilateur avec ses propres paliers",type:"oui_non",required:true,condition:siVentAncien},
+    {id:"type_roulement_av_v",label:"Type roulement côté entraînement",type:"roulement",required:true,condition:siVentPaliers},
+    {id:"etat_roulement_av_v",label:"État roulement côté entraînement",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_av_v_pair",condition:siVentPaliers},{id:"roulement_av_v_change",label:"Roulement côté entraînement changé",type:"oui_non",required:false,groupe:"roulement_av_v_pair",condition:siVentPaliers},
+    {id:"joint_av_v",label:"Joints côté entraînement",type:"joints",required:false,groupe:"joint_av_v",condition:siVentPaliers},
+    {id:"type_roulement_ar_v",label:"Type roulement côté opposé",type:"roulement",required:true,condition:siVentPaliers},
+    {id:"etat_roulement_ar_v",label:"État roulement côté opposé",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_ar_v_pair",condition:siVentPaliers},{id:"roulement_ar_v_change",label:"Roulement côté opposé changé",type:"oui_non",required:false,groupe:"roulement_ar_v_pair",condition:siVentPaliers},
+    {id:"joint_ar_v",label:"Joints côté opposé",type:"joints",required:false,groupe:"joint_ar_v",condition:siVentPaliers},
+    // transmission : poulies et courroies
+    {id:"diam_poulie_moteur",label:"Poulie moteur — diamètre",type:"number",unite:"mm",required:false,groupe:"poulie_m",condition:siVentPoulies},
+    {id:"etat_poulie_moteur",label:"Poulie moteur — état",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"poulie_m",condition:siVentPoulies},
+    {id:"diam_poulie_vent",label:"Poulie ventilateur — diamètre",type:"number",unite:"mm",required:false,groupe:"poulie_v",condition:siVentPoulies},
+    {id:"etat_poulie_vent",label:"Poulie ventilateur — état",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"poulie_v",condition:siVentPoulies},
+    {id:"profil_courroie",label:"Courroies — profil",type:"select",options:PROFILS_COURROIE,required:false,autreTexte:true,groupe:"courroie_a",condition:siVentPoulies},
+    {id:"nb_courroies",label:"Courroies — nombre",type:"number",required:false,groupe:"courroie_a",condition:siVentPoulies},
+    {id:"etat_courroies",label:"Courroies — état",type:"select",options:["RAS","Usées","Fissurées","HS"],required:true,groupe:"courroie_b",condition:siVentPoulies},
+    {id:"courroies_changees",label:"Courroies changées",type:"oui_non",required:false,groupe:"courroie_b",condition:siVentPoulies},
+    {id:"entraxe_poulies",label:"Entraxe des poulies",type:"number",unite:"mm",required:false,condition:siVentPoulies},
+    // transmission : accouplement
+    {id:"type_accouplement",label:"Accouplement — type",type:"text",required:false,groupe:"accoup",condition:siVentAccouplement},
+    {id:"etat_accouplement",label:"Accouplement — état",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"accoup",condition:siVentAccouplement},
+    {id:"accouplement_change",label:"Élastique / accouplement changé",type:"oui_non",required:false,condition:siVentAccouplement},
+    // carter, silentblocs, grille, caisson
+    {id:"etat_carter",label:"État du carter / de la volute",type:"select",options:["RAS","Encrassé","Corrodé","Déformé","Fissuré","HS"],required:true,condition:siVentAncien},
+    {id:"etat_silentblocs",label:"Silentblocs / amortisseurs — état",type:"select",options:["RAS","Durcis","Écrasés","HS","Absents"],required:false,groupe:"silentblocs",condition:siVentAncien},
+    {id:"silentblocs_changes",label:"Silentblocs changés",type:"oui_non",required:false,groupe:"silentblocs",condition:siVentAncien},
+    {id:"etat_grille",label:"État de la grille",type:"select",options:["RAS","Abîmée","HS"],required:false,condition:v=>siVentAncien(v)&&v.grille==="Oui"},
+    {id:"etat_caisson",label:"État du caisson",type:"select",options:["RAS","Corrodé","Déformé","HS"],required:false,condition:v=>siVentAncien(v)&&v.caisson==="Oui"},
+    {id:"autres_pieces_v",label:"Autres pièces à changer",type:"text",required:false,dictee:true,condition:siVentAncien},
+    {id:"peinture_v",label:"Peinture / traitement à faire",type:"oui_non",required:true,condition:siVentAncien},
+    {id:"tech_demontage_v",label:"Qui a démonté le ventilateur",type:"technicien",required:true,condition:siVentAncien},
+    // ventilateur neuf
+    {id:"marque_ventilateur_neuf",label:"Marque du ventilateur",type:"select",options:MARQUES_VENTILATEUR,required:false,autreTexte:true,condition:siVentNeuf,groupe:"vneuf_marque"},
+    {id:"modele_ventilateur_neuf",label:"Modèle / référence",type:"text",required:false,condition:siVentNeuf,groupe:"vneuf_marque"},
+    {id:"numero_serie_ventilateur_neuf",label:"N° de série",type:"text",required:false,condition:siVentNeuf,groupe:"vneuf_serie"},
+    {id:"dimensions_ventilateur_neuf",label:"Dimensions / caractéristiques",type:"text",required:false,condition:siVentNeuf,groupe:"vneuf_serie"},
+    {id:"travaux_conseille",label:"Travaux conseillé/à effectuer",type:"text",required:true,dictee:true},
+  ],
+  [ETAPE_SUIVI_DEVIS]:CHAMPS_SUIVI_DEVIS,
+  "Essais après remontage":[
+    {id:"tech_remontage",label:"Qui a remonté",type:"technicien",required:true},
+    // moteur
+    {id:"essai_vide_apres",label:"Essai à vide possible",type:"select",options:["Oui","Non"],required:true,condition:siVentEnsemble},
+    {id:"essai_vide_apres_pourquoi",label:"Pourquoi essai à vide impossible",type:"text",required:true,dictee:true,condition:v=>siVentEnsemble(v)&&v.essai_vide_apres==="Non"},
+    {id:"int_p1_apres",label:"Intensité Phase 1",type:"mesure",unite:"A",required:true,groupe:"int_apres",condition:siVentEnsemble},
+    {id:"int_p2_apres",label:"Intensité Phase 2",type:"mesure",unite:"A",required:true,groupe:"int_apres",condition:siVentEnsemble},
+    {id:"int_p3_apres",label:"Intensité Phase 3",type:"mesure",unite:"A",required:true,groupe:"int_apres",condition:siVentEnsemble},
+    {id:"int_560_p1_apres",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_apres",condition:siVentEnsemble},
+    {id:"int_560_p2_apres",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_apres",condition:siVentEnsemble},
+    {id:"int_560_p3_apres",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_apres",condition:siVentEnsemble},
+    {id:"vib_av_mms_apres",label:"Vibration moteur avant — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_av_apres",condition:siVentEnsemble},
+    {id:"vib_av_ge_apres",label:"Vibration moteur avant — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_av_apres",condition:siVentEnsemble},
+    {id:"vib_ar_mms_apres",label:"Vibration moteur arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_ar_apres",condition:siVentEnsemble},
+    {id:"vib_ar_ge_apres",label:"Vibration moteur arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_ar_apres",condition:siVentEnsemble},
+    {id:"skf_av_rem",label:"Screen SKF avant remontage",type:"photo_skf",categorie:"Screen SKF avant au remontage",required:false,condition:siVentEnsemble},{id:"skf_ar_rem",label:"Screen SKF arrière remontage",type:"photo_skf",categorie:"Screen SKF arrière au remontage",required:false,condition:siVentEnsemble},
+    {id:"resserage_plaque",label:"Resserrage plaque à bornes",type:"text",required:false,dictee:true,condition:siVentEnsemble},
+    // ventilateur
+    {id:"sens_rotation_apres",label:"Sens de rotation après remontage",type:"select",options:["Correct","Inversé — à corriger"],required:true},
+    {id:"bruit_apres_v",label:"Bruit après remontage",type:"select",options:["RAS","Léger bruit","Bruit anormal"],required:true},
+    {id:"vib_v_av_mms_apres",label:"Vibration palier côté entraînement — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_v_av_apres"},
+    {id:"vib_v_av_ge_apres",label:"Vibration palier côté entraînement — GE",type:"mesure",unite:"GE",required:false,groupe:"vib_v_av_apres"},
+    {id:"vib_v_ar_mms_apres",label:"Vibration palier côté opposé — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_v_ar_apres"},
+    {id:"vib_v_ar_ge_apres",label:"Vibration palier côté opposé — GE",type:"mesure",unite:"GE",required:false,groupe:"vib_v_ar_apres"},
+    {id:"equilibrage_realise",label:"Équilibrage réalisé",type:"oui_non",required:false,groupe:"equilibrage_pair"},
+    {id:"equilibrage_qualite",label:"Qualité d'équilibrage visée (ISO 1940)",type:"select",options:["G 16","G 6.3","G 2.5","G 1","Autre"],required:false,autreTexte:true,groupe:"equilibrage_pair",condition:{champ:"equilibrage_realise",valeur:"Oui"}},
+    {id:"balourd_avant",label:"Balourd avant équilibrage",type:"text",unite:"g·mm",unitesChoix:["g·mm","g","mm/s"],required:false,groupe:"balourd_pair",condition:{champ:"equilibrage_realise",valeur:"Oui"}},
+    {id:"balourd_apres",label:"Balourd après équilibrage",type:"text",unite:"g·mm",unitesChoix:["g·mm","g","mm/s"],required:false,groupe:"balourd_pair",condition:{champ:"equilibrage_realise",valeur:"Oui"}},
+    {id:"debit_apres_v",label:"Débit mesuré",type:"mesure",unite:"m³/h",required:false},
+    {id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
+    {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true,dictee:true},
+    {id:"controle_qualite",label:"Contrôle qualité fait",type:"oui_non",required:true},
+  ],
+};
+
+// Champs et étapes d'une fiche selon son type (utilisé par la fiche, l'aperçu, le PDF et les exports ZIP)
+function champsPourType(type){
+  return type==="Pompe"?CHAMPS_POMPE:type==="Moto-réducteur"?CHAMPS_REDUCTEUR:type==="Ventilateur"?CHAMPS_VENTILATEUR:type==="Autre"?CHAMPS_AUTRE:CHAMPS;
+}
+function etapesPourType(type,v){
+  return type==="Pompe"?ETAPES_POMPE:type==="Moto-réducteur"?ETAPES_REDUCTEUR:type==="Ventilateur"?etapesVentilateurPour(v):etapesMoteurPour(v);
+}
 function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed}){
   const lecture=React.useContext(LectureCtx);
   const isPompe=typeMateriel==="Pompe";
-  const isReducteur=typeMateriel==="Moto-réducteur";
-  const champsActifs=isPompe?CHAMPS_POMPE:isReducteur?CHAMPS_REDUCTEUR:typeMateriel==="Autre"?CHAMPS_AUTRE:CHAMPS;
+  const champsActifs=champsPourType(typeMateriel);
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
   const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {de:ficheInit?.de||"",date_entree:today(),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
-  const etapesActives=insererEtapeSuiviDevis(isPompe?ETAPES_POMPE:isReducteur?ETAPES_REDUCTEUR:etapesMoteurPour(v),v,typeMateriel||"Moteur");
+  const etapesActives=insererEtapeSuiviDevis(etapesPourType(typeMateriel,v),v,typeMateriel||"Moteur");
 
   useEffect(()=>{
     if(seedValeurs&&onSeedConsumed)onSeedConsumed();
@@ -2563,7 +2809,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
           <button style={S.p1} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁 Aperçu fiche</button>
           <button style={S.p2} onClick={()=>telechargerHtml(genHtml(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives),"Fiche_"+(v.de||"sans_de")+"_"+(v.client||""))}>⬇ Télécharger</button>
           <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄 Imprimer / PDF</button>
-          {!isPompe&&<button style={{...S.p2,opacity:ficheId?1:0.5}} disabled={!ficheId} onClick={()=>onOpenRapport(ficheId)}>📧 Rapport client</button>}
+          {!isPompe&&typeMateriel!=="Ventilateur"&&<button style={{...S.p2,opacity:ficheId?1:0.5}} disabled={!ficheId} onClick={()=>onOpenRapport(ficheId)}>📧 Rapport client</button>}
           <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
         </div>
       </div>
@@ -3013,6 +3259,8 @@ if(typeof window!=="undefined"){
   window.__CHAMPS_POMPE=CHAMPS_POMPE;
   window.__ETAPES=ETAPES;
   window.__ETAPES_POMPE=ETAPES_POMPE;
+  window.__champsPour=(type,v)=>champsPourType(type||((v&&v.type_materiel_libre)?"Autre":"Moteur"));
+  window.__etapesPour=(type,v)=>{const t=type||((v&&v.type_materiel_libre)?"Autre":"Moteur");return insererEtapeSuiviDevis(etapesPourType(t,v||{}),v||{},t);};
 }
 
 // ─── SUIVI DE COMMANDES FOURNISSEURS (module indépendant, localStorage) ──
@@ -5305,7 +5553,7 @@ export default function App(){
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
     {page==="dashboard"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
-    {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Autre"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
+    {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{if(commercial)setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
