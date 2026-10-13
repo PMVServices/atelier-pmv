@@ -85,6 +85,7 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 - Types de matériel et étapes existants ; photos, aperçu, export PDF + ZIP, duplication, dossiers client → N° DE → lieu.
 - N° DE toujours au format « DE0000 » (des chiffres seuls reçoivent le préfixe DE).
 - Une fiche peut être préremplie depuis une fiche chantier (case « Entretien en atelier »).
+- **Technicien de chaque étape** (fiche atelier) : la personne qui a ouvert l'appli (si elle a des initiales) est cochée d'office quand le champ est vide. Si on **décoche son nom**, l'appli demande « Qui utilise l'application ? » (fenêtre par-dessus la fiche, qui reste ouverte) : la personne choisie devient celle qui a ouvert (en-tête) et se coche à la place ; « Annuler » remet le coche. Cocher un deuxième technicien ne pose aucune question. La fiche chantier garde son propre champ technicien.
 - Le bouton « Ajouter photo » de la liste atelier fonctionne (upload via `db.uploadPhoto`).
 - Types proposés au choix « Nouvelle fiche » : Moteur, Pompe, Moto-réducteur, **Autre matériel** (il remplace les anciennes cartes « Bientôt disponible » Ventilation et Réducteur, qui n'étaient pas utilisables).
   « Autre matériel » (`type_materiel` = « Autre ») suit exactement le déroulement du moteur (mêmes étapes, devis, rapport) ; seul s'ajoute le champ obligatoire « Type de matériel » (ventilateur, treuil, compresseur…) saisi à la main, juste avant « Matériel / Identification lieux ». Il apparaît dans l'en-tête, l'aperçu et le PDF.

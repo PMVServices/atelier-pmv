@@ -10,7 +10,9 @@ export const PROFILS={
   tech:{label:"Technicien",icone:"🛠"},
   commercial:{label:"Commercial",icone:"💼"},
 };
-export const LectureCtx=React.createContext(false); // vrai pour le profil Commercial : fiches et planning en lecture seule
+export const LectureCtx=React.createContext(false);
+// Personne connectée + « demander qui utilise l'appli » (fenêtre de choix par-dessus l'écran en cours, sans le fermer) : sert aux fiches
+export const PersonneCtx=React.createContext(null); // vrai pour le profil Commercial : fiches et planning en lecture seule
 
 const CLE="acces_personnes";
 const CACHE="pmv_acces_cache";

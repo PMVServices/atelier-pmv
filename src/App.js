@@ -8,7 +8,7 @@ import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
 import PageCalendrier from "./Calendrier";
 import {useSuiviDevis, PageSuiviClients, DashboardCommercial} from "./SuiviClients";
-import {LectureCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
+import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
@@ -1018,7 +1018,7 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   let ctrl;
   if(c.type==="contact")ctrl=<ChampContact valeur={val} onChange={onChange} champ={c} v={v}/>;
   else if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={nv=>onChange(c.id,nv)} clients={clients} onAddClient={onAddClient}/>;
-  else if(c.type==="technicien")ctrl=<ChampTechniciensMultiples valeur={val} onChange={nv=>onChange(c.id,nv)} techs={techs}/>;
+  else if(c.type==="technicien")ctrl=<ChampTechnicienAuto valeur={val} onChange={nv=>onChange(c.id,nv)} techs={techs}/>;
   else if(c.type==="roulement")ctrl=<ChampRoulement valeur={val} onChange={nv=>onChange(c.id,nv)}/>;
   else if(c.type==="ohm")ctrl=<ChampOhm champId={c.id} valeur={val} onChange={onChange}/>;
   else if(c.type==="joints")ctrl=<ChampJoints champId={c.id} valeur={val} onChange={onChange}/>;
@@ -2590,6 +2590,30 @@ function ChampMarque({valeur,onChange,marques}){
     {modeAutre&&<input type="text" placeholder="Préciser la marque..." value={valeur||""} onChange={function(e){onChange(e.target.value);}} style={S.inp}/>}
   </div>);
 }
+// Étape de fiche atelier : la personne qui a ouvert l'appli est cochée d'office. Si on décoche son nom, l'appli demande
+// qui utilise l'application ; la personne choisie devient celle qui a ouvert (en-tête) et se coche à sa place.
+// Cocher un deuxième technicien ne pose aucune question.
+function ChampTechnicienAuto({valeur,onChange,techs}){
+  const ctx=React.useContext(PersonneCtx);
+  const ini=ctx&&ctx.moi&&ctx.moi.initiales?String(ctx.moi.initiales):"";
+  const dernier=useRef(valeur);dernier.current=valeur;
+  const liste=t=>String(t||"").split(",").map(x=>x.trim()).filter(Boolean);
+  useEffect(()=>{if(ini&&!String(dernier.current||"").trim())onChange(ini);},[ini]);
+  function modifier(nv){
+    const avant=liste(dernier.current),apres=liste(nv);
+    const decocheMoi=ini&&avant.includes(ini)&&!apres.includes(ini);
+    onChange(nv);
+    if(!decocheMoi||!ctx||!ctx.demander)return;
+    ctx.demander(p=>{
+      if(!p){onChange(avant.join(", "));return;}                       // annulé : on remet comme avant
+      const sans=apres.filter(x=>x!==ini);
+      const nouveau=p.initiales&&!sans.includes(p.initiales)?[...sans,p.initiales]:sans;
+      onChange(nouveau.join(", "));
+    });
+  }
+  return <ChampTechniciensMultiples valeur={valeur} onChange={modifier} techs={techs}/>;
+}
+
 function ChampTechniciensMultiples({valeur,onChange,techs}){
   var parts=(valeur||"").split(",").map(function(s){return s.trim();}).filter(Boolean);
   var listeConnue=techs.filter(function(t){return t!=="Autre";});
@@ -5109,6 +5133,7 @@ export default function App(){
   const [personnes,setPersonnes]=useState(null);const [erreurAcces,setErreurAcces]=useState(null);
   const [moiId,setMoiId]=useState(()=>{try{return sessionStorage.getItem(CLE_SESSION)||null;}catch(e){return null;}});
   const [changerPers,setChangerPers]=useState(false);const [menuPersonne,setMenuPersonne]=useState(false);
+  const [demandeQui,setDemandeQui]=useState(null); // {cb} : « qui utilise l'application ? » demandé par une fiche
   const [page,setPage]=useState(()=>loadDraft()?"fiche":"dashboard");const [sessionTech,setSessionTech]=useState(()=>loadDraft()?.sessionTech||null);const [ficheOuverte,setFicheOuverte]=useState(()=>{const d=loadDraft();return d?{id:d.ficheId,de:d.v?.de,client:d.v?.client,materiel_lieu:d.v?.materiel_lieu,type_materiel:d.typeMateriel,statut_chantier:d.statutChantier,etape_active:d.actif,etapes_validees:d.validees}:null;});const [ouvrirApercu,setOuvrirApercu]=useState(false);const [typeMat,setTypeMat]=useState(()=>loadDraft()?.typeMateriel||"Moteur");const [pieces,setPieces]=useState([]);const [demandeIdent,setDemandeIdent]=useState(false);const [pending,setPending]=useState(null);const [techs,setTechs]=useState(TECHNICIENS_FB);const [clients,setClients]=useState([]);const [categories,setCategories]=useState(CATS_FB.map(n=>({nom:n,slug:slugCat(n)})));const [fiches,setFiches]=useState([]);const [rapportFicheId,setRapportFicheId]=useState(null);const [seedValeurs,setSeedValeurs]=useState(null);
 
   useEffect(()=>{
@@ -5174,6 +5199,8 @@ export default function App(){
   const moi=personnes&&moiId?(personnes.find(p=>p.id===moiId)||null):null;
   const role=moi?moi.profil:"tech";
   const admin=role==="admin",commercial=role==="commercial";
+  const demanderQui=useCallback(cb=>setDemandeQui({cb}),[]);
+  const ctxPersonne=React.useMemo(()=>({moi,demander:demanderQui}),[moi,demanderQui]);
   const suivi=useSuiviDevis(commercial&&!!moi); // suivi des devis clients : chargé seulement pour le profil Commercial
   function choisirPersonne(p){
     if(p.initiales)setSessionTech(p.initiales);else if(moiId&&moiId!==p.id)setSessionTech(null);
@@ -5195,7 +5222,11 @@ export default function App(){
   if(!pinOk)return <EcranCode code={PIN_CODE} logo={LOGO_B64} onSucces={()=>setPinOk(true)}/>;
   if(personnes===null)return <EcranChargement erreur={erreurAcces} onRetour={chargerAcces}/>;
   if(personnes.length===0)return <EcranPremierDemarrage codeAdmin={ADMIN_CODE} logo={LOGO_B64} onCree={p=>{setPersonnes([p]);choisirPersonne(p);}}/>;
-  if(!moi||changerPers)return <EcranQui personnes={personnes} derniereId={(()=>{try{return localStorage.getItem(CLE_DERNIERE);}catch(e){return null;}})()} logo={LOGO_B64} titre={changerPers?"Changer de personne":undefined} onChoisir={choisirPersonne} onAnnuler={moi&&changerPers?()=>setChangerPers(false):undefined}/>;
+  if(!moi)return <EcranQui personnes={personnes} derniereId={(()=>{try{return localStorage.getItem(CLE_DERNIERE);}catch(e){return null;}})()} logo={LOGO_B64} onChoisir={choisirPersonne}/>;
+  const ecranChoix=(changerPers||demandeQui)&&<EcranQui personnes={personnes} derniereId={null} logo={LOGO_B64}
+    titre={demandeQui?"Qui utilise l'application ?":"Changer de personne"}
+    onChoisir={p=>{const cb=demandeQui&&demandeQui.cb;setDemandeQui(null);choisirPersonne(p);if(cb)cb(p);}}
+    onAnnuler={()=>{const cb=demandeQui&&demandeQui.cb;setDemandeQui(null);setChangerPers(false);if(cb)cb(null);}}/>;
   const fenetrePersonne=menuPersonne&&<MenuPersonne moi={moi} onChanger={()=>{setMenuPersonne(false);setChangerPers(true);}} onAcces={()=>{setMenuPersonne(false);setMenuOuvert(false);setPage("acces");}} onFermer={()=>setMenuPersonne(false)}/>;
   const chipPersonne=(compact)=><button onClick={()=>setMenuPersonne(true)} title={nomComplet(moi)+" — "+PROFILS[role].label+" (toucher pour changer de personne)"} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis"}}>{PROFILS[role].icone}{compact?"":" "+nomCourt(moi)}</button>;
   if(MODE_STOCK){
@@ -5209,12 +5240,13 @@ export default function App(){
         ?<div style={{maxWidth:520,margin:"40px auto",padding:"0 16px",textAlign:"center",color:"#6B7280",fontSize:14}}>Le stock n'est pas accessible avec le profil Commercial.<div style={{marginTop:12}}><button onClick={()=>setChangerPers(true)} style={S.p1}>🔁 Changer de personne</button></div></div>
         :<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
       {fenetrePersonne}
+      {ecranChoix}
     </div>);
   }
 
   const navItems=navPourRole(role);
 
-  return(<LectureCtx.Provider value={commercial}><div style={S.app}>
+  return(<PersonneCtx.Provider value={ctxPersonne}><LectureCtx.Provider value={commercial}><div style={S.app}>
     {/* ── HEADER ── */}
     <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
       {/* Logo */}
@@ -5262,6 +5294,7 @@ export default function App(){
     </div>}
 
     {fenetrePersonne}
+    {ecranChoix}
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
     {page==="dashboard"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
@@ -5284,5 +5317,5 @@ export default function App(){
     {page==="calendrier"&&<PageCalendrier admin={admin} sessionTech={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="stats"&&admin&&<PageStats fiches={fiches} pieces={pieces}/>}
     {page==="acces"&&admin&&<PageAcces personnes={personnes} techs={techs} moi={moi} onEnregistre={l=>setPersonnes(l)} onRetour={()=>setPage("dashboard")}/>}
-  </div></LectureCtx.Provider>);
+  </div></LectureCtx.Provider></PersonneCtx.Provider>);
 }
