@@ -65,19 +65,19 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 
 | Zone | Technicien | Administrateur | Commercial |
 |---|---|---|---|
-| Tableau de bord | sans le bloc de traitement | complet | non (arrive sur Calendrier) |
+| Tableau de bord | sans le bloc de traitement | complet | oui, version à lui : relances à faire + raccourcis de ses onglets |
 | Fiche Atelier / Fiche Chantier | création et modification | idem | **lecture seule** : liste, aperçu, ZIP + PDF ; ni création, ni modification, ni photos, ni suppression, ni statut |
 | Planning | déplacement des cartes, statuts | idem | lecture seule (carte → aperçu) |
 | Rapport | oui | oui | oui |
 | Calendrier | oui | oui + stock de départ | oui |
-| Suivi de devis clients | non | oui (à construire) | oui (à construire) |
+| Suivi clients (devis) | non | non | oui, **lui seul** |
 | Matériel | « Mes demandes » en lecture seule | traitement complet, origines, alerte mail | non |
 | Stock | Sortie / Entrée + opérateur | tout | non |
 | Stats | non | oui | non |
 | Accès | non | oui | non |
 | Demande de matériel | oui | oui | non |
 
-- Ordre des onglets du Commercial : Calendrier, Devis (quand il existera), Fiche Atelier, Fiche Chantier, Planning, Rapport. Son accueil est le Calendrier.
+- Ordre des onglets du Commercial : Tableau de bord, **Suivi clients**, Calendrier, Fiche Atelier, Fiche Chantier, Planning, Rapport. Son accueil est son tableau de bord.
 - Le Commercial ne voit pas la jauge de stockage de l'en-tête.
 
 ## 5. Fiche Atelier
@@ -128,6 +128,14 @@ Modèle de référence : le rapport « DE7591 Rapport d'entretien » de PMV (7 p
 - Avertissements : le client ou le contact a déjà reçu un calendrier pour l'édition choisie (quantités et date affichées).
 - **Compteur de stock** (en haut de la page, pour l'édition choisie) : grands et petits restants sur le stock de départ, avec barre (orange sous 20 %, rouge au-delà du stock). Stock de départ de l'édition en cours : **100 grands et 180 petits** ; modifiable par l'administrateur (« Stock de départ »), rangé dans `parametres_app` (clé `calendrier_stock_<édition>` = « grands,petits »). Une autre édition sans stock saisi affiche seulement les quantités données ; « Toutes » masque le compteur. Le formulaire annonce le stock restant après l'enregistrement et prévient si on dépasse le stock.
 - Liste : barre de recherche (client, contact, date, mois, mots dans le désordre, sans accents), filtre par édition, regroupement par client avec totaux grands / petits, date et personne qui a noté, suppression d'une ligne avec confirmation.
+
+## 6 quater. Suivi clients — devis (profil Commercial uniquement)
+
+- Table Supabase `suivi_devis` (SQL dans `SQL_SUIVI_DEVIS`, `src/SuiviClients.js`, à coller une fois ; tant qu'elle manque, l'onglet affiche l'écran d'activation). Visible et chargé **uniquement pour le profil Commercial**.
+- Une ligne = un devis : **N° de DE** (normalisé « DE1234 » ; si une fiche atelier ou chantier porte ce DE, son client est proposé), **client** (liste des clients existante, ajout possible), **contact** (carnet de contacts existant ; ajout d'une nouvelle personne avec son numéro et son mail ; téléphone et mail repris du carnet), objet, montant HT, date du devis, statut (À envoyer, Envoyé — en attente, Accepté, Refusé, Sans suite), commentaire, historique.
+- **Relance** : soit une **date précise**, soit un **délai** (jours, semaines ou mois à partir de la date du devis, ex. 8 semaines), soit aucune. Quand la date est atteinte ou dépassée, la ligne passe en rouge (orange le jour même), l'onglet affiche une pastille avec le nombre de relances à faire et le tableau de bord du Commercial liste ces relances (visible aussi sur téléphone).
+- « ✓ Relancé » : note facultative, la prochaine relance reprend le même délai (modifiable) ; chaque relance et chaque changement de statut est gardé dans l'historique de la ligne.
+- Tableau interactif (ordinateur) ou cartes (téléphone) : recherche, filtre par statut, tri (relance, client, date, montant), statut modifiable directement, appel téléphonique et mail de relance préremplis en un geste, export CSV de la liste affichée, indicateurs (à relancer, en attente avec montant total, acceptés avec taux de réponses positives, refusés).
 
 ## 7. Matériel à commander
 

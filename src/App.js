@@ -7,6 +7,7 @@ import PageStock, {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
 import PageCalendrier from "./Calendrier";
+import {useSuiviDevis, PageSuiviClients, DashboardCommercial} from "./SuiviClients";
 import {LectureCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
@@ -5076,7 +5077,7 @@ function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel,p
 
 const TOUS_PROFILS=["admin","tech","commercial"],PROFILS_INTERNES=["admin","tech"];
 const NAV_ITEMS=[
-  {id:"dashboard",label:"🏠 Tableau de bord",roles:PROFILS_INTERNES},
+  {id:"dashboard",label:"🏠 Tableau de bord",roles:TOUS_PROFILS},
   {id:"accueil",label:"📁 Fiche Atelier",roles:TOUS_PROFILS},{id:"chantier",label:"🏗 Fiche Chantier",roles:TOUS_PROFILS},
   {id:"planning",label:"📋 Planning",roles:TOUS_PROFILS},
   {id:"rapport",label:"📧 Rapport",roles:TOUS_PROFILS},
@@ -5084,11 +5085,12 @@ const NAV_ITEMS=[
   ...(SUIVI_COMMANDES?[{id:"commandes",label:"📦 Commandes",roles:PROFILS_INTERNES}]:[]),
   {id:"stock",label:"🗃 Stock",roles:PROFILS_INTERNES},
   {id:"calendrier",label:"🗓 Calendrier",roles:TOUS_PROFILS},
+  {id:"devis",label:"📞 Suivi clients",roles:["commercial"]},
   {id:"stats",label:"📊 Stats",roles:["admin"]},
 ];
-// Ordre des onglets du profil Commercial ("devis" : futur suivi de devis clients, pas encore construit)
-const ORDRE_COMMERCIAL=["calendrier","devis","accueil","chantier","planning","rapport"];
-const PAGES_COMMERCIAL=["calendrier","devis","accueil","chantier","planning","rapport","fiche"];
+// Ordre des onglets du profil Commercial (le suivi clients passe avant tout le reste)
+const ORDRE_COMMERCIAL=["dashboard","devis","calendrier","accueil","chantier","planning","rapport"];
+const PAGES_COMMERCIAL=["dashboard","devis","calendrier","accueil","chantier","planning","rapport","fiche"];
 function navPourRole(role){
   const l=NAV_ITEMS.filter(n=>n.roles.includes(role));
   return role==="commercial"?l.sort((a,b)=>ORDRE_COMMERCIAL.indexOf(a.id)-ORDRE_COMMERCIAL.indexOf(b.id)):l;
@@ -5096,7 +5098,7 @@ function navPourRole(role){
 function pageAutorisee(page,role){
   if(role==="admin")return true;
   if(role==="commercial")return PAGES_COMMERCIAL.includes(page);
-  return page!=="stats"&&page!=="acces";
+  return page!=="stats"&&page!=="acces"&&page!=="devis";
 }
 
 // Mode "Stock seul" (adresse /stock/, utilisée par l'icône PMV Stock du téléphone) : une seule page, sans menu.
@@ -5172,13 +5174,14 @@ export default function App(){
   const moi=personnes&&moiId?(personnes.find(p=>p.id===moiId)||null):null;
   const role=moi?moi.profil:"tech";
   const admin=role==="admin",commercial=role==="commercial";
+  const suivi=useSuiviDevis(commercial&&!!moi); // suivi des devis clients : chargé seulement pour le profil Commercial
   function choisirPersonne(p){
     if(p.initiales)setSessionTech(p.initiales);else if(moiId&&moiId!==p.id)setSessionTech(null);
     setMoiId(p.id);setChangerPers(false);setMenuPersonne(false);
     try{sessionStorage.setItem(CLE_SESSION,p.id);localStorage.setItem(CLE_DERNIERE,p.id);}catch(e){}
   }
   // une page interdite au profil (ex. tableau de bord pour le Commercial) renvoie vers sa page d'accueil
-  useEffect(()=>{if(moi&&!pageAutorisee(page,role))setPage(role==="commercial"?"calendrier":"dashboard");},[role,page,moi]);
+  useEffect(()=>{if(moi&&!pageAutorisee(page,role))setPage("dashboard");},[role,page,moi]);
   // la liste des fiches sert aussi au tableau de bord et à l'onglet Rapport : on la charge dès l'ouverture de l'appli
   useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{if(Array.isArray(d))setFiches(prev=>prev.length?prev:d);}).catch(()=>{});},[]);
   useEffect(()=>{
@@ -5215,7 +5218,7 @@ export default function App(){
     {/* ── HEADER ── */}
     <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
       {/* Logo */}
-      <img src={LOGO_B64} alt="PMV" style={{height:isMobile?30:40,objectFit:"contain",borderRadius:4,cursor:"pointer",flexShrink:0}} onClick={()=>{setPage(commercial?"calendrier":"dashboard");setMenuOuvert(false);}}/>
+      <img src={LOGO_B64} alt="PMV" style={{height:isMobile?30:40,objectFit:"contain",borderRadius:4,cursor:"pointer",flexShrink:0}} onClick={()=>{setPage("dashboard");setMenuOuvert(false);}}/>
 
       {/* Onglets — masqués sur mobile */}
       {!isMobile&&<div style={{display:"flex",alignItems:"center",gap:4,flex:1,justifyContent:"center"}}>
@@ -5224,6 +5227,7 @@ export default function App(){
             {n.label}
             {n.id==="planning"&&devisCount>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{devisCount}</span>}
             {admin&&n.id==="suivi"&&badgeMateriel>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeMateriel}</span>}
+            {n.id==="devis"&&suivi.aRelancer.length>0&&<span style={{position:"absolute",top:-4,right:-4,background:"#D73A49",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{suivi.aRelancer.length}</span>}
             {n.id==="commandes"&&badgeCommandes>0&&<span style={{position:"absolute",top:-4,right:-4,background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"1px 5px",fontSize:9,fontWeight:700}}>{badgeCommandes}</span>}
           </button>
         ))}
@@ -5247,6 +5251,7 @@ export default function App(){
           <span>{n.label}</span>
           {n.id==="planning"&&devisCount>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{devisCount}</span>}
           {admin&&n.id==="suivi"&&badgeMateriel>0&&<span style={{background:"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeMateriel}</span>}
+          {n.id==="devis"&&suivi.aRelancer.length>0&&<span style={{background:"#D73A49",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{suivi.aRelancer.length}</span>}
           {n.id==="commandes"&&badgeCommandes>0&&<span style={{background:commandesAlerte>0?"#D73A49":"#E8720C",color:"#fff",borderRadius:10,padding:"2px 8px",fontSize:11,fontWeight:700}}>{badgeCommandes}</span>}
         </button>
       ))}
@@ -5258,7 +5263,7 @@ export default function App(){
 
     {fenetrePersonne}
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
-    {page==="dashboard"&&<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>}
+    {page==="dashboard"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
     {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Autre"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
@@ -5275,6 +5280,7 @@ export default function App(){
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
       :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
     {page==="stock"&&<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
+    {page==="devis"&&commercial&&<PageSuiviClients suivi={suivi} fiches={fiches} par={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="calendrier"&&<PageCalendrier admin={admin} sessionTech={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="stats"&&admin&&<PageStats fiches={fiches} pieces={pieces}/>}
     {page==="acces"&&admin&&<PageAcces personnes={personnes} techs={techs} moi={moi} onEnregistre={l=>setPersonnes(l)} onRetour={()=>setPage("dashboard")}/>}
