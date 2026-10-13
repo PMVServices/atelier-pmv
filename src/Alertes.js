@@ -1,4 +1,5 @@
 import {SUPA_URL, H, db} from "./supabase";
+import {reunirStocks, qteEff, miniEff, maxiEff, estPrincipal, libelleGroupe} from "./stockGroupes";
 
 // Résumé quotidien par mail (EmailJS) : une seule alerte par jour qui regroupe le matériel en attente et les stocks
 // sous leur minimum (le quota gratuit d'EmailJS est de 200 mails par mois, d'où pas de mail à chaque action).
@@ -37,21 +38,22 @@ export async function composerResume(){
     try{const r=await fetch(SUPA_URL+"/rest/v1/"+chemin,{headers:H});const d=await r.json();if(Array.isArray(d)){lectures++;return d;}}catch(e){/* hors ligne */}
     return [];
   };
-  const [dem,pieces,arts]=await Promise.all([
+  const [dem,pieces,artsBruts]=await Promise.all([
     lire("demandes_materiel?statut=eq.a_commander&order=created_at.asc&limit=500"),
     lire("suivi_pieces?or=(statut.eq.A_recommander,statut.is.null)&order=created_at.asc&limit=500"),
     lire("stock_articles?select=reference,dimensions,quantite,stock_mini,stock_maxi&order=reference&limit=2000"),
   ]);
   if(!lectures)return null;
+  const arts=reunirStocks(artsBruts);
   const aCommander=dem.filter(l=>l.type==="commander");
   const aRenouveler=dem.filter(l=>l.type!=="commander");
-  const bas=arts.filter(a=>{const q=a.quantite||0;return a.stock_mini!=null&&q<=a.stock_mini&&(a.stock_maxi==null||q<a.stock_maxi);})
-    .sort((a,b)=>((a.quantite||0)>0)-((b.quantite||0)>0));
+  const bas=arts.filter(a=>{const q=qteEff(a),mi=miniEff(a),ma=maxiEff(a);return estPrincipal(a)&&mi!=null&&q<=mi&&(ma==null||q<ma);})
+    .sort((a,b)=>(qteEff(a)>0)-(qteEff(b)>0));
   const ligneDemande=l=>"• "+(l.categorie?l.categorie+" : ":"")+l.designation+" × "+l.quantite+" — "+[l.demandeur,l.chantier,origine(l)].filter(Boolean).join(", ")+" ("+ilYa(l.created_at)+")";
   const lignePiece=p=>"• "+p.designation+(p.reference?" ("+p.reference+")":"")+" — fiche atelier"+(p.de?" "+p.de:"")+(p.client?" · "+p.client:"");
   const ligneStock=a=>{
-    const q=a.quantite||0,cible=a.stock_maxi!=null?a.stock_maxi:a.stock_mini;
-    return "• "+a.reference+(a.dimensions?" ("+a.dimensions+")":"")+" : reste "+q+" (minimum "+a.stock_mini+(a.stock_maxi!=null?", maximum "+a.stock_maxi:"")+") — à commander : "+Math.max(0,cible-q)+(q<=0?"  ⚠ RUPTURE":"");
+    const q=qteEff(a),mi=miniEff(a),ma=maxiEff(a),cible=ma!=null?ma:mi;
+    return "• "+libelleGroupe(a," + ")+(a.dimensions?" ("+a.dimensions+")":"")+" : reste "+q+(a.groupe?" au total des deux":"")+" (minimum "+mi+(ma!=null?", maximum "+ma:"")+") — à commander : "+Math.max(0,cible-q)+(q<=0?"  ⚠ RUPTURE":"");
   };
   const bloc=(titre,lignes)=>lignes.length?titre+" ("+lignes.length+")\n"+lignes.slice(0,MAX_LIGNES).join("\n")+(lignes.length>MAX_LIGNES?"\n… et "+(lignes.length-MAX_LIGNES)+" autres (voir l'appli)":"")+"\n\n":"";
   const renouveler=aRenouveler.map(ligneDemande).concat(pieces.map(lignePiece));

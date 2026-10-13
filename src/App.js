@@ -90,6 +90,16 @@ const siReducteurNeuf=v=>v.reducteur_neuf==="Oui";
 const siReducteurAncien=v=>v.reducteur_neuf!=="Oui";
 // Puissance : la valeur reste en texte libre, l'unité se choisit dans une liste (kW par défaut) et est rangée dans "<champ>__unite"
 const UNITES_PUISSANCE=["kW","W","CV","HP","kVA"];
+// Puissance saisie convertie en kW (null si absente ou illisible). La valeur est en texte libre, l'unité dans "<champ>__unite" (kW par défaut) ;
+// le kVA est converti avec un cos φ de 0,8 (approximation, suffisante pour un simple conseil).
+function puissanceKw(v,champ){
+  const id=champ||"puissance";
+  const n=parseFloat(String(v[id]||"").replace(",","."));
+  if(isNaN(n)||n<=0)return null;
+  const facteur={kW:1,W:0.001,CV:0.7355,HP:0.7457,kVA:0.8}[v[id+"__unite"]||"kW"];
+  return n*(facteur===undefined?1:facteur);
+}
+const PETIT_MOTEUR_KW=4;
 // Délai demandé : "Pas de délai demandé" se choisit dans la liste d'unités (la durée n'est alors plus demandée)
 const PAS_DE_DELAI="Pas de délai demandé";
 // "Ne sais pas encore" compte comme "Non" partout où l'on teste "Oui"
@@ -209,6 +219,7 @@ const CHAMPS={
     {id:"rapport_client",label:"Rapport client demandé ?",type:"oui_non",required:true},
     {id:"tech_entree",label:"Technicien",type:"technicien",required:true},
     {id:"demande_client",label:"Demande client",type:"text",required:true,dictee:true},
+    {id:"conseil_petit_moteur",type:"conseil",condition:v=>{const p=puissanceKw(v);return p!==null&&p<=PETIT_MOTEUR_KW;},texte:v=>"Petit moteur ("+Math.round(puissanceKw(v)*100)/100+" kW, donc "+PETIT_MOTEUR_KW+" kW ou moins) : si le moteur est « basique » (standard, sans particularité), pensez à proposer au client un moteur neuf plutôt que l'entretien."},
   ],
   "Infos électriques":[CHAMP_MOTEUR_NEUF_DEBUT,...CHAMPS_INFOS_ELECTRIQUES.map(masquerSiMoteurNeufDebut)],
   "Information rotation avant démontage":CHAMPS_ROTATION_AVANT,
@@ -1031,6 +1042,7 @@ function SectionPhotos({etape,ficheId,cheminBase,categories,photos,toutes,onPhot
 
 function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,photos=[],onPhotoAdded}){
   if(!champVisible(c,v))return null;
+  if(c.type==="conseil")return <div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#8A4B00",marginBottom:12,lineHeight:1.5}}>💡 {typeof c.texte==="function"?c.texte(v):c.texte}</div>;
   const val=v[c.id]||"";const manqueOr=c.orRequiredWith&&!val&&!v[c.orRequiredWith];const manque=(c.required&&!val)||manqueOr;const err=enErreur(c,val);
   const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>{c.label}{(c.required||c.orRequiredWith)&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&!c.unitesChoix&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}{c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:10}}> — {c.note}</span>}</label>;
   let ctrl;
@@ -1062,9 +1074,39 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   return <div style={{marginBottom:12}}>{lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>{manqueOr?"L'un des deux — "+c.label+" ou "+(c.orRequiredLabel||"l'autre champ")+" — est obligatoire":"Champ obligatoire"}</div>}</div>;
 }
 
+// Cases libres : « ➕ Ajouter une case libre » demande un nom (une marque, une particularité…) puis offre un champ de texte libre dans l'étape.
+// Rangées dans un seul champ « cases_libres » (JSON : id, étape, nom, valeur) ; seules celles qui ont une valeur figurent dans l'aperçu et le PDF.
+function lireCasesLibres(v){try{const a=JSON.parse(v.cases_libres||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}}
+function CasesLibres({etape,v,onChange}){
+  const toutes=lireCasesLibres(v);
+  const [ajout,setAjout]=useState(false);
+  const [nom,setNom]=useState("");
+  const enregistrer=liste=>onChange("cases_libres",JSON.stringify(liste));
+  const ici=toutes.filter(c=>c.etape===etape);
+  function ajouter(){
+    const n=nom.trim();if(!n)return;
+    enregistrer([...toutes,{id:"l"+Date.now().toString(36)+Math.random().toString(36).slice(2,5),etape,nom:n,valeur:""}]);
+    setNom("");setAjout(false);
+  }
+  return(<div style={{marginBottom:12}}>
+    {ici.map(c=><div key={c.id} style={{marginBottom:12}}>
+      <label style={{...S.lbl,display:"flex",justifyContent:"space-between",gap:8}}><span>{c.nom} <span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}>(case libre)</span></span><span role="button" tabIndex={0} onClick={()=>enregistrer(toutes.filter(x=>x.id!==c.id))} style={{color:"#D73A49",cursor:"pointer",textTransform:"none",fontWeight:600}}>✕ retirer</span></label>
+      <ChampTexteDictee champId={c.id} valeur={c.valeur} onChange={(id,val)=>enregistrer(toutes.map(x=>x.id===c.id?{...x,valeur:val}:x))} erreur={false}/>
+    </div>)}
+    {ajout
+      ?<div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+        <input type="text" autoFocus value={nom} onChange={e=>setNom(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();ajouter();}}} placeholder="Nom de la case (ex : marque du capteur)" style={{...S.inp,flex:"1 1 200px"}}/>
+        <button type="button" onClick={ajouter} disabled={!nom.trim()} style={{...S.p1,fontSize:12,padding:"7px 14px",opacity:nom.trim()?1:0.5}}>Ajouter</button>
+        <button type="button" onClick={()=>{setAjout(false);setNom("");}} style={{...S.p2,fontSize:12,padding:"6px 12px"}}>Annuler</button>
+      </div>
+      :<button type="button" onClick={()=>setAjout(true)} style={{...S.p2,fontSize:12,padding:"6px 12px",color:"#22863A",borderColor:"#22863A"}}>➕ Ajouter une case libre</button>}
+  </div>);
+}
+
 function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,onPhotoRemoved,champsSource}){
   const width=useWidth();const champs=(champsSource||CHAMPS)[nom]||[];const rendus=[];const vus=new Set();
   for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(cc=><UnChamp key={cc.id} c={cc} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded}/>)}</div>);}else{vus.add(c.id);rendus.push(<UnChamp key={c.id} c={c} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded}/>);}}
+  rendus.push(<CasesLibres key="libres" etape={nom} v={v} onChange={onChange}/>);
   rendus.push(<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom)} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>);
   return <>{rendus}</>;
 }
@@ -2630,10 +2672,7 @@ const CHAMPS_VENTILATEUR={
     {id:"vib_v_av_ge_apres",label:"Vibration palier côté entraînement — GE",type:"mesure",unite:"GE",required:false,groupe:"vib_v_av_apres"},
     {id:"vib_v_ar_mms_apres",label:"Vibration palier côté opposé — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_v_ar_apres"},
     {id:"vib_v_ar_ge_apres",label:"Vibration palier côté opposé — GE",type:"mesure",unite:"GE",required:false,groupe:"vib_v_ar_apres"},
-    {id:"equilibrage_realise",label:"Équilibrage réalisé",type:"oui_non",required:false,groupe:"equilibrage_pair"},
-    {id:"equilibrage_qualite",label:"Qualité d'équilibrage visée (ISO 1940)",type:"select",options:["G 16","G 6.3","G 2.5","G 1","Autre"],required:false,autreTexte:true,groupe:"equilibrage_pair",condition:{champ:"equilibrage_realise",valeur:"Oui"}},
-    {id:"balourd_avant",label:"Balourd avant équilibrage",type:"text",unite:"g·mm",unitesChoix:["g·mm","g","mm/s"],required:false,groupe:"balourd_pair",condition:{champ:"equilibrage_realise",valeur:"Oui"}},
-    {id:"balourd_apres",label:"Balourd après équilibrage",type:"text",unite:"g·mm",unitesChoix:["g·mm","g","mm/s"],required:false,groupe:"balourd_pair",condition:{champ:"equilibrage_realise",valeur:"Oui"}},
+    {id:"equilibrage_realise",label:"Équilibrage réalisé",type:"oui_non",required:false},
     {id:"debit_apres_v",label:"Débit mesuré",type:"mesure",unite:"m³/h",required:false},
     {id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
     {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true,dictee:true},

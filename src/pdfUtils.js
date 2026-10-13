@@ -60,7 +60,7 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
 
     // Trouver les champs avec valeur (hors technicien, hors info, hors photo_skf, hors champs masqués par une condition)
     var champsAvecVal=csEtape.filter(function(c){
-      return c.type!=="technicien"&&c.type!=="info"&&c.type!=="photo_skf"&&champVisiblePdf(c,v);
+      return c.type!=="technicien"&&c.type!=="info"&&c.type!=="conseil"&&c.type!=="photo_skf"&&champVisiblePdf(c,v);
     });
 
     html+="<table>";
@@ -82,6 +82,11 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
     // Textareas pleine largeur
     champsTA.forEach(function(c){
       html+="<tr><td class='lbl'>"+c.label+"</td><td colspan='3' class='val'>"+fmt(c.id,c)+"</td></tr>";
+    });
+    // cases libres ajoutées dans cette étape (seulement celles qui ont une valeur)
+    var libres=[];try{libres=JSON.parse(v.cases_libres||"[]");}catch(e){libres=[];}
+    (Array.isArray(libres)?libres:[]).filter(function(x){return x&&x.etape===nomEtape&&String(x.valeur||"").trim();}).forEach(function(x){
+      html+="<tr><td class='lbl'>"+esc(x.nom||"")+"</td><td colspan='3' class='val'>"+esc(x.valeur)+"</td></tr>";
     });
     html+="</table>";
   });

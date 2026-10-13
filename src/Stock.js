@@ -2,6 +2,7 @@ import React, {useState, useEffect, useCallback, useRef} from "react";
 import {SUPA_URL, H, db} from "./supabase";
 import {NoticeActivation} from "./Activation";
 import {lancerImpression, telechargerHtml} from "./pdfUtils";
+import {reunirStocks, qteEff, miniEff, maxiEff, estPrincipal, libelleGroupe} from "./stockGroupes";
 
 // ─── GESTION DE STOCK (démarrage : roulements 6XXX) ──────────────────────────────────────────────
 // Principe : Excel garde le catalogue (références, dimensions, emplacements, mini/maxi, prix…), l'appli
@@ -89,9 +90,13 @@ const serieDe=ref=>{
 };
 const familleDe=ref=>/^\d/.test(String(ref||"").trim())?"Roulements":"Garniture";
 // Libellé utilisé dans Matériel à commander (même style que l'assistant : "GM CNK 12")
-const designationDemande=a=>familleDe(a.reference)==="Garniture"?"GM "+a.reference:a.reference;
+const designationDemande=a=>a.groupe?libelleGroupe(a," ou "):familleDe(a.reference)==="Garniture"?"GM "+a.reference:a.reference;
 // Seuils lisibles : "stock voulu 4" quand mini = maxi (garniture), sinon "mini 2 · maxi 4"
-const libSeuils=a=>a.stock_mini==null?(a.stock_maxi!=null?"maxi "+a.stock_maxi:""):(a.stock_mini===a.stock_maxi?"stock voulu "+a.stock_mini:"mini "+a.stock_mini+(a.stock_maxi!=null?" · maxi "+a.stock_maxi:""));
+const libSeuils=a=>{
+  const mi=miniEff(a),ma=maxiEff(a);
+  const t=mi==null?(ma!=null?"maxi "+ma:""):(mi===ma?"stock voulu "+mi:"mini "+mi+(ma!=null?" · maxi "+ma:""));
+  return a.groupe&&t?t+" (les 2 réunis)":t;
+};
 const FAMILLES=["Roulements","Garniture"];
 const LIB_FAMILLE={Roulements:"Roulements",Garniture:"Garniture mécanique"};
 // [[famille, articles], …] dans l'ordre des familles, sans les familles vides
@@ -104,11 +109,11 @@ function triRef(a,b){
 }
 // Règle reprise de la colonne "A recommander ?" du fichier Excel : stock <= mini et stock < maxi.
 const aRecommander=a=>{
-  const q=a.quantite||0,mi=a.stock_mini,ma=a.stock_maxi;
+  const q=qteEff(a),mi=miniEff(a),ma=maxiEff(a);
   if(mi==null)return false;
   return q<=mi&&(ma==null||q<ma);
 };
-const qteARecommander=a=>Math.max(0,(a.stock_maxi!=null?a.stock_maxi:(a.stock_mini||0))-(a.quantite||0));
+const qteARecommander=a=>Math.max(0,(maxiEff(a)!=null?maxiEff(a):(miniEff(a)||0))-qteEff(a));
 const fmtEuro=n=>(n==null||isNaN(n))?"":Number(n).toLocaleString("fr-FR",{style:"currency",currency:"EUR"});
 const fmtDate=iso=>{
   const d=new Date(iso);if(isNaN(d.getTime()))return "";
@@ -144,7 +149,7 @@ function useStock(){
       // fetch direct (et non db.get) : db.get renvoie [] en cas de coupure réseau, ce qui viderait la liste à tort.
       const r=await fetch(SUPA_URL+"/rest/v1/stock_articles?select=*&order=reference&limit=5000",{headers:H});
       const rows=await r.json();
-      if(Array.isArray(rows)){setEtat({articles:rows.slice().sort(triRef),disponible:true});return true;}
+      if(Array.isArray(rows)){setEtat({articles:reunirStocks(rows.slice().sort(triRef)),disponible:true});return true;}
       if(rows&&rows.code==="PGRST205"){setEtat({articles:[],disponible:false});return false;}
     }catch(e){/* hors ligne : on garde l'état précédent */}
     return null;
@@ -830,7 +835,7 @@ function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,on
   return(<Feuille titre={article.reference} onFermer={onFermer}>
     <div className="stk-stock">
       <div><span className="stk-lib" style={{marginBottom:2}}>En stock</span><span className={"stk-stock-n "+etatStock}>{stock}</span>{reco&&<span className="stk-badge">À recommander : {qteARecommander(article)}</span>}{stock<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
-      <div style={{fontSize:13,color:"#6B7280",textAlign:"right"}}>{libSeuils(article)&&<div>{libSeuils(article)}</div>}{article.prix_unitaire!=null&&<div>{fmtEuro(article.prix_unitaire)} / pièce · valeur {fmtEuro(stock*article.prix_unitaire)}</div>}</div>
+      <div style={{fontSize:13,color:"#6B7280",textAlign:"right"}}>{article.groupe&&<div style={{color:"#1B4F8A",fontWeight:700}}>{libelleGroupe(article," + ")} : {qteEff(article)} en tout</div>}{libSeuils(article)&&<div>{libSeuils(article)}</div>}{article.prix_unitaire!=null&&<div>{fmtEuro(article.prix_unitaire)} / pièce · valeur {fmtEuro(stock*article.prix_unitaire)}</div>}</div>
     </div>
     <div className="stk-infos">
       {article.dimensions&&<div><b>Dimensions</b>{article.dimensions}</div>}
@@ -1107,12 +1112,12 @@ export function ScanDemande({typeDefaut,etats,onTermine,onRetour}){
 
 // ─── Remise au stock maximum (démarrage : évite une longue liste "à renouveler" tant que les quantités ne sont pas fiables) ──
 function RemiseMax({liste,libelle,qui,onFermer,onFait}){
-  const aRemonter=liste.filter(a=>a.stock_maxi!=null&&(a.quantite||0)<a.stock_maxi);
+  const aRemonter=liste.filter(a=>estPrincipal(a)&&maxiEff(a)!=null&&qteEff(a)<maxiEff(a));
   const [envoi,setEnvoi]=useState({enCours:false,erreur:null});
   async function valider(){
     if(!qui||envoi.enCours||!aRemonter.length)return;
     setEnvoi({enCours:true,erreur:null});
-    const corps=aRemonter.map(a=>({article_id:a.id,type:"inventaire",delta:a.stock_maxi-(a.quantite||0),utilisateur:qui,commentaire:"Remise au stock maximum"}));
+    const corps=aRemonter.map(a=>({article_id:a.id,type:"inventaire",delta:maxiEff(a)-qteEff(a),utilisateur:qui,commentaire:"Remise au stock maximum"}));
     for(let i=0;i<corps.length;i+=200){
       const r=await appel("POST","stock_mouvements",corps.slice(i,i+200),"return=minimal");
       if(!r.ok){setEnvoi({enCours:false,erreur:"L'enregistrement n'a pas abouti (connexion ?). Réessayez : les références déjà remises au maximum ne seront pas touchées une seconde fois."});await onFait();return;}
@@ -1354,12 +1359,12 @@ export default function PageStock({techs,sessionTech,admin}){
   const q=cle(recherche);
   const trouves=q?base.filter(a=>cle(a.reference).includes(q)||cle(a.dimensions).includes(q)||cle(a.emplacement).includes(q)).slice(0,20):[];
   const catalogue=base.filter(a=>serie==="toutes"||serieDe(a.reference)===serie);
-  const reco=base.filter(aRecommander).sort((a,b)=>{
-    const va=(a.quantite||0)<=0?0:1,vb=(b.quantite||0)<=0?0:1;
-    return va-vb||((a.quantite||0)/(a.stock_mini||1))-((b.quantite||0)/(b.stock_mini||1))||triRef(a,b);
+  const reco=base.filter(a=>aRecommander(a)&&estPrincipal(a)).sort((a,b)=>{
+    const va=qteEff(a)<=0?0:1,vb=qteEff(b)<=0?0:1;
+    return va-vb||(qteEff(a)/(miniEff(a)||1))-(qteEff(b)/(miniEff(b)||1))||triRef(a,b);
   });
   const aDemander=reco.filter(a=>!demandes.has(cle(designationDemande(a))));
-  const nbRupture=base.filter(a=>(a.quantite||0)<=0).length;
+  const nbRupture=base.filter(a=>estPrincipal(a)&&qteEff(a)<=0).length;
 
   async function envoyerDemandes(arts){
     if(!arts.length||cmdEnCours)return;
@@ -1367,7 +1372,7 @@ export default function PageStock({techs,sessionTech,admin}){
     setCmdEnCours(true);
     const id="stock-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     const base=Date.now();
-    const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:familleDe(a.reference),designation:designationDemande(a),quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+(a.quantite||0)+" / "+(libSeuils(a)||"seuil ?")+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
+    const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:familleDe(a.reference),designation:designationDemande(a),quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+qteEff(a)+" / "+(libSeuils(a)||"seuil ?")+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
     const r=await appel("POST","demandes_materiel",rows,"return=minimal");
     setCmdEnCours(false);
     if(!r.ok){afficherToast("La demande n'a pas abouti (connexion, ou « Matériel à commander » pas encore activé)");return;}
@@ -1386,9 +1391,9 @@ export default function PageStock({techs,sessionTech,admin}){
   async function exporter(){
     try{
       const XLSX=await import("xlsx");
-      const lignes=base.map(a=>({"Famille":LIB_FAMILLE[familleDe(a.reference)],"Référence":a.reference,"Dimensions":a.dimensions||"","Emplacement":a.emplacement||"","Stock minimum":a.stock_mini,"Stock maximum":a.stock_maxi,"Stock":a.quantite||0,"Prix unitaire":a.prix_unitaire,"Valeur du stock":(a.quantite||0)*(a.prix_unitaire||0),"À recommander":aRecommander(a)?"Oui":"Non","Quantité à recommander":aRecommander(a)?qteARecommander(a):0,"Fournisseur 1":a.fournisseur1||"","Fournisseur 2":a.fournisseur2||"","Fournisseur 3":a.fournisseur3||""}));
+      const lignes=base.map(a=>({"Famille":LIB_FAMILLE[familleDe(a.reference)],"Référence":a.reference,"Dimensions":a.dimensions||"","Emplacement":a.emplacement||"","Stock minimum":miniEff(a),"Stock maximum":maxiEff(a),"Stock":a.quantite||0,"Stock des 2 réunis":a.groupe?qteEff(a):"","Prix unitaire":a.prix_unitaire,"Valeur du stock":(a.quantite||0)*(a.prix_unitaire||0),"À recommander":aRecommander(a)?(estPrincipal(a)?"Oui":"Oui (voir "+a.membres[0]+")"):"Non","Quantité à recommander":aRecommander(a)&&estPrincipal(a)?qteARecommander(a):0,"Fournisseur 1":a.fournisseur1||"","Fournisseur 2":a.fournisseur2||"","Fournisseur 3":a.fournisseur3||""}));
       const ws=XLSX.utils.json_to_sheet(lignes);
-      ws["!cols"]=[{wch:18},{wch:16},{wch:14},{wch:12},{wch:8},{wch:8},{wch:8},{wch:10},{wch:12},{wch:12},{wch:10},{wch:14},{wch:14},{wch:14}];
+      ws["!cols"]=[{wch:18},{wch:16},{wch:14},{wch:12},{wch:8},{wch:8},{wch:8},{wch:12},{wch:10},{wch:12},{wch:12},{wch:10},{wch:14},{wch:14},{wch:14}];
       const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"Stock");
       const buf=XLSX.write(wb,{type:"array",bookType:"xlsx"});
       const d=new Date();const p=n=>String(n).padStart(2,"0");
@@ -1396,23 +1401,23 @@ export default function PageStock({techs,sessionTech,admin}){
     }catch(e){afficherToast("Export impossible");}
   }
   const carte=a=>{
-    const st=a.quantite||0,r=aRecommander(a),etat=st<=0?"vide":r?"bas":"";
+    const st=a.quantite||0,tot=qteEff(a),r=aRecommander(a),etat=tot<=0?"vide":r?"bas":"";
     return(<button type="button" key={a.id} className={"stk-carte "+etat} onClick={()=>{setRecherche("");setFicheId(a.id);}}>
       <div style={{minWidth:0}}>
-        <div><span className="stk-ref">{a.reference}</span>{r&&st>0&&<span className="stk-badge">À renouveler</span>}{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
+        <div><span className="stk-ref">{a.reference}</span>{r&&tot>0&&<span className="stk-badge">À renouveler</span>}{tot<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
         <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
       </div>
-      <div className={"stk-qte "+etat}>{st}<small>{libSeuils(a)||"en stock"}</small></div>
+      <div className={"stk-qte "+etat}>{st}<small>{a.groupe?"les 2 : "+tot+" · "+libSeuils(a).replace(" (les 2 réunis)",""):(libSeuils(a)||"en stock")}</small></div>
     </button>);
   };
 
   const ligneReno=a=>{
-    const st=a.quantite||0,dem=demandes.has(cle(designationDemande(a)));
+    const st=qteEff(a),dem=demandes.has(cle(designationDemande(a)));
     return(<div key={a.id} className={"stk-reno"+(st<=0?" vide":"")}>
       <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>setFicheId(a.id)}>
-        <div><span className="stk-ref">{a.reference}</span>{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
+        <div><span className="stk-ref">{libelleGroupe(a," + ")}</span>{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
         <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
-        <div className="stk-sub">Stock <b>{st}</b> · {libSeuils(a)||"seuil ?"} · à commander <b>{qteARecommander(a)}</b></div>
+        <div className="stk-sub">Stock{a.groupe?" des 2":""} <b>{st}</b> · {libSeuils(a)||"seuil ?"} · à commander <b>{qteARecommander(a)}</b></div>
       </div>
       <div className="act">{dem?<span className="stk-ok-pill">✓ Demandé</span>:<button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} onClick={()=>envoyerDemandes([a])}>Demander</button>}</div>
     </div>);

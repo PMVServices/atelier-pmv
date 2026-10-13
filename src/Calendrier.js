@@ -34,9 +34,9 @@ const aujourdhui=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.get
 // Les calendriers de l'année suivante se distribuent à partir de septembre
 const editionParDefaut=()=>{const d=new Date();return d.getMonth()>=8?d.getFullYear()+1:d.getFullYear();};
 const pluriel=(n,mot)=>n+" "+mot+(n>1?"s":"");
-// Stock de calendriers au départ (par édition) : 100 grands et 180 petits pour l'édition en cours ; modifiable par l'administrateur.
+// Stock de calendriers au départ (par édition) : 180 grands et 100 petits pour l'édition en cours ; modifiable par l'administrateur.
 // Rangé dans parametres_app sous la clé "calendrier_stock_<édition>" = "grands,petits".
-const STOCK_DEFAUT={g:100,p:180};
+const STOCK_DEFAUT={g:180,p:100};
 const cleStock=ed=>"calendrier_stock_"+ed;
 function lireStock(params,ed){
   const v=params&&params[cleStock(ed)];
@@ -200,6 +200,45 @@ function FormulaireDon({lignes,champClient,sessionTech,editionsConnues,departPou
   </div>);
 }
 
+// ── modification d'une remise déjà notée : quantités, contact, date, édition ─────────────
+function ModifRemise({ligne,editionsConnues,onEnregistre,onAnnuler}){
+  const [contact,setContact]=useState(ligne.contact||"");
+  const [grands,setGrands]=useState(ligne.grands||0);
+  const [petits,setPetits]=useState(ligne.petits||0);
+  const [date,setDate]=useState(String(ligne.donne_le||"").slice(0,10)||aujourdhui());
+  const [edition,setEdition]=useState(ligne.edition);
+  const [occupe,setOccupe]=useState(false);
+  const [erreur,setErreur]=useState(null);
+  async function enregistrer(){
+    if(occupe)return;
+    if(grands+petits<=0){setErreur("Indiquez au moins un calendrier (pour tout retirer, supprimez la ligne).");return;}
+    setOccupe(true);setErreur(null);
+    const rep=await db.patch("calendriers","?id=eq."+ligne.id,{contact:contact.trim(),grands,petits,donne_le:date||aujourdhui(),edition});
+    if(Array.isArray(rep)&&rep[0])onEnregistre(rep[0]);
+    else setErreur("La modification n'a pas abouti (connexion ?). Rien n'a été changé.");
+    setOccupe(false);
+  }
+  return(<div style={{background:"#F8F9FA",border:"2px solid #1B4F8A",borderRadius:10,padding:"10px 12px",margin:"6px 0"}}>
+    <div style={{fontSize:13,fontWeight:800,color:"#1B4F8A",marginBottom:8}}>✏ Modifier cette remise — {ligne.client}</div>
+    <div style={{marginBottom:10}}><label style={LBL}>Contact</label><ChampContact valeur={contact} onChange={(id,val)=>setContact(val)} champ={{id:"contact",remplit:{}}} v={{}}/></div>
+    <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:10}}>
+      <Compteur libelle="Grands" valeur={grands} onChange={setGrands}/>
+      <Compteur libelle="Petits" valeur={petits} onChange={setPetits}/>
+    </div>
+    <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:10}}>
+      <div style={{flex:"1 1 150px"}}><label style={LBL}>Date de remise</label><input type="date" value={date} onChange={e=>setDate(e.target.value)} style={INP}/></div>
+      <div style={{flex:"1 1 150px"}}><label style={LBL}>Édition du calendrier</label>
+        <select value={edition} onChange={e=>setEdition(parseInt(e.target.value,10))} style={INP}>{editionsConnues.map(y=><option key={y} value={y}>{y}</option>)}</select>
+      </div>
+    </div>
+    {erreur&&<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,padding:"8px 10px",fontSize:13,color:"#D73A49",marginBottom:10}}>{erreur}</div>}
+    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+      <button type="button" onClick={enregistrer} disabled={occupe} style={{...BTN1,opacity:occupe?0.6:1}}>{occupe?"⏳ Enregistrement…":"✓ Enregistrer"}</button>
+      <button type="button" onClick={onAnnuler} style={BTN2}>Annuler</button>
+    </div>
+  </div>);
+}
+
 // ── page ───────────────────────────────────────────────────────────────
 export default function PageCalendrier({sessionTech,champClient,admin}){
   const [donnees,setDonnees]=useState({lignes:[],dispo:null});
@@ -209,6 +248,7 @@ export default function PageCalendrier({sessionTech,champClient,admin}){
   const [edition,setEdition]=useState(editionParDefaut());
   const [formulaire,setFormulaire]=useState(false);
   const [aSupprimer,setASupprimer]=useState(null);
+  const [enModif,setEnModif]=useState(null); // id de la remise en cours de modification
   const [message,setMessage]=useState(null);
   const [activation,setActivation]=useState(false);
   const [params,setParams]=useState({});
@@ -258,6 +298,13 @@ export default function PageCalendrier({sessionTech,champClient,admin}){
     setFormulaire(false);
     setEdition(rows[0].edition);
     setMessage("✓ Noté pour "+client+" : "+rows.map(r=>r.contact+" ("+libelleQte(r.grands,r.petits)+")").join(", "));
+    setTimeout(()=>setMessage(null),6000);
+  }
+  function apresModification(row){
+    setDonnees(d=>({...d,lignes:d.lignes.map(x=>x.id===row.id?row:x)}));
+    setEnModif(null);
+    if(edition!=="toutes")setEdition(row.edition); // on suit la remise si elle a changé d'édition
+    setMessage("✓ Remise modifiée : "+(row.contact||"(sans contact)")+" — "+libelleQte(row.grands,row.petits)+".");
     setTimeout(()=>setMessage(null),6000);
   }
   async function supprimer(){
@@ -341,12 +388,13 @@ export default function PageCalendrier({sessionTech,champClient,admin}){
         <div style={{fontSize:15,fontWeight:800,color:"#1B4F8A",minWidth:0,overflowWrap:"anywhere"}}>{g.client}</div>
         <div style={{fontSize:13,fontWeight:700,color:"#374151"}}>{libelleQte(g.grands,g.petits)}</div>
       </div>
-      {g.lignes.map(l=>(<div key={l.id} style={{display:"flex",gap:10,alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderTop:"1px solid #F3F4F6",flexWrap:"wrap"}}>
+      {g.lignes.map(l=>enModif===l.id?<ModifRemise key={l.id} ligne={l} editionsConnues={editions} onEnregistre={apresModification} onAnnuler={()=>setEnModif(null)}/>:(<div key={l.id} style={{display:"flex",gap:10,alignItems:"center",justifyContent:"space-between",padding:"7px 0",borderTop:"1px solid #F3F4F6",flexWrap:"wrap"}}>
         <div style={{minWidth:0,flex:"1 1 180px"}}>
           <div style={{fontSize:14,fontWeight:600,overflowWrap:"anywhere"}}>{l.contact||"(sans contact)"}</div>
           <div style={{fontSize:12,color:"#6B7280"}}>{frDate(l.donne_le)}{edition==="toutes"?" · édition "+l.edition:""}{l.par?" · noté par "+l.par:""}</div>
         </div>
         <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{libelleQte(l.grands,l.petits)}</div>
+        <button type="button" onClick={()=>setEnModif(l.id)} title="Modifier cette remise (quantités, contact, date)" aria-label="Modifier cette remise" style={{background:"transparent",border:"none",color:"#1B4F8A",cursor:"pointer",fontSize:15,padding:"4px 8px"}}>✏</button>
         <button type="button" onClick={()=>setASupprimer(l)} title="Supprimer cette ligne" aria-label="Supprimer cette ligne" style={{background:"transparent",border:"none",color:"#9CA3AF",cursor:"pointer",fontSize:15,padding:"4px 8px"}}>🗑</button>
       </div>))}
     </div>))}
