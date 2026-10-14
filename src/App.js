@@ -5533,6 +5533,7 @@ function pageAutorisee(page,role){
 // Mode "Stock seul" (adresse /stock/, utilisée par l'icône PMV Stock du téléphone) : une seule page, sans menu.
 // Mode « Gestion de stock » (adresse /poste/, application installée sur l'ordinateur du stock) : même page Stock, sans menu, avec le poste douchette ouvert d'office.
 const MODE_POSTE=typeof window!=="undefined"&&/^\/poste(\/|$)/.test(window.location.pathname);
+const PERSONNE_POSTE={id:"poste",nom:"Poste",prenom:"stock",initiales:"",profil:"tech"};
 const MODE_STOCK=MODE_POSTE||(typeof window!=="undefined"&&(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search)));
 
 export default function App(){
@@ -5606,7 +5607,7 @@ export default function App(){
   // Accès par personne : la liste vient de la base ; le profil de la personne choisie décide de ce qu'elle voit
   const chargerAcces=()=>{setErreurAcces(null);lirePersonnes().then(r=>{if(r.liste)setPersonnes(r.liste);else setErreurAcces(r.erreur);});};
   useEffect(()=>{chargerAcces();},[]);
-  const moi=personnes&&moiId?(personnes.find(p=>p.id===moiId)||null):null;
+  const moi=MODE_POSTE?PERSONNE_POSTE:(personnes&&moiId?(personnes.find(p=>p.id===moiId)||null):null);
   const role=moi?moi.profil:"tech";
   const admin=role==="admin",commercial=role==="commercial";
   const demanderQui=useCallback(cb=>setDemandeQui({cb}),[]);
@@ -5631,8 +5632,8 @@ export default function App(){
     return()=>{document.removeEventListener("visibilitychange",auRetour);clearInterval(t);};
   },[moiId]);
   if(!pinOk)return <EcranCode code={PIN_CODE} logo={LOGO_B64} onSucces={()=>setPinOk(true)}/>;
-  if(personnes===null)return <EcranChargement erreur={erreurAcces} onRetour={chargerAcces}/>;
-  if(personnes.length===0)return <EcranPremierDemarrage codeAdmin={ADMIN_CODE} logo={LOGO_B64} onCree={p=>{setPersonnes([p]);choisirPersonne(p);}}/>;
+  if(!MODE_POSTE&&personnes===null)return <EcranChargement erreur={erreurAcces} onRetour={chargerAcces}/>;
+  if(!MODE_POSTE&&personnes.length===0)return <EcranPremierDemarrage codeAdmin={ADMIN_CODE} logo={LOGO_B64} onCree={p=>{setPersonnes([p]);choisirPersonne(p);}}/>;
   if(!moi)return <EcranQui personnes={personnes} derniereId={(()=>{try{return localStorage.getItem(CLE_DERNIERE);}catch(e){return null;}})()} logo={LOGO_B64} onChoisir={choisirPersonne}/>;
   const ecranChoix=(changerPers||demandeQui)&&<EcranQui personnes={personnes} derniereId={null} logo={LOGO_B64}
     titre={demandeQui?"Qui utilise l'application ?":"Changer de personne"}
@@ -5647,7 +5648,7 @@ export default function App(){
           ?<img src={(process.env.PUBLIC_URL||"")+"/poste96.png"} alt="" style={{height:38,width:38,objectFit:"contain",flexShrink:0}}/>
           :<img src={LOGO_B64} alt="PMV" style={{height:30,objectFit:"contain",borderRadius:4,flexShrink:0}}/>}
         <span style={{color:"#fff",fontWeight:700,fontSize:MODE_POSTE?20:16,marginLeft:10}}>{MODE_POSTE?"Gestion de stock":"Stock"}</span>
-        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{chipPersonne(true)}{!MODE_POSTE&&<a href="/" style={{color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a>}</span>
+        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{!MODE_POSTE&&chipPersonne(true)}{!MODE_POSTE&&<a href="/" style={{color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a>}</span>
       </div>
       {commercial
         ?<div style={{maxWidth:520,margin:"40px auto",padding:"0 16px",textAlign:"center",color:"#6B7280",fontSize:14}}>Le stock n'est pas accessible avec le profil Commercial.<div style={{marginTop:12}}><button onClick={()=>setChangerPers(true)} style={S.p1}>🔁 Changer de personne</button></div></div>

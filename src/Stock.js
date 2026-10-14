@@ -1367,13 +1367,13 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
     return r.ok&&Array.isArray(r.data)&&r.data[0]?(r.data[0].quantite||0):null;
   }
   async function mouvement(a,type,delta,commentaire){
-    const r=await appel("POST","stock_mouvements",[{article_id:a.id,type,delta,chantier:null,utilisateur:opRef.current,commentaire:commentaire||null}],"return=representation");
+    const r=await appel("POST","stock_mouvements",[{article_id:a.id,type,delta,chantier:null,utilisateur:opRef.current||"Poste",commentaire:commentaire||null}],"return=representation");
     if(!r.ok||!Array.isArray(r.data)||!r.data[0])return null;
     const apres=await quantiteDe(a.id);
     return {id:r.data[0].id,apres:apres===null?null:apres};
   }
   async function enregistrer(a){
-    if(!opRef.current){setDernier({genre:"err",titre:"Opérateur ?",detail:"Choisissez l'opérateur en haut de l'écran, puis rescannez."});son(300,0.25,2);return;}
+    if(!opRef.current&&!modePoste){setDernier({genre:"err",titre:"Opérateur ?",detail:"Choisissez l'opérateur en haut de l'écran, puis rescannez."});son(300,0.25,2);return;}
     const type=modeRef.current,delta=type==="sortie"?-1:1;
     const m=await mouvement(a,type,delta);
     if(!m){setDernier({genre:"err",titre:"Non enregistré",detail:a.reference+" : connexion ? Rescannez l'étiquette."});son(300,0.25,2);return;}
@@ -1468,7 +1468,7 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
   return(<div className="stk-session" role="dialog" aria-label="Poste douchette">
     <div className="stk-session-tete">
       <strong style={{fontSize:17}}>🎯 Poste douchette</strong>
-      <select className="stk-select" value={op} onChange={e=>{setOp(e.target.value);if(setQui)setQui(e.target.value||null);e.target.blur();}} aria-label="Opérateur" style={{marginLeft:"auto",minWidth:0,maxWidth:"45%"}}><option value="">Opérateur ?</option>{liste.map(t=><option key={t} value={t}>{t}</option>)}</select>
+      <select className="stk-select" value={op} onChange={e=>{setOp(e.target.value);if(setQui)setQui(e.target.value||null);e.target.blur();}} aria-label="Opérateur" style={{marginLeft:"auto",minWidth:0,maxWidth:"45%"}}><option value="">{modePoste?"Poste (sans nom)":"Opérateur ?"}</option>{liste.map(t=><option key={t} value={t}>{t}</option>)}</select>
       <button type="button" className="stk-x" onClick={fermer} aria-label="Fermer le poste douchette">✕</button>
     </div>
     <div className="stk-session-corps">
@@ -1478,7 +1478,7 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
       </div>
       {!dernier&&<div style={{background:"#fff",border:"1px dashed #BFC8D4",borderRadius:14,padding:"28px 16px",textAlign:"center",color:"#6B7280",fontSize:16}}>
         Scannez une étiquette avec la douchette.<br/><span style={{fontSize:13}}>Rien à toucher : le scan enregistre tout de suite.</span>
-        {!op&&<div className="stk-alerte" style={{marginTop:12}}>Choisissez l'opérateur en haut de l'écran.</div>}
+        {!op&&!modePoste&&<div className="stk-alerte" style={{marginTop:12}}>Choisissez l'opérateur en haut de l'écran.</div>}
       </div>}
       {dernier&&dernier.genre==="ok"&&<div className="flash" style={{background:dernier.apres!==null&&dernier.apres<0&&dernier.type==="sortie"?"#FFF8E1":"#E9F6EC",border:"2px solid "+(dernier.apres!==null&&dernier.apres<0&&dernier.type==="sortie"?"#E8720C":"#22863A"),borderRadius:14,padding:"14px 16px"}}>
         <div style={{fontSize:13,fontWeight:700,color:dernier.type==="sortie"?"#B42318":"#1B6B2E"}}>✓ {dernier.type==="sortie"?"Sortie −1":"Entrée +1"} enregistrée</div>
@@ -1704,7 +1704,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
       </>}
     </>}
 
-    {poste&&<PosteDouchette articles={articles} techs={techs} quiInit={liste.includes(iniMoi)?iniMoi:(qui||"")} setQui={setQui} modePoste={!!modePoste} onChange={apresMouvement} onFermer={()=>setPoste(false)}/>}
+    {poste&&<PosteDouchette articles={articles} techs={techs} quiInit={modePoste?"":(liste.includes(iniMoi)?iniMoi:(qui||""))} setQui={setQui} modePoste={!!modePoste} onChange={apresMouvement} onFermer={()=>setPoste(false)}/>}
     {session&&<SessionScan mode={session} articles={articles} techs={techs} qui={qui} setQui={setQui} onFermer={()=>setSession(null)} onChange={apresMouvement} afficherToast={afficherToast}/>}
     {admin&&tel&&<LienTelephone onFermer={()=>setTel(false)}/>}
     {admin&&remiseMax&&<RemiseMax liste={base} libelle={famille==="toutes"?"toutes les familles":LIB_FAMILLE[famille]} qui={qui} onFermer={n=>{setRemiseMax(false);if(n)afficherToast("✓ "+n+" référence"+(n>1?"s":"")+" remise"+(n>1?"s":"")+" au stock maximum");}} onFait={apresMouvement}/>}
