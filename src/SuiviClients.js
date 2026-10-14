@@ -262,7 +262,7 @@ function Formulaire({initial,fiches,champClient,par,onEnregistre,onAnnuler}){
   const [occupe,setOccupe]=useState(false);const [erreur,setErreur]=useState(null);
   const maj=(id,val)=>setF(x=>({...x,[id]:val}));
   useEffect(()=>{db.get("fiches_chantier","?select=de,client,materiel&order=created_at.desc&limit=1000").then(d=>{if(Array.isArray(d))setChantiers(d);}).catch(()=>{});},[]);
-  const deNorm=normaliserDE(f.de);
+  const deNorm=normaliserDE(f.de,f.client);
   const trouvees=useMemo(()=>{
     if(!deNorm||deNorm.length<4)return [];
     return [...fiches.map(x=>({type:"atelier",de:x.de,client:x.client,lieu:x.materiel_lieu||x.materiel})),...chantiers.map(x=>({type:"chantier",de:x.de,client:x.client,lieu:x.materiel}))]
@@ -848,7 +848,7 @@ function LienAction({onClick,children,title,style}){
   return <span role="button" tabIndex={0} title={title} onClick={onClick} onKeyDown={e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();onClick(e);}}} style={{color:"#1B4F8A",cursor:"pointer",textDecoration:"underline",textDecorationColor:"#B7C9E2",...style}}>{children}</span>;
 }
 function useFichesParDe(fiches){
-  return useMemo(()=>{const m=new Map();(fiches||[]).forEach(f=>{const k=normaliserDE(f.de||"");if(k&&!m.has(k))m.set(k,f);});return m;},[fiches]);
+  return useMemo(()=>{const m=new Map();(fiches||[]).forEach(f=>{const k=normaliserDE(f.de||"",f.client);if(k&&!m.has(k))m.set(k,f);});return m;},[fiches]);
 }
 const FenetreFond=({onFermer,children,largeur=440})=><div onClick={onFermer} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",zIndex:300,padding:12,overflowY:"auto"}}>
   <div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:"20px 18px",width:"100%",maxWidth:largeur,margin:"auto",boxSizing:"border-box"}}>{children}</div>

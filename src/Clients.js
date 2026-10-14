@@ -192,7 +192,7 @@ export default function PageClients({clients,fiches,suivi,onOuvrirFiche}){
     return()=>{ok=false;};
   },[]);
 
-  const fichesParDe=useMemo(()=>{const m=new Map();(fiches||[]).forEach(f=>{const k=normaliserDE(f.de||"");if(k&&!m.has(k))m.set(k,f);});return m;},[fiches]);
+  const fichesParDe=useMemo(()=>{const m=new Map();(fiches||[]).forEach(f=>{const k=normaliserDE(f.de||"",f.client);if(k&&!m.has(k))m.set(k,f);});return m;},[fiches]);
   const {index,liste}=useMemo(()=>{
     const m=new Map();
     const nomsListe=new Set((clients||[]).map(norm));

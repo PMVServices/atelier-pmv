@@ -21,7 +21,15 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
   // Helpers
   function fmt(id,c){
     var val=v[id]||"";
+    // champs de la fiche cheminée (PMV Rail) : photo obligatoire, verdict calculé, case « fait »
+    if(c.type==="photo_requise"){
+      if(val==="impossible")return "Photo impossible — "+esc(v[id+"__just"]||"justification manquante");
+      var np=(photos||[]).filter(function(p){return p.categorie_nom===c.categorie;}).length;
+      return np?"✓ "+np+" photo"+(np>1?"s":""):"—";
+    }
+    if(c.type==="verdict"){var rv=c.verdict(v);return esc(rv.texte);}
     if(!val)return "—";
+    if(c.type==="fait")return "Fait ✓";
     if(c.type==="ohm"){var p=val.split("_");return(p[0]||"")+(p[1]?" "+p[1]:"");}
     if(c.type==="joints"){try{var j=JSON.parse(val);return j.map(function(x){if(x.type==="VA"||x.type==="VS")return x.type+(x.int||"?");return x.int+"x"+x.ext+"x"+x.ep+" "+(x.type==="Double"?"DL":"SL");}).join(", ");}catch(e){return val;}}
     if(c.type==="oui_non")return val==="Oui"?"Oui":val==="Non"?"Non":val;
@@ -60,7 +68,7 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
 
     // Trouver les champs avec valeur (hors technicien, hors info, hors photo_skf, hors champs masqués par une condition)
     var champsAvecVal=csEtape.filter(function(c){
-      return c.type!=="technicien"&&c.type!=="info"&&c.type!=="conseil"&&c.type!=="photo_skf"&&champVisiblePdf(c,v);
+      return c.type!=="technicien"&&c.type!=="info"&&c.type!=="conseil"&&c.type!=="photo_skf"&&c.type!=="titre"&&c.type!=="illustration"&&champVisiblePdf(c,v);
     });
 
     html+="<table>";
@@ -70,6 +78,9 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
       html+="<tr class='nr'><td colspan='4'>⚠ Étape non réalisable</td></tr>";
     }
 
+    // un intitulé (type « titre » avec prefixe:true) précède le libellé des champs qui le suivent : « Résistance N°3 — Isolement 5 kV »
+    var prefixes={};var titreCourant="";csEtape.forEach(function(c){if(c.type==="titre")titreCourant=c.prefixe?c.label:"";else prefixes[c.id]=titreCourant;});
+    function lib(c){return (prefixes[c.id]?prefixes[c.id]+" — ":"")+c.label;}
     // Afficher les champs 2 par 2
     var champs2=champsAvecVal.filter(function(c){return c.type!=="textarea"&&c.type!=="materiel_liste";});
     var champsTA=champsAvecVal.filter(function(c){return c.type==="textarea"||c.type==="materiel_liste";});
@@ -77,11 +88,11 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
     for(var i=0;i<champs2.length;i+=2){
       var c1=champs2[i];
       var c2=champs2[i+1];
-      html+="<tr><td class='lbl'>"+c1.label+"</td><td class='val'>"+fmt(c1.id,c1)+"</td><td class='lbl'>"+(c2?c2.label:"")+"</td><td class='val'>"+(c2?fmt(c2.id,c2):"")+"</td></tr>";
+      html+="<tr><td class='lbl'>"+lib(c1)+"</td><td class='val'>"+fmt(c1.id,c1)+"</td><td class='lbl'>"+(c2?lib(c2):"")+"</td><td class='val'>"+(c2?fmt(c2.id,c2):"")+"</td></tr>";
     }
     // Textareas pleine largeur
     champsTA.forEach(function(c){
-      html+="<tr><td class='lbl'>"+c.label+"</td><td colspan='3' class='val'>"+fmt(c.id,c)+"</td></tr>";
+      html+="<tr><td class='lbl'>"+lib(c)+"</td><td colspan='3' class='val'>"+fmt(c.id,c)+"</td></tr>";
     });
     // cases libres ajoutées dans cette étape (seulement celles qui ont une valeur)
     var libres=[];try{libres=JSON.parse(v.cases_libres||"[]");}catch(e){libres=[];}

@@ -3,7 +3,7 @@ import {genHtml, imprimerFiche, telechargerZip, apercuRapport, afficherApercu, t
 import {exporterRapportDocx} from "./rapportDocx";
 import {SUPA_URL,SUPA_KEY,H,db} from "./supabase";
 import {NoticeActivation} from "./Activation";
-import PageStock, {ScanDemande} from "./Stock";
+import {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
 import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerResume, verifierResumeQuotidien, NOMS_JOURS} from "./Alertes";
 import PageCalendrier from "./Calendrier";
@@ -14,6 +14,9 @@ import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPrem
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
+import {CHAMPS_CHEMINEE, ETAPES_CHEMINEE} from "./Cheminee";
+import {TYPE_CHEMINEE, prefixeNumero, normaliserNumero} from "./railClients";
+import PageStockRail, {synchroniserIsolateursRail, supprimerMouvementsRailFiche, chargerClientsRail} from "./Rail";
 
 const LOGO_B64 = "data:image/jpeg;base64,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";
 // LOGO_B64 moved to pdfUtils.js
@@ -113,6 +116,7 @@ function champsIdentitePour(typeMateriel){
   if(typeMateriel==="Pompe")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_POMPE);
   if(typeMateriel==="Moto-réducteur")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_REDUCTEUR);
   if(typeMateriel==="Autre")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_AUTRE);
+  if(typeMateriel===TYPE_CHEMINEE)return ["client"];
   if(typeMateriel==="Ventilateur")return CHAMPS_IDENTITE_COMMUN.concat(CHAMPS_IDENTITE_VENTILATEUR);
   return CHAMPS_IDENTITE_COMMUN;
 }
@@ -634,11 +638,19 @@ const CHAMPS_REDUCTEUR={
 };;
 
 function champVisible(c,v){if(!c.condition)return true;if(typeof c.condition==="function")return c.condition(v);if(Array.isArray(c.condition))return c.condition.every(cd=>v[cd.champ]===cd.valeur);return v[c.condition.champ]===c.condition.valeur;}
-function etapeOk(nom,v,nr,cs){
+// « required » peut être une fonction de la fiche (ex. gravure obligatoire seulement pour une cheminée SNCF)
+function estRequis(c,v){return typeof c.required==="function"?!!c.required(v):!!c.required;}
+// Photo obligatoire (fiche cheminée) : une photo de la catégorie, ou « photo impossible » avec une justification
+function photoRequiseOk(c,v,photos){
+  if(v[c.id]==="impossible")return String(v[c.id+"__just"]||"").trim().length>0;
+  return (photos||[]).some(p=>p.categorie_nom===c.categorie);
+}
+function etapeOk(nom,v,nr,cs,photos){
   if(nr)return true;
   for(const c of((cs||CHAMPS)[nom]||[])){
     if(!champVisible(c,v))continue;
-    if(c.required&&!v[c.id])return false;
+    if(c.type==="photo_requise"){if(c.required&&!photoRequiseOk(c,v,photos))return false;continue;}
+    if(estRequis(c,v)&&!v[c.id])return false;
     if(c.orRequiredWith&&!v[c.id]&&!v[c.orRequiredWith])return false;
   }
   return true;
@@ -1040,11 +1052,83 @@ function SectionPhotos({etape,ficheId,cheminBase,categories,photos,toutes,onPhot
   </div>);
 }
 
-function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,photos=[],onPhotoAdded}){
+// Bouton rond « ? » à côté d'un libellé : explique où trouver l'information (aide : texte ou {texte, image})
+function EnteteAide({lbl,aide}){
+  const [ouvert,setOuvert]=useState(false);
+  const a=typeof aide==="string"?{texte:aide}:aide;
+  return(<div>
+    <div style={{display:"flex",alignItems:"center",gap:8}}>{lbl}<button type="button" onClick={()=>setOuvert(o=>!o)} aria-label="Aide : où trouver cette information ?" aria-expanded={ouvert} title="Où trouver cette information ?" style={{width:28,height:28,borderRadius:"50%",border:"1.5px solid #1B4F8A",background:ouvert?"#1B4F8A":"#fff",color:ouvert?"#fff":"#1B4F8A",fontWeight:700,fontSize:14,lineHeight:1,cursor:"pointer",padding:0,flexShrink:0,marginBottom:3}}>?</button></div>
+    {ouvert&&<div style={{background:"#EEF4FF",border:"1px solid #1B4F8A",borderRadius:8,padding:"9px 12px",fontSize:13,color:"#1B4F8A",margin:"2px 0 8px",lineHeight:1.5}}>{a.texte}{a.image&&<img src={(process.env.PUBLIC_URL||"")+a.image} alt="" style={{display:"block",maxWidth:"100%",height:"auto",marginTop:8,borderRadius:6}}/>}</div>}
+  </div>);
+}
+
+// Photo obligatoire de la fiche cheminée (PMV Rail) : « Prendre la photo » ; sans photo on ne passe pas à l'étape suivante,
+// sauf « Photo impossible » avec une justification obligatoire.
+function ChampPhotoRequise({c,v,onChange,etape,ficheId,cheminBase,photos=[],onPhotoAdded,onPhotoRemoved}){
+  const [envoi,setEnvoi]=useState(false);const [erreur,setErreur]=useState("");const [apercu,setApercu]=useState(null);
+  const [aSupprimer,setASupprimer]=useState(null);const [suppression,setSuppression]=useState(false);const inputRef=useRef(null);
+  const slugC=slugCat(c.categorie);
+  const siennes=photos.filter(p=>p.categorie_nom===c.categorie);
+  const impossible=v[c.id]==="impossible";
+  const requis=!!c.required;const ok=photoRequiseOk(c,v,photos);
+  const justif=v[c.id+"__just"]||"";
+  async function envoyer(file,decalage){
+    const memeCat=photos.filter(p=>p.categorie_slug===slugC||(p.nom_fichier||"").startsWith(slugC+"_"));
+    const dernier=memeCat.reduce((m,p)=>{const k=parseInt(((p.nom_fichier||"").match(/_(\d+)\.[^.]+$/)||[])[1],10);return isNaN(k)?m:Math.max(m,k);},0);
+    const nomFichier=slugC+"_"+(Math.max(memeCat.length,dernier)+1+decalage)+(file.name.match(/\.[^.]+$/)?.[0]||".jpg");
+    const path=cheminBase+"/"+nomFichier;
+    await db.uploadPhoto(path,file);
+    const donnees={fiche_id:ficheId||null,etape,categorie_slug:slugC,categorie_nom:c.categorie,nom_fichier:nomFichier,storage_path:path};
+    if(ficheId){
+      const rec=await db.post("fiche_photos",donnees);
+      if(!(Array.isArray(rec)&&rec[0])){await db.deleteFile(path);throw new Error("La photo n'a pas pu être rattachée à la fiche.");}
+    }
+    onPhotoAdded({...donnees,url:db.photoUrl(path)});
+  }
+  async function choisir(e){
+    const fichiers=Array.from(e.target.files||[]);if(!fichiers.length)return;
+    setEnvoi(true);setErreur("");
+    try{for(let i=0;i<fichiers.length;i++)await envoyer(fichiers[i],i);}catch(err){setErreur("Erreur d'envoi : "+(err&&err.message?err.message:"connexion ?"));}
+    setEnvoi(false);if(inputRef.current)inputRef.current.value="";
+  }
+  async function confirmerSuppression(){
+    const p=aSupprimer;if(!p)return;setSuppression(true);setErreur("");
+    try{await supprimerPhotoEnBase(p,"fiche_photos",ficheId);if(onPhotoRemoved)onPhotoRemoved(p);if(apercu===p)setApercu(null);setASupprimer(null);}
+    catch(err){setErreur("Erreur suppression : "+err.message);}
+    setSuppression(false);
+  }
+  return(<div style={{marginBottom:12,border:"1.5px solid "+(ok?"#22863A":"#E2E6EA"),borderRadius:8,padding:"10px 12px",background:ok?"#F0FFF4":"#fff"}}>
+    <label style={{...S.lbl,color:ok?"#22863A":(requis?"#D73A49":"#6B7280"),marginBottom:6}}>📷 {c.label}{requis&&<span style={{color:"#D73A49"}}> *</span>}{ok&&!impossible?" ✓":""}</label>
+    {siennes.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>{siennes.map(p=><div key={p.storage_path} onClick={()=>setApercu(p)} style={{cursor:"pointer",position:"relative"}}><CroixPhoto onClick={()=>setASupprimer(p)}/><img src={p.url} alt={c.label} style={{width:64,height:64,objectFit:"cover",borderRadius:5,border:"1.5px solid #E2E6EA",display:"block"}}/></div>)}</div>}
+    <ConfirmerSuppressionPhoto photo={aSupprimer} occupe={suppression} onConfirmer={confirmerSuppression} onAnnuler={()=>setASupprimer(null)} styleBouton={S.p2} styleBoutonDanger={S.pDanger}/>
+    {impossible
+      ?<div>
+        <div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:6,padding:"7px 10px",fontSize:12,color:"#8A4B00",marginBottom:6}}>Photo impossible : expliquez pourquoi (obligatoire).</div>
+        <ChampTexteDictee champId={c.id+"__just"} valeur={justif} onChange={onChange} erreur={!justif.trim()}/>
+        {!justif.trim()&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>Justification obligatoire</div>}
+        <button type="button" onClick={()=>onChange(c.id,"")} style={{...S.p2,fontSize:12,padding:"6px 12px",marginTop:8}}>📷 Finalement, prendre la photo</button>
+      </div>
+      :<div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+        <button type="button" disabled={envoi} onClick={()=>inputRef.current&&inputRef.current.click()} style={{...S.p1,fontSize:13,padding:"9px 16px",minHeight:44,opacity:envoi?0.6:1}}>{envoi?"⏳ Envoi…":(siennes.length?"📷 Ajouter une photo":"📷 Prendre la photo")}</button>
+        {siennes.length===0&&<button type="button" onClick={()=>onChange(c.id,"impossible")} style={{background:"none",border:"none",padding:"8px 4px",fontSize:12,color:"#6B7280",textDecoration:"underline",cursor:"pointer"}}>Photo impossible ?</button>}
+      </div>}
+    <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={choisir} style={{display:"none"}}/>
+    {erreur&&<p style={{fontSize:11,color:"#D73A49",margin:"6px 0 0"}}>{erreur}</p>}
+    {apercu&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}} onClick={()=>setApercu(null)}><img src={apercu.url} alt={c.label} style={{maxWidth:"92vw",maxHeight:"82vh",objectFit:"contain",borderRadius:8}}/><p style={{color:"#fff",marginTop:10,fontSize:13}}>{c.label}</p><p style={{color:"rgba(255,255,255,0.5)",fontSize:11,marginTop:4}}>Appuyez pour fermer</p></div>}
+  </div>);
+}
+
+function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,photos=[],onPhotoAdded,onPhotoRemoved,etape}){
   if(!champVisible(c,v))return null;
   if(c.type==="conseil")return <div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:8,padding:"10px 12px",fontSize:13,color:"#8A4B00",marginBottom:12,lineHeight:1.5}}>💡 {typeof c.texte==="function"?c.texte(v):c.texte}</div>;
-  const val=v[c.id]||"";const manqueOr=c.orRequiredWith&&!val&&!v[c.orRequiredWith];const manque=(c.required&&!val)||manqueOr;const err=enErreur(c,val);
-  const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>{c.label}{(c.required||c.orRequiredWith)&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&!c.unitesChoix&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}{c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:10}}> — {c.note}</span>}</label>;
+  if(c.type==="titre")return <p style={{fontSize:13,fontWeight:700,color:"#1B4F8A",margin:"16px 0 8px",paddingBottom:4,borderBottom:"1px solid #E2E6EA"}}>{c.label}</p>;
+  if(c.type==="illustration")return <figure style={{margin:"0 0 12px",textAlign:"center"}}><img src={(process.env.PUBLIC_URL||"")+c.src} alt={c.legende||""} style={{width:"100%",maxWidth:c.largeur||360,height:"auto",border:"1px solid #E2E6EA",borderRadius:6,background:"#fff"}}/>{c.legende&&<figcaption style={{fontSize:11,color:"#6B7280",marginTop:4}}>{c.legende}</figcaption>}</figure>;
+  if(c.type==="verdict"){const r=c.verdict(v);const col=r.ok===true?"#22863A":r.ok===false?"#D73A49":"#6B7280";return <div style={{marginBottom:12}}><label style={S.lbl}>{c.label}</label><div style={{padding:"7px 9px",borderRadius:6,border:"1.5px solid "+col,background:r.ok===true?"#F0FFF4":r.ok===false?"#FFF5F5":"#F8F9FA",color:col,fontSize:13,fontWeight:700}}>{r.texte}</div></div>;}
+  if(c.type==="fait"){const requisF=estRequis(c,v);const coche=!!v[c.id];return <div style={{marginBottom:10}}><label style={{display:"flex",alignItems:"flex-start",gap:10,fontSize:13,cursor:"pointer",padding:"9px 10px",minHeight:44,borderRadius:8,border:"1.5px solid "+(coche?"#22863A":"#D1D5DB"),background:coche?"#F0FFF4":"#fff",color:coche||!requisF?"#1A1A2E":"#D73A49"}}><input type="checkbox" checked={coche} onChange={e=>onChange(c.id,e.target.checked?"Oui":"")} style={{width:20,height:20,marginTop:0,flexShrink:0,accentColor:"#22863A"}}/><span>{c.label}{requisF&&<span style={{color:"#D73A49"}}> *</span>}</span></label></div>;}
+  if(c.type==="photo_requise")return <ChampPhotoRequise c={c} v={v} onChange={onChange} etape={etape} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved}/>;
+  const requis=estRequis(c,v);const val=v[c.id]||"";const manqueOr=c.orRequiredWith&&!val&&!v[c.orRequiredWith];const manque=(requis&&!val)||manqueOr;const err=enErreur(c,val);
+  const libelle=(c.id==="de"&&!c.prefixe)?c.label.replace(/\bDE\b/,prefixeNumero(v.client)):c.label;
+  const lbl=<label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>{libelle}{(requis||c.orRequiredWith)&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&!c.unitesChoix&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none"}}> ({c.unite})</span>}{c.note&&<span style={{color:"#9CA3AF",fontWeight:400,textTransform:"none",fontSize:10}}> — {c.note}</span>}</label>;
   let ctrl;
   if(c.type==="contact")ctrl=<ChampContact valeur={val} onChange={onChange} champ={c} v={v}/>;
   else if(c.type==="client")ctrl=<ChampClient valeur={val} onChange={nv=>onChange(c.id,nv)} clients={clients} onAddClient={onAddClient}/>;
@@ -1070,8 +1154,8 @@ function UnChamp({c,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,phot
   else if(c.type==="number")ctrl=<div style={{display:"flex",alignItems:"center",gap:6}}><input type="number" value={val} onChange={e=>onChange(c.id,e.target.value)} style={{...S.inp,flex:1}} placeholder="—"/>{c.unite&&<span style={{fontSize:12,color:"#6B7280",whiteSpace:"nowrap"}}>{c.unite}</span>}</div>;
   else if(c.unitesChoix)ctrl=<div style={{display:"flex",alignItems:"center",gap:6}}><input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} style={{...(manque?S.inpErr:S.inp),flex:1,minWidth:0}} placeholder="—"/><select value={v[c.id+"__unite"]||c.unite} onChange={e=>onChange(c.id+"__unite",e.target.value)} style={{...S.sel,width:76,flexShrink:0}} aria-label={"Unité — "+c.label}>{c.unitesChoix.map(u=><option key={u} value={u}>{u}</option>)}</select></div>;
   else if(c.dictee)ctrl=<ChampTexteDictee champId={c.id} valeur={val} onChange={onChange} erreur={manque}/>;
-  else ctrl=<input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} onBlur={c.id==="de"?()=>{const t=val.trim();const m=t.match(/^(?:de)?(\d+)$/i);if(m&&t!=="DE"+m[1])onChange(c.id,"DE"+m[1]);}:undefined} style={manque?S.inpErr:S.inp} placeholder="—"/>;
-  return <div style={{marginBottom:12}}>{lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>{manqueOr?"L'un des deux — "+c.label+" ou "+(c.orRequiredLabel||"l'autre champ")+" — est obligatoire":"Champ obligatoire"}</div>}</div>;
+  else ctrl=<input type="text" value={val} onChange={e=>onChange(c.id,e.target.value)} onBlur={c.id==="de"?()=>{const n=normaliserNumero(val,v.client,c.prefixe);if(n!==val)onChange(c.id,n);}:undefined} style={manque?S.inpErr:S.inp} placeholder="—"/>;
+  return <div style={{marginBottom:12}}>{c.aide?<EnteteAide lbl={lbl} aide={c.aide}/>:lbl}{ctrl}{manque&&<div style={{fontSize:10,color:"#D73A49",marginTop:2}}>{manqueOr?"L'un des deux — "+c.label+" ou "+(c.orRequiredLabel||"l'autre champ")+" — est obligatoire":"Champ obligatoire"}</div>}</div>;
 }
 
 // Cases libres : « ➕ Ajouter une case libre » demande un nom (une marque, une particularité…) puis offre un champ de texte libre dans l'étape.
@@ -1105,14 +1189,17 @@ function CasesLibres({etape,v,onChange}){
 
 function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,onPhotoRemoved,champsSource}){
   const width=useWidth();const champs=(champsSource||CHAMPS)[nom]||[];const rendus=[];const vus=new Set();
-  for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(cc=><UnChamp key={cc.id} c={cc} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded}/>)}</div>);}else{vus.add(c.id);rendus.push(<UnChamp key={c.id} c={c} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded}/>);}}
+  const un=cc=><UnChamp key={cc.id} c={cc} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} etape={nom}/>;
+  for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>);}else{vus.add(c.id);rendus.push(un(c));}}
   rendus.push(<CasesLibres key="libres" etape={nom} v={v} onChange={onChange}/>);
-  rendus.push(<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom)} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>);
+  // les photos obligatoires (champs « photo_requise ») s'affichent dans leur champ : on ne les répète pas dans « Photos — étape »
+  const catsRequises=new Set(champs.filter(c=>c.type==="photo_requise").map(c=>c.categorie));
+  rendus.push(<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom&&!catsRequises.has(p.categorie_nom))} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>);
   return <>{rendus}</>;
 }
 
 function SectionEtape({nom,idx,total,actif,validees,v,nr,onChange,onNR,onValider,onSauvegarder,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,onPhotoRemoved,champsSource}){
-  const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
+  const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2,photos);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
   function resume(){return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${(c.unitesChoix&&v[c.id+"__unite"])||c.unite?" "+((c.unitesChoix&&v[c.id+"__unite"])||c.unite):""}`).join(" · ");}
   if(estLock)return<div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
   if(estVal&&!estAct)return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>✅</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}}</span></div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modification tracée dans l'historique.</div><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
@@ -1941,6 +2028,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
       await db.del("suivi_pieces","?fiche_id=eq."+f.id);
       await db.del("fiche_historique","?fiche_id=eq."+f.id);
       await db.del("fiches","?id=eq."+f.id);
+      if(f.type_materiel===TYPE_CHEMINEE){try{await supprimerMouvementsRailFiche(f.id);}catch(e){/* sans effet */}}
       onDelete(f.id);
     }catch(e){alert("Erreur: "+e.message);}
   }
@@ -2146,7 +2234,7 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
 }
 
 function PageChoix({onChoisir,onRetour}){
-  const mats=[{id:"Moteur",emoji:"⚙️",desc:"Moteur électrique seul"},{id:"Pompe",emoji:"💧",desc:"Corps de pompe + moteur"},{id:"Moto-réducteur",emoji:"🔧",desc:"Moto-réducteur complet"},{id:"Ventilateur",emoji:"🌀",desc:"Ventilateur seul ou avec son moteur (centrifuge, hélicoïde, VMC…)"},{id:"Autre",titre:"Autre matériel",emoji:"🧰",desc:"Treuil, compresseur… même fiche que le moteur, le type est saisi à la main"}];
+  const mats=[{id:"Moteur",emoji:"⚙️",desc:"Moteur électrique seul"},{id:"Pompe",emoji:"💧",desc:"Corps de pompe + moteur"},{id:"Moto-réducteur",emoji:"🔧",desc:"Moto-réducteur complet"},{id:"Ventilateur",emoji:"🌀",desc:"Ventilateur seul ou avec son moteur (centrifuge, hélicoïde, VMC…)"},{id:TYPE_CHEMINEE,emoji:"🚆",desc:"PMV Rail : cheminée de freinage de train (SNCF / IMATEQ)"},{id:"Autre",titre:"Autre matériel",emoji:"🧰",desc:"Treuil, compresseur… même fiche que le moteur, le type est saisi à la main"}];
   return(<div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px"}}><button style={{...S.p2,marginBottom:20}} onClick={onRetour}>← Retour</button><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>Nouvelle fiche — quel matériel ?</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>{mats.map(m=><div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}><div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div><p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.titre||m.id}</p><p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>{m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}</div>)}</div></div>);
 }
 
@@ -2682,9 +2770,11 @@ const CHAMPS_VENTILATEUR={
 
 // Champs et étapes d'une fiche selon son type (utilisé par la fiche, l'aperçu, le PDF et les exports ZIP)
 function champsPourType(type){
+  if(type===TYPE_CHEMINEE)return CHAMPS_CHEMINEE;
   return type==="Pompe"?CHAMPS_POMPE:type==="Moto-réducteur"?CHAMPS_REDUCTEUR:type==="Ventilateur"?CHAMPS_VENTILATEUR:type==="Autre"?CHAMPS_AUTRE:CHAMPS;
 }
 function etapesPourType(type,v){
+  if(type===TYPE_CHEMINEE)return ETAPES_CHEMINEE;
   return type==="Pompe"?ETAPES_POMPE:type==="Moto-réducteur"?ETAPES_REDUCTEUR:type==="Ventilateur"?etapesVentilateurPour(v):etapesMoteurPour(v);
 }
 function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed}){
@@ -2694,6 +2784,9 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
   const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {de:ficheInit?.de||"",date_entree:today(),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
   const etapesActives=insererEtapeSuiviDevis(etapesPourType(typeMateriel,v),v,typeMateriel||"Moteur");
+  const matDefaut=typeMateriel===TYPE_CHEMINEE?"Cheminée":"Moteur";
+  const typeRef=useRef(typeMateriel);typeRef.current=typeMateriel;
+  const [avisRail,setAvisRail]=useState(null);
 
   useEffect(()=>{
     if(seedValeurs&&onSeedConsumed)onSeedConsumed();
@@ -2719,6 +2812,8 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
 const autoSaveTimer=useRef(null);
 const onChange=useCallback((id,val)=>setV(p=>{
   const n={...p,[id]:val};
+  if(id==="n_cheminee")n.materiel_lieu=val?"Cheminée "+val:"";
+  if(id==="client"){const m=String(p.de||"").match(/^D[EV](\d+)$/i);if(m)n.de=(typeRef.current===TYPE_CHEMINEE?"DV":prefixeNumero(val))+m[1];}
   if(id==="rapport_reduction"||id==="vitesse_sortie"){
     const vm=parseFloat((p.vitesse||"").replace("Autre:",""));
     if(!isNaN(vm)&&vm>0){
@@ -2746,20 +2841,36 @@ const onChange=useCallback((id,val)=>setV(p=>{
     setSavingComm(false);
   }
 
+  // Photos prises avant que la fiche existe : rattachées à la fiche dès sa création (« Enregistrer » ou « Valider »)
+  async function rattacherPhotos(fid){
+    const orphelines=photos.filter(p=>!p.fiche_id);const faites=[];
+    for(const p of orphelines){try{const r=await db.post("fiche_photos",{fiche_id:fid,etape:p.etape,categorie_slug:p.categorie_slug,categorie_nom:p.categorie_nom,nom_fichier:p.nom_fichier,storage_path:p.storage_path});if(Array.isArray(r)&&r[0])faites.push(p.storage_path);}catch(e){}}
+    if(faites.length)setPhotos(prev=>prev.map(p=>faites.includes(p.storage_path)?{...p,fiche_id:fid}:p));
+  }
+  // Cheminée : décompte automatique des isolateurs (SNCF 520 ; IMATEQ le nombre saisi), à chaque enregistrement
+  async function synchroniserRail(fid){
+    if(typeMateriel!==TYPE_CHEMINEE||!fid)return;
+    try{
+      const r=await synchroniserIsolateursRail({ficheId:fid,dv:v.de,cheminee:v.n_cheminee,type:v.cheminee_origine,nb:v.isolateurs_changes,par:sessionTech});
+      setAvisRail(r&&r.absente?"Le stock RAIL n'est pas encore activé : les isolateurs ne sont pas décomptés. L'administrateur doit l'activer (Stock, onglet RAIL).":null);
+    }catch(e){/* sans effet sur l'enregistrement de la fiche */}
+  }
+
   async function savePartiel(idxEtape){
     if(saving)return;
     setSaving(true);setErreur(null);
     try{
       let fid=ficheId;
       if(!fid){
-        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:"En cours",statut_chantier:statutChantier||"A_demonter",etape_active:idxEtape,etapes_validees:validees,type_materiel:typeMateriel||"Moteur"});
+        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||matDefaut,client:v.client||"",statut:"En cours",statut_chantier:statutChantier||"A_demonter",etape_active:idxEtape,etapes_validees:validees,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;
         if(!fid)throw new Error("Impossible de créer la fiche");
         setFicheId(fid);
+        await rattacherPhotos(fid);
       }else{
         const passeARemonter=suiviDevisComplet(v)&&statutChantier==="Devis";
         const patchSC=passeARemonter?{statut_chantier:"A_remonter"}:{};
-        await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:"En cours",...patchSC});
+        await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:"En cours",...patchSC});
         if(passeARemonter){setStatutChantier("A_remonter");onFicheUpdated(fid,{statut_chantier:"A_remonter"});}
       }
       const champs=Object.keys(v).filter(k=>v[k]!==undefined&&v[k]!=="");
@@ -2769,8 +2880,9 @@ const onChange=useCallback((id,val)=>setV(p=>{
           await db.upsert("fiche_valeurs",rows.slice(i,i+50),"fiche_id,champ_id");
         }
       }
+      await synchroniserRail(fid);
       setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);
-      if(fid)onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur"});
+      if(fid)onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut});
       clearDraft();
     }catch(e){setErreur(e.message||"Erreur de sauvegarde");}
     setSaving(false);
@@ -2783,16 +2895,17 @@ const onChange=useCallback((id,val)=>setV(p=>{
       if(declencheDevis&&statutChantier==="A_demonter")newSC=v.devis_necessaire==="Non"?"A_remonter":"Devis";
       if(suiviDevisComplet(v)&&statutChantier==="Devis")newSC="A_remonter";
       if(!fid){
-        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||"Moteur",client:v.client||"",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:idx+1,etapes_validees:newVal,type_materiel:typeMateriel||"Moteur"});
+        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||matDefaut,client:v.client||"",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:idx+1,etapes_validees:newVal,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;if(!fid)throw new Error("Impossible de créer la fiche");setFicheId(fid);
-        for(const p of photos){if(!p.fiche_id)try{await db.post("fiche_photos",{fiche_id:fid,etape:p.etape,categorie_slug:p.categorie_slug,categorie_nom:p.categorie_nom,nom_fichier:p.nom_fichier,storage_path:p.storage_path});}catch(e){}}
-      }else{await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:Math.min(idx+1,etapesActives.length-1),etapes_validees:newVal});setStatutChantier(newSC);}
+        await rattacherPhotos(fid);
+      }else{await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:Math.min(idx+1,etapesActives.length-1),etapes_validees:newVal});setStatutChantier(newSC);}
       await db.del("fiche_valeurs","?fiche_id=eq."+fid+"&champ_id=not.in.(__commentaires)");
       const vals=Object.entries(v).filter(([k,val])=>!k.startsWith("__")&&val!==undefined&&val!=="").map(([champ_id,valeur])=>({fiche_id:fid,champ_id,valeur:String(valeur)}));
       if(vals.length>0)await db.post("fiche_valeurs",vals);
+      await synchroniserRail(fid);
       await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Étape validée",etape:etapesActives[idx]});
       if(onFicheUpdated)onFicheUpdated(fid,{statut:toutFini?"Terminée":"En cours",statut_chantier:newSC});
-      setValidees(newVal);if(idx+1<etapesActives.length)setActif(idx+1);setFlash(idx);setTimeout(()=>setFlash(null),3000);onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||"Moteur",statut_chantier:newSC});
+      setValidees(newVal);if(idx+1<etapesActives.length)setActif(idx+1);setFlash(idx);setTimeout(()=>setFlash(null),3000);onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut_chantier:newSC});
       clearDraft();
     }catch(e){setErreur("Erreur : "+e.message);}finally{setSaving(false);}
   }
@@ -2821,6 +2934,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
     <div style={{padding:"16px 16px 0"}}>
       {flash==="saved_partiel"&&<div style={{...S.ok,background:"#EEF4FF",color:"#1B4F8A",border:"1px solid #D6E4F7"}}>💾 Données sauvegardées.</div>}{flash!==null&&flash!=="saved_partiel"&&<div style={S.ok}>✅ Étape "{etapesActives[flash]}" enregistrée.</div>}
       {erreur&&<div style={{...S.alert,marginBottom:14}}>{erreur}</div>}
+      {avisRail&&<div style={{...S.alert,marginBottom:14,background:"#FFF8E1",borderColor:"#E8720C",color:"#8A4B00"}}>⚠ {avisRail}</div>}
       {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>setNrMap(p=>({...p,[i]:!p[i]}))} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={champsActifs}/>)}
 
       <SectionMaterielCommander v={v} ficheId={ficheId} de={v.de} client={v.client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeMateriel}/>
@@ -2848,7 +2962,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
           <button style={S.p1} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁 Aperçu fiche</button>
           <button style={S.p2} onClick={()=>telechargerHtml(genHtml(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives),"Fiche_"+(v.de||"sans_de")+"_"+(v.client||""))}>⬇ Télécharger</button>
           <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄 Imprimer / PDF</button>
-          {!isPompe&&typeMateriel!=="Ventilateur"&&<button style={{...S.p2,opacity:ficheId?1:0.5}} disabled={!ficheId} onClick={()=>onOpenRapport(ficheId)}>📧 Rapport client</button>}
+          {!isPompe&&typeMateriel!=="Ventilateur"&&typeMateriel!==TYPE_CHEMINEE&&<button style={{...S.p2,opacity:ficheId?1:0.5}} disabled={!ficheId} onClick={()=>onOpenRapport(ficheId)}>📧 Rapport client</button>}
           <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
         </div>
       </div>
@@ -3123,7 +3237,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   },[fiche]);
 
   var onChange=React.useCallback(function(id,val){
-    setV(function(p){var n=Object.assign({},p);n[id]=val;return n;});
+    setV(function(p){var n=Object.assign({},p);n[id]=val;if(id==="ch_client"){var m=String(p.ch_de||"").match(/^D[EV](\d+)$/i);if(m)n.ch_de=prefixeNumero(val)+m[1];}return n;});
   },[]);
 
   // Renvoie true si tout est enregistré (utilisé avant d'ouvrir la fiche atelier)
@@ -3132,7 +3246,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
     setSaving(true);setErreur(null);
     var ok=false;
     try{
-      var deNorm=normaliserDE(v.ch_de||"");
+      var deNorm=normaliserDE(v.ch_de||"",v.ch_client);
       if(deNorm!==(v.ch_de||""))onChange("ch_de",deNorm);
       var fid=ficheId;
       var equipLabel=v.ch_eq_nom||v.ch_eq_ref||typeEquipement;
@@ -3192,7 +3306,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   }
 
   function docHtml(){
-    return htmlChantier({v:Object.assign({},v,{ch_de:normaliserDE(v.ch_de||"")}),fiche:{type_equipement:typeEquipement},photos:photos,champsPour:champsChantierPourType,etapes:etapes,type:typeEquipement});
+    return htmlChantier({v:Object.assign({},v,{ch_de:normaliserDE(v.ch_de||"",v.ch_client)}),fiche:{type_equipement:typeEquipement},photos:photos,champsPour:champsChantierPourType,etapes:etapes,type:typeEquipement});
   }
   function imprimer(){lancerImpression(docHtml());}
   function apercu(){afficherApercu(docHtml(),"fiche_chantier",COULEUR_CHANTIER);}
@@ -3215,9 +3329,9 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
     else if(c.type==="tags")ctrl=<ChampTags valeur={val} onChange={function(nv){onChange(c.id,nv);}} options={c.options}/>;
     else if(c.type==="materiel_liste")ctrl=<ChampMaterielChantier valeur={val} onChange={function(nv){onChange(c.id,nv);}}/>;
     else if(c.type==="case_atelier")ctrl=<CaseEntretienAtelier valeur={val} onChange={function(nv){onChange(c.id,nv);}} v={v} type={typeEquipement} onOuvrir={ouvrirAtelier}/>;
-    else ctrl=<input type="text" value={val} onChange={function(e){onChange(c.id,e.target.value);}} onBlur={c.id==="ch_de"?function(){var n=normaliserDE(val);if(n!==val)onChange(c.id,n);}:undefined} style={S.inp}/>;
+    else ctrl=<input type="text" value={val} onChange={function(e){onChange(c.id,e.target.value);}} onBlur={c.id==="ch_de"?function(){var n=normaliserDE(val,v.ch_client);if(n!==val)onChange(c.id,n);}:undefined} style={S.inp}/>;
     return(<div key={c.id} style={{marginBottom:12,minWidth:0}}>
-      {c.type!=="case_atelier"&&<label style={{fontSize:11,fontWeight:600,color:"#6B7280",display:"block",marginBottom:4}}>{c.label}{c.required?" *":""}</label>}
+      {c.type!=="case_atelier"&&<label style={{fontSize:11,fontWeight:600,color:"#6B7280",display:"block",marginBottom:4}}>{c.id==="ch_de"?c.label.replace(/\bDE\b/,prefixeNumero(v.ch_client)):c.label}{c.required?" *":""}</label>}
       {ctrl}
     </div>);
   }
@@ -3235,7 +3349,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   }
 
   var prog=Math.round((validees.length/etapes.length)*100);
-  var deAff=normaliserDE(v.ch_de||"");
+  var deAff=normaliserDE(v.ch_de||"",v.ch_client);
   var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(deAff||"de")+"/"+typeEquipement.replace(/[^a-z0-9]/gi,"_");
 
   return(<div style={{paddingBottom:80}}>
@@ -5431,6 +5545,7 @@ export default function App(){
   useEffect(()=>{
     db.get("techniciens","?actif=eq.true&order=initiales").then(d=>{if(Array.isArray(d)&&d.length>0)setTechs(d.map(t=>t.initiales));}).catch(()=>{});
     db.get("clients","?order=nom").then(d=>{if(Array.isArray(d)&&d.length>0)setClients(d.map(c=>c.nom));}).catch(()=>{});
+    chargerClientsRail();
     db.get("categories_photos","?actif=eq.true&order=ordre").then(d=>{if(Array.isArray(d)&&d.length>0)setCategories(d);
     db.get("suivi_pieces","?order=created_at.desc").then(d=>{if(Array.isArray(d))setPieces(d);});}).catch(()=>{});
   },[]);
@@ -5532,7 +5647,7 @@ export default function App(){
       </div>
       {commercial
         ?<div style={{maxWidth:520,margin:"40px auto",padding:"0 16px",textAlign:"center",color:"#6B7280",fontSize:14}}>Le stock n'est pas accessible avec le profil Commercial.<div style={{marginTop:12}}><button onClick={()=>setChangerPers(true)} style={S.p1}>🔁 Changer de personne</button></div></div>
-        :<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
+        :<PageStockRail techs={techs} sessionTech={sessionTech} admin={admin} clients={clients}/>}
       {fenetrePersonne}
       {ecranChoix}
     </div>);
@@ -5592,7 +5707,7 @@ export default function App(){
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
     {page==="dashboard"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
     {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
-    {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
+    {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"&&m!==TYPE_CHEMINEE){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
     {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{if(commercial)setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
@@ -5606,7 +5721,7 @@ export default function App(){
     {page==="demande"&&(demandesMat.disponible===false
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
       :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
-    {page==="stock"&&<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>}
+    {page==="stock"&&<PageStockRail techs={techs} sessionTech={sessionTech} admin={admin} clients={clients}/>}
     {page==="clients"&&(admin||commercial)&&<PageClients clients={clients} fiches={fiches} suivi={suivi} onOuvrirFiche={fi=>ouvrirFicheDepuis(fi,"clients")}/>}
     {page==="devis"&&commercial&&<PageSuiviClients onOuvrirFiche={fi=>ouvrirFicheDepuis(fi,"devis")} onOuvrirClient={nom=>ouvrirClient(nom,setPage)} suivi={suivi} fiches={fiches} clients={clients} par={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="calendrier"&&<PageCalendrier admin={admin} sessionTech={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}

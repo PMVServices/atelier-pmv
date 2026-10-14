@@ -1,6 +1,7 @@
 import React, {useState, useRef, useContext} from "react";
 import {LectureCtx} from "./Acces";
 import {db} from "./supabase";
+import {normaliserNumero} from "./railClients";
 import {genHtml, afficherApercu, telechargerZip} from "./pdfUtils";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
 
@@ -13,12 +14,8 @@ const BTN={background:COULEUR_CHANTIER,color:"#fff",border:"none",padding:"6px 1
 const BTN_O={background:"#fff",color:COULEUR_CHANTIER,border:"1.5px solid "+COULEUR_CHANTIER,padding:"5px 11px",borderRadius:6,fontWeight:600,fontSize:12,cursor:"pointer"};
 const BTN_R={background:"#fff",color:"#D73A49",border:"1.5px solid #D73A49",padding:"5px 11px",borderRadius:6,fontWeight:600,fontSize:12,cursor:"pointer"};
 
-// "7945", "de7945", "DE 7945" -> "DE7945" (même règle que la fiche atelier : toujours DE + chiffres)
-export function normaliserDE(t){
-  const s=String(t==null?"":t).trim();
-  const m=s.match(/^(?:de)?\s*(\d+)$/i);
-  return m?"DE"+m[1]:s;
-}
+// "7945", "de7945", "DE 7945" -> "DE7945" (même règle que la fiche atelier : DE + chiffres) ; « DV » pour les clients de PMV Rail (voir railClients.js)
+export function normaliserDE(t,client){return normaliserNumero(t==null?"":t,client);}
 const slug=s=>String(s||"").replace(/[^a-z0-9]/gi,"_");
 const fmtDate=iso=>{const d=new Date(iso);return isNaN(d)?"":d.toLocaleDateString("fr-FR");};
 
@@ -38,7 +35,7 @@ export const TYPES_AVEC_FICHE_ATELIER=["Pompe","Moteur","Moto-réducteur"];
 export function graineAtelier(v,type){
   const g={};
   const mets=(k,x)=>{if(x!==undefined&&x!==null&&String(x).trim()!=="")g[k]=String(x).trim();};
-  mets("client",v.ch_client);mets("de",normaliserDE(v.ch_de));mets("materiel_lieu",v.ch_eq_nom);
+  mets("client",v.ch_client);mets("de",normaliserDE(v.ch_de,v.ch_client));mets("materiel_lieu",v.ch_eq_nom);
   mets("contact",v.ch_contact);mets("telephone",v.ch_tel);mets("mail",v.ch_mail);
   mets("puissance",v.ch_eq_puissance);
   if(type==="Moteur"){mets("marque_moteur",v.ch_eq_marque);mets("type_moteur",v.ch_eq_type);mets("numero_serie",v.ch_eq_serie);mets("vitesse",v.ch_eq_vitesse);mets("fixation",v.ch_eq_fixation);}
@@ -65,7 +62,7 @@ export function CaseEntretienAtelier({valeur,onChange,v,type,onOuvrir}){
 // ── Aperçu / PDF / ZIP : même modèle que l'atelier, en vert pétrole ──
 export function htmlChantier({v,fiche,photos,champsPour,etapes,type}){
   const t=type||(fiche&&fiche.type_equipement)||"Autre";
-  const vv={...v,client:v.ch_client||(fiche&&fiche.client)||"",de:normaliserDE(v.ch_de||(fiche&&fiche.de)||""),materiel_lieu:v.ch_eq_nom||(fiche&&fiche.materiel)||t,_type:t};
+  const vv={...v,client:v.ch_client||(fiche&&fiche.client)||"",de:normaliserDE(v.ch_de||(fiche&&fiche.de)||"",v.ch_client||(fiche&&fiche.client)),materiel_lieu:v.ch_eq_nom||(fiche&&fiche.materiel)||t,_type:t};
   return genHtml(vv,photos||[],"","",[],{},champsPour(t),etapes,OPTS_DOC);
 }
 async function chargerFiche(f){
@@ -88,7 +85,7 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
   const fileRef=useRef();
   const recup=f.statut_recuperation==="Récupéré";
   const type=f.type_equipement||"Autre";
-  const de=normaliserDE(f.de);
+  const de=normaliserDE(f.de,f.client);
   const nomDoc=[slug(f.client||"Client"),de||"DE",slug(f.materiel||type)].join("_");
   const echec=e=>setErreur((e&&e.message)||"L'action n'a pas abouti (connexion ?).");
 
@@ -230,7 +227,7 @@ function ChDossierDE({de,fiches,...reste}){
 
 function ChDossierClient({client,fiches,...reste}){
   const [ouvert,setOuvert]=useState(false);
-  const parDE={};fiches.forEach(f=>{const d=normaliserDE(f.de)||"Sans DE";(parDE[d]=parDE[d]||[]).push(f);});
+  const parDE={};fiches.forEach(f=>{const d=normaliserDE(f.de,f.client)||"Sans DE";(parDE[d]=parDE[d]||[]).push(f);});
   const deList=Object.keys(parDE).sort();
   return(<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,overflow:"hidden"}}>
     <div onClick={()=>setOuvert(!ouvert)} style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",background:TEINTE.bandeau,borderLeft:"4px solid "+COULEUR_CHANTIER}}>
@@ -250,7 +247,7 @@ export function ListeChantier({fiches,setFiches,loading,categories,champsPour,et
   const [q,setQ]=useState("");const [filtre,setFiltre]=useState("tous");
   const qq=q.trim().toLowerCase();
   const filtrees=fiches.filter(f=>{
-    const okQ=!qq||[f.de,normaliserDE(f.de),f.client,f.materiel,f.type_equipement].some(x=>String(x||"").toLowerCase().includes(qq));
+    const okQ=!qq||[f.de,normaliserDE(f.de,f.client),f.client,f.materiel,f.type_equipement].some(x=>String(x||"").toLowerCase().includes(qq));
     const recup=f.statut_recuperation==="Récupéré";
     return okQ&&(filtre==="tous"||(filtre==="attente"?!recup:recup));
   });
