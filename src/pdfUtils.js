@@ -256,7 +256,7 @@ export function genRapportHtml(v,data,photos,images){
   "body{font-family:Arial,Helvetica,sans-serif;font-size:11pt;color:#1F2937;line-height:1.45;background:#E5E7EB;}"+
   ".page{width:210mm;min-height:297mm;margin:10px auto;padding:20mm;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.18);page-break-after:always;}"+
   ".page:last-child{page-break-after:auto;}"+
-  ".page.flux{page-break-after:auto;}"+
+  ".page.flux{page-break-after:auto;min-height:0;}"+
   ".topbar{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #D1D5DB;padding-bottom:6px;margin-bottom:16px;font-size:8.5pt;color:#6B7280;}"+
   ".topbar img{height:11mm;}"+
   ".cover{position:relative;width:210mm;height:297mm;margin:10px auto;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.18);overflow:hidden;page-break-after:always;}"+
@@ -270,9 +270,10 @@ export function genRapportHtml(v,data,photos,images){
   ".cover .date{position:absolute;right:16mm;bottom:22mm;font-size:44pt;}"+
   ".societe .nom{font-size:13pt;font-weight:700;color:#404040;}.societe .nom span{color:#00B050;}"+
   ".societe div{font-size:10pt;}.societe .web{color:#1B4F8A;margin-bottom:10mm;}"+
-  "h1{font-size:15pt;color:#1B4F8A;border-bottom:2px solid #00B050;padding-bottom:3px;margin:0 0 14px;page-break-after:avoid;}"+
+  "h1{font-size:15pt;color:#1B4F8A;border-bottom:2px solid #00B050;padding-bottom:3px;margin:22px 0 12px;page-break-after:avoid;break-after:avoid;}"+
+  "h1.prem{margin-top:0;}"+
   "h1 .n{color:#00B050;}"+
-  "h2{font-size:12pt;color:#1B4F8A;margin:16px 0 6px;page-break-after:avoid;}"+
+  "h2{font-size:12pt;color:#1B4F8A;margin:14px 0 6px;page-break-after:avoid;break-after:avoid;}"+
   "p{margin-bottom:6px;}.l{margin-bottom:3px;}.lignes{margin-bottom:8px;}.lignes.espace{margin-top:18px;}.lignes.petit{font-size:9.5pt;}"+
   "table.id{width:100%;border-collapse:collapse;border-top:1px solid #D1D5DB;margin-bottom:8mm;}"+
   "table.id td{border-bottom:1px solid #D1D5DB;padding:5px 8px;vertical-align:middle;}"+
@@ -284,7 +285,7 @@ export function genRapportHtml(v,data,photos,images){
   "figcaption{font-size:8.5pt;color:#6B7280;font-style:italic;margin-top:2px;}"+
   ".paire{display:flex;gap:6mm;justify-content:center;page-break-inside:avoid;margin-bottom:8px;}"+
   ".paire figure{flex:1;max-width:50%;}.paire figure img{max-height:88mm;}"+
-  "figure.capture img{max-height:215mm;}"+
+  "figure.capture{margin:8px 0 12px;}figure.capture img{max-height:215mm;}"+
   ".ok{background:#CDEFD4;color:#1E6B2E;font-weight:700;padding:0 4px;border-radius:3px;}"+
   ".ko{background:#F8D0D0;color:#9C1C1C;font-weight:700;padding:0 4px;border-radius:3px;}"+
   "@media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}"+
@@ -303,29 +304,22 @@ export function genRapportHtml(v,data,photos,images){
   if(M.identite.length)html+="<table class='id'>"+M.identite.map(function(l){return "<tr><td class='k'>"+esc(l.k)+"</td><td>"+esc(l.v).replace(/\n/g,"<br/>")+"</td></tr>";}).join("")+"</table>";
   html+="<h2>Sommaire</h2><ol class='som'>"+M.sommaire.map(function(t){return "<li>"+esc(t)+"</li>";}).join("")+"</ol></section>";
 
-  // Chapitres
+  // Chapitres : un seul flux continu (aucun saut de page forcé, captures comprises) ; seuls les blocs qui ne tiennent pas
+  // dans la fin d'une page passent à la suivante.
+  var page="<section class='page flux'>"+topbar;
   M.chapitres.forEach(function(ch,i){
-    var page="<section class='page "+(i===0?"force":"flux")+"'>"+topbar+"<h1><span class='n'>"+(i+1)+".</span> "+esc(ch.titre)+"</h1>";
-    var vide=false;
+    page+="<h1"+(i===0?" class='prem'":"")+"><span class='n'>"+(i+1)+".</span> "+esc(ch.titre)+"</h1>";
     ch.blocs.forEach(function(b){
-      if(b.t==="capture"){
-        html+=page+"</section>";
-        html+="<section class='page force'>"+topbar+fig(b.url,b.legende,"capture")+"</section>";
-        page="<section class='page flux'>"+topbar;vide=true;
-        return;
-      }
-      vide=false;
-      if(b.t==="iso")page+="<p style='font-size:10pt;'><b>NORME ISO 10816-3 des vitesses vibratoires des machines tournantes de puissance &gt;15 kW</b></p><figure class='grande'><img src='"+ISO_CHART_B64+"' style='width:100%;max-height:none;'/></figure>";
+      if(b.t==="capture")page+=fig(b.url,b.legende,"capture");
+      else if(b.t==="iso")page+="<p style='font-size:10pt;'><b>NORME ISO 10816-3 des vitesses vibratoires des machines tournantes de puissance &gt;15 kW</b></p><figure class='grande'><img src='"+ISO_CHART_B64+"' style='width:100%;max-height:none;'/></figure>";
       else if(b.t==="sous")page+="<h2>"+esc(b.txt)+"</h2>";
       else if(b.t==="para")page+="<p>"+parts(b.parts)+"</p>";
       else if(b.t==="lignes")page+="<div class='lignes"+(b.espace?" espace":"")+(b.petit?" petit":"")+"'>"+b.lignes.map(function(l){return "<div class='l'>"+parts(l)+"</div>";}).join("")+"</div>";
       else if(b.t==="img")page+=fig(b.url,b.legende,b.taille==="grande"?"grande":(b.taille==="petite"?"petite":"moyenne"));
       else if(b.t==="paire")page+="<div class='paire'>"+b.items.map(function(it){return fig(it.url,it.legende,"");}).join("")+"</div>";
     });
-    // une page vide (après une capture) n'est pas émise
-    var restant=page.length>("<section class='page flux'>"+topbar).length;
-    if(!vide&&restant)html+=page+"</section>";
   });
+  html+=page+"</section>";
 
   html+="</body></html>";
   return html;

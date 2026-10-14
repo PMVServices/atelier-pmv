@@ -276,7 +276,7 @@ export async function genRapportDocx(v, data, photos) {
         const im = img(b.url);
         if (im) {
           const taille = fitBox(im, LARGEUR, cm(21.5));
-          corps.push(imageParagraph(im, LARGEUR, cm(21.5), { pageBreakBefore: taille.height > cm(10), legende: b.legende }));
+          corps.push(imageParagraph(im, LARGEUR, cm(taille.height > cm(10) ? 20.5 : 21.5), { keepNext: !!b.legende, legende: b.legende }));
           if (b.legende) corps.push(legende(b.legende));
         }
       }
