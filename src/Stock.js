@@ -1,4 +1,5 @@
-import React, {useState, useEffect, useCallback, useRef} from "react";
+import React, {useState, useEffect, useCallback, useRef, useContext} from "react";
+import {PersonneCtx} from "./Acces";
 import {SUPA_URL, H, db} from "./supabase";
 import {NoticeActivation} from "./Activation";
 import {lancerImpression, telechargerHtml} from "./pdfUtils";
@@ -121,7 +122,7 @@ const fmtDate=iso=>{
 };
 const normChantier=v=>{const m=String(v||"").trim().match(/^(?:de)?(\d+)$/i);return m?"DE"+m[1]:String(v||"").trim();};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
-const TYPES_MVT={initial:"Stock initial",entree:"Entrée",sortie:"Sortie",inventaire:"Inventaire"};
+const TYPES_MVT={initial:"Stock initial",entree:"Entrée",sortie:"Sortie",inventaire:"Inventaire",annulation:"Annulation"};
 
 async function appel(methode,chemin,corps,prefer){
   try{
@@ -1310,6 +1311,210 @@ function SessionInventaire({articles,techs,qui,setQui,onFermer,onFini,recharger,
   </div>);
 }
 
+// ─── Poste douchette : tout se fait avec la douchette, sans toucher la tablette ─────────────────────
+// La douchette Bluetooth/USB « clavier » tape le code puis Entrée. Ici l'écran écoute tout le clavier (aucun champ à sélectionner) :
+// une rafale rapide de caractères = un scan. Un scan enregistre tout de suite 1 pièce (sortie par défaut) ; deux étiquettes de commande
+// (QR « ENTRÉE » et « SORTIE », plus « ANNULER » pour défaire le dernier scan) changent de mode. L'auteur est la personne qui a ouvert l'appli.
+const CMD_POSTE={entree:"PMV ENTREE",sortie:"PMV SORTIE",annuler:"PMV ANNULER"};
+const CLE_POSTE_AUTO="pmv_stock_poste_auto"; // ouverture automatique du poste sur cet appareil
+const DELAI_RETOUR_SORTIE=120000;            // sans scan pendant 2 min, retour au mode SORTIE (évite d'oublier le mode ENTRÉE)
+function son(freq,duree,fois){
+  try{
+    const C=window.AudioContext||window.webkitAudioContext;if(!C)return;
+    const c=son.c||(son.c=new C());
+    if(c.state==="suspended"&&c.resume)c.resume();
+    for(let i=0;i<(fois||1);i++){
+      const o=c.createOscillator(),g=c.createGain();
+      o.frequency.value=freq;g.gain.value=0.1;o.connect(g);g.connect(c.destination);
+      const t=c.currentTime+i*(duree+0.06);o.start(t);o.stop(t+duree);
+    }
+  }catch(e){/* son facultatif */}
+}
+async function htmlCommandesPoste(){
+  const defs=[["ENTRÉE","PMV ENTREE","#22863A","Scannez pour passer en mode ENTRÉE (arrivée de pièces)"],["SORTIE","PMV SORTIE","#D73A49","Scannez pour revenir en mode SORTIE (pièces prises)"],["ANNULER","PMV ANNULER","#4B5563","Scannez pour annuler le dernier scan"]];
+  const svgs=await Promise.all(defs.map(d=>codeSvg("qr",d[1])));
+  const blocs=defs.map((d,i)=>"<div class='f' style='border-color:"+d[2]+"'><h1 style='color:"+d[2]+"'>"+d[0]+"</h1>"+svgs[i]+"<p>"+d[3]+"</p></div>").join("");
+  return "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Étiquettes de commande — poste douchette</title><style>@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0}.f{display:flex;flex-direction:column;align-items:center;border:3px solid;border-radius:8mm;margin:0 0 7mm;padding:5mm;page-break-inside:avoid}.f h1{font-size:28pt;margin:0 0 3mm}.f svg{width:52mm;height:52mm}.f p{font-size:11pt;color:#444;margin:3mm 0 0;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>"+blocs+"</body></html>";
+}
+
+function PosteDouchette({articles,techs,quiInit,setQui,onFermer,onChange}){
+  const liste=(techs||[]).filter(t=>t!=="Autre");
+  const [mode,setMode]=useState("sortie");
+  const [op,setOp]=useState(quiInit||"");
+  const [dernier,setDernier]=useState(null); // dernier événement affiché en grand
+  const [histo,setHisto]=useState([]);       // scans de cette ouverture, du plus récent au plus ancien
+  const [inconnu,setInconnu]=useState(null);
+  const [auto,setAuto]=useState(()=>{try{return localStorage.getItem(CLE_POSTE_AUTO)==="1";}catch(e){return false;}});
+  const [imprEnCours,setImprEnCours]=useState(false);
+  const articlesRef=useRef(articles);articlesRef.current=articles;
+  const modeRef=useRef("sortie");
+  const opRef=useRef(op);opRef.current=op;
+  const histoRef=useRef([]);
+  const chaine=useRef(Promise.resolve());
+  const inactif=useRef(null);
+  const rechargement=useRef(null);
+  const changerMode=m=>{modeRef.current=m;setMode(m);};
+  const majHisto=fn=>{const n=fn(histoRef.current);histoRef.current=n;setHisto(n);};
+  const planifierRechargement=()=>{clearTimeout(rechargement.current);rechargement.current=setTimeout(()=>{onChange();},1500);};
+  const armerInactivite=()=>{
+    clearTimeout(inactif.current);
+    inactif.current=setTimeout(()=>{
+      if(modeRef.current==="entree"){changerMode("sortie");setDernier({genre:"cmd",titre:"Retour en mode SORTIE",detail:"Aucun scan depuis 2 minutes."});}
+    },DELAI_RETOUR_SORTIE);
+  };
+  async function quantiteDe(id){
+    const r=await appel("GET","stock_articles?id=eq."+id+"&select=quantite");
+    return r.ok&&Array.isArray(r.data)&&r.data[0]?(r.data[0].quantite||0):null;
+  }
+  async function mouvement(a,type,delta,commentaire){
+    const r=await appel("POST","stock_mouvements",[{article_id:a.id,type,delta,chantier:null,utilisateur:opRef.current,commentaire:commentaire||null}],"return=representation");
+    if(!r.ok||!Array.isArray(r.data)||!r.data[0])return null;
+    const apres=await quantiteDe(a.id);
+    return {id:r.data[0].id,apres:apres===null?null:apres};
+  }
+  async function enregistrer(a){
+    if(!opRef.current){setDernier({genre:"err",titre:"Opérateur ?",detail:"Choisissez l'opérateur en haut de l'écran, puis rescannez."});son(300,0.25,2);return;}
+    const type=modeRef.current,delta=type==="sortie"?-1:1;
+    const m=await mouvement(a,type,delta);
+    if(!m){setDernier({genre:"err",titre:"Non enregistré",detail:a.reference+" : connexion ? Rescannez l'étiquette."});son(300,0.25,2);return;}
+    const apres=m.apres,avant=apres===null?null:apres-delta;
+    majHisto(h=>[{cle:m.id,article_id:a.id,ref:a.reference,type,delta,t:Date.now(),annule:false}].concat(h).slice(0,15));
+    setDernier({genre:"ok",type,delta,article:a,avant,apres});
+    if(type==="sortie"&&apres!==null&&apres<0)son(300,0.25,2);else if(type==="entree")son(1320,0.09,2);else son(1040,0.09,1);
+    planifierRechargement();
+  }
+  async function annulerLigne(h){
+    if(!h||h.annule)return;
+    const a=articlesRef.current.find(x=>x.id===h.article_id);
+    if(!a)return;
+    const m=await mouvement(a,"annulation",-h.delta,"Annulation d'un scan");
+    if(!m){setDernier({genre:"err",titre:"Annulation non enregistrée",detail:"Connexion ? Réessayez."});son(300,0.25,2);return;}
+    majHisto(l=>l.map(x=>x.cle===h.cle?{...x,annule:true}:x));
+    setDernier({genre:"cmd",titre:"↩ Annulé",detail:h.ref+" : "+(m.apres!==null?"stock remis à "+m.apres:"mouvement annulé")});
+    son(700,0.12,1);
+    planifierRechargement();
+  }
+  async function traiter(brut){
+    const code=String(brut||"").trim();if(!code)return;
+    armerInactivite();
+    const c=cle(code);
+    if(c===CMD_POSTE.entree){changerMode("entree");setDernier({genre:"cmd",titre:"Mode ENTRÉE",detail:"Les scans suivants ajoutent des pièces au stock."});son(1320,0.09,2);return;}
+    if(c===CMD_POSTE.sortie){changerMode("sortie");setDernier({genre:"cmd",titre:"Mode SORTIE",detail:"Les scans suivants retirent des pièces du stock."});son(880,0.09,1);return;}
+    if(c===CMD_POSTE.annuler){
+      const h=histoRef.current.find(x=>!x.annule);
+      if(!h){setDernier({genre:"err",titre:"Rien à annuler",detail:"Aucun scan enregistré depuis l'ouverture du poste."});son(300,0.25,2);return;}
+      await annulerLigne(h);return;
+    }
+    let a=articlesRef.current.find(x=>cle(x.reference)===c);
+    if(!a){
+      const r=await appel("GET","stock_codes?code=eq."+encodeURIComponent(code)+"&select=article_id");
+      if(r.ok&&Array.isArray(r.data)&&r.data[0])a=articlesRef.current.find(x=>x.id===r.data[0].article_id);
+    }
+    if(!a){setDernier({genre:"err",titre:"Code inconnu",detail:code,code});son(300,0.25,2);return;}
+    await enregistrer(a);
+  }
+  const traiterRef=useRef(traiter);traiterRef.current=traiter;
+  // écoute du clavier : une rafale rapide de caractères terminée par Entrée (ou suivie d'un silence) = un scan ; une frappe lente est ignorée
+  useEffect(()=>{
+    let tampon="",dernierT=0,minut=null;
+    const soumettre=()=>{
+      const t=tampon;tampon="";clearTimeout(minut);
+      if(t.length>=3)chaine.current=chaine.current.then(()=>traiterRef.current(t)).catch(()=>{});
+    };
+    const champTexte=el=>{if(!el)return false;const t=el.tagName;if(t==="TEXTAREA"||t==="SELECT")return true;if(t==="INPUT")return !["checkbox","radio","button","submit"].includes(el.type);return !!el.isContentEditable;};
+    const touche=e=>{
+      if(champTexte(e.target)||e.ctrlKey||e.metaKey||e.altKey)return;
+      // un bouton ou une case resté sélectionné après un toucher ne doit pas réagir aux caractères de la douchette (Entrée, espace)
+      const ae=document.activeElement;if(ae&&ae!==document.body&&ae.blur&&(e.key==="Enter"||(e.key&&e.key.length===1)))ae.blur();
+      if(e.key==="Enter"){e.preventDefault();soumettre();return;}
+      if(e.key&&e.key.length===1){
+        const now=Date.now();
+        if(now-dernierT>250)tampon="";
+        tampon+=e.key;dernierT=now;
+        e.preventDefault();
+        clearTimeout(minut);minut=setTimeout(soumettre,200);
+      }
+    };
+    const relache=e=>{if(!champTexte(e.target)&&(e.key===" "||e.key==="Enter"))e.preventDefault();};
+    window.addEventListener("keydown",touche,true);
+    window.addEventListener("keyup",relache,true);
+    return()=>{window.removeEventListener("keydown",touche,true);window.removeEventListener("keyup",relache,true);clearTimeout(minut);};
+  },[]);
+  // écran allumé tant que le poste est ouvert ; le son demande un premier contact avec l'écran pour se réveiller
+  useEffect(()=>{
+    let verrou=null;
+    const demander=async()=>{try{if(navigator.wakeLock&&document.visibilityState==="visible")verrou=await navigator.wakeLock.request("screen");}catch(e){/* facultatif */}};
+    const visible=()=>{if(document.visibilityState==="visible")demander();};
+    const reveil=()=>son(0,0);
+    demander();
+    document.addEventListener("visibilitychange",visible);
+    document.addEventListener("pointerdown",reveil);
+    return()=>{document.removeEventListener("visibilitychange",visible);document.removeEventListener("pointerdown",reveil);try{if(verrou)verrou.release();}catch(e){/* facultatif */}};
+  },[]);
+  useEffect(()=>()=>{clearTimeout(inactif.current);clearTimeout(rechargement.current);},[]);
+  function fermer(){clearTimeout(rechargement.current);onChange();onFermer();}
+  function basculerAuto(v){setAuto(v);try{if(v)localStorage.setItem(CLE_POSTE_AUTO,"1");else localStorage.removeItem(CLE_POSTE_AUTO);}catch(e){/* facultatif */}}
+  async function imprimerCommandes(telecharger){
+    setImprEnCours(true);
+    try{const html=await htmlCommandesPoste();if(telecharger)telechargerHtml(html,"etiquettes-commandes-douchette");else lancerImpression(html);}catch(e){/* rien */}
+    setImprEnCours(false);
+  }
+  const sortie=mode==="sortie";
+  const couleur=sortie?"#D73A49":"#22863A";
+  const heure=t=>{const d=new Date(t);const p=n=>String(n).padStart(2,"0");return p(d.getHours())+":"+p(d.getMinutes())+":"+p(d.getSeconds());};
+  const grand="clamp(26px,7vw,44px)";
+  return(<div className="stk-session" role="dialog" aria-label="Poste douchette">
+    <div className="stk-session-tete">
+      <strong style={{fontSize:17}}>🎯 Poste douchette</strong>
+      <select className="stk-select" value={op} onChange={e=>{setOp(e.target.value);if(setQui)setQui(e.target.value||null);e.target.blur();}} aria-label="Opérateur" style={{marginLeft:"auto",minWidth:0,maxWidth:"45%"}}><option value="">Opérateur ?</option>{liste.map(t=><option key={t} value={t}>{t}</option>)}</select>
+      <button type="button" className="stk-x" onClick={fermer} aria-label="Fermer le poste douchette">✕</button>
+    </div>
+    <div className="stk-session-corps">
+      <div style={{borderRadius:16,background:couleur,color:"#fff",padding:"14px 16px",textAlign:"center"}}>
+        <div style={{fontSize:grand,fontWeight:800,letterSpacing:".02em"}}>{sortie?"📤 SORTIE":"📥 ENTRÉE"}</div>
+        <div style={{fontSize:13,opacity:.92}}>{sortie?"Chaque scan retire 1 pièce. Scannez l'étiquette « ENTRÉE » pour recevoir des pièces.":"Chaque scan ajoute 1 pièce. Scannez l'étiquette « SORTIE » pour revenir (retour automatique après 2 min sans scan)."}</div>
+      </div>
+      {!dernier&&<div style={{background:"#fff",border:"1px dashed #BFC8D4",borderRadius:14,padding:"28px 16px",textAlign:"center",color:"#6B7280",fontSize:16}}>
+        Scannez une étiquette avec la douchette.<br/><span style={{fontSize:13}}>Rien à toucher : le scan enregistre tout de suite.</span>
+        {!op&&<div className="stk-alerte" style={{marginTop:12}}>Choisissez l'opérateur en haut de l'écran.</div>}
+      </div>}
+      {dernier&&dernier.genre==="ok"&&<div className="flash" style={{background:dernier.apres!==null&&dernier.apres<0&&dernier.type==="sortie"?"#FFF8E1":"#E9F6EC",border:"2px solid "+(dernier.apres!==null&&dernier.apres<0&&dernier.type==="sortie"?"#E8720C":"#22863A"),borderRadius:14,padding:"14px 16px"}}>
+        <div style={{fontSize:13,fontWeight:700,color:dernier.type==="sortie"?"#B42318":"#1B6B2E"}}>✓ {dernier.type==="sortie"?"Sortie −1":"Entrée +1"} enregistrée</div>
+        <div style={{fontFamily:MONO,fontSize:grand,fontWeight:800,wordBreak:"break-word"}}>{dernier.article.reference}</div>
+        <div className="stk-sub">{[dernier.article.dimensions,dernier.article.emplacement&&"Empl. "+dernier.article.emplacement].filter(Boolean).join(" · ")}</div>
+        {dernier.apres!==null&&<div style={{fontSize:"clamp(20px,5vw,30px)",fontWeight:700,marginTop:6}}>Stock {dernier.avant} → <b>{dernier.apres}</b></div>}
+        {dernier.apres!==null&&dernier.apres<0&&dernier.type==="sortie"&&<div style={{color:"#B42318",fontWeight:700,marginTop:4}}>Stock insuffisant dans la base : à vérifier lors d'un inventaire.</div>}
+      </div>}
+      {dernier&&dernier.genre==="cmd"&&<div style={{background:"#EEF4FF",border:"2px solid #1B4F8A",borderRadius:14,padding:"14px 16px"}}>
+        <div style={{fontSize:"clamp(22px,6vw,34px)",fontWeight:800,color:"#1B4F8A"}}>{dernier.titre}</div>
+        <div className="stk-sub" style={{fontSize:14}}>{dernier.detail}</div>
+      </div>}
+      {dernier&&dernier.genre==="err"&&<div style={{background:"#FFF1F2",border:"2px solid #D73A49",borderRadius:14,padding:"14px 16px"}}>
+        <div style={{fontSize:"clamp(22px,6vw,34px)",fontWeight:800,color:"#B42318"}}>{dernier.titre}</div>
+        <div className="stk-sub" style={{fontSize:15,fontFamily:dernier.code?MONO:undefined,wordBreak:"break-word"}}>{dernier.detail}</div>
+        {dernier.code&&<button type="button" className="stk-btn stk-btn--s" style={{marginTop:8}} onClick={()=>setInconnu(dernier.code)}>Associer ce code à un article</button>}
+      </div>}
+      {histo.length>0&&<div>
+        <span className="stk-lib">Scans depuis l'ouverture</span>
+        <div className="stk-histo" style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:12,padding:"2px 12px",marginTop:4}}>{histo.map(h=><div key={h.cle} style={{opacity:h.annule?.5:1,alignItems:"center"}}>
+          <span className="d" style={{minWidth:70}}>{heure(h.t)}</span>
+          <span className={"q "+(h.delta<0?"neg":"pos")}>{h.delta>0?"+":""}{h.delta}</span>
+          <span style={{flex:1,minWidth:0,textDecoration:h.annule?"line-through":"none"}}><b style={{fontFamily:MONO}}>{h.ref}</b>{h.annule?" · annulé":""}</span>
+          {!h.annule&&<button type="button" className="stk-btn stk-btn--s" style={{minHeight:40}} onClick={()=>{chaine.current=chaine.current.then(()=>annulerLigne(h)).catch(()=>{});}} aria-label={"Annuler "+h.ref}>↩</button>}
+        </div>)}</div>
+      </div>}
+    </div>
+    <div className="stk-session-pied">
+      <label style={{display:"flex",alignItems:"center",gap:10,fontSize:14}}><input type="checkbox" checked={auto} onChange={e=>basculerAuto(e.target.checked)} style={{width:22,height:22,minHeight:0,padding:0}}/>Ouvrir ce poste automatiquement quand le Stock s'ouvre sur cette tablette</label>
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button type="button" className="stk-btn stk-btn--s" disabled={imprEnCours} onClick={()=>imprimerCommandes(false)} style={{flex:"1 1 200px"}}>🖨 Imprimer les étiquettes ENTRÉE / SORTIE / ANNULER</button>
+        <button type="button" className="stk-btn stk-btn--s" disabled={imprEnCours} onClick={()=>imprimerCommandes(true)} style={{flex:"1 1 200px"}}>⬇ Télécharger (à imprimer depuis le PC)</button>
+      </div>
+    </div>
+    {inconnu&&<CodeInconnu haut code={inconnu} articles={articles} onFermer={()=>setInconnu(null)} onAssocie={a=>{setInconnu(null);chaine.current=chaine.current.then(()=>enregistrer(a)).catch(()=>{});}}/>}
+  </div>);
+}
+
 // ─── Page Stock : tout part du scan ; l'écran d'accueil montre ce qui est à renouveler ───────────
 export default function PageStock({techs,sessionTech,admin}){
   const {articles,disponible,recharger}=useStock();
@@ -1326,6 +1531,10 @@ export default function PageStock({techs,sessionTech,admin}){
   const setFamille=f=>{setFamilleEtat(f);setSerie("toutes");try{localStorage.setItem("pmv_stock_famille",f);}catch(e){/* mémorisation facultative */}};
   const [ficheId,setFicheId]=useState(null);
   const [session,setSession]=useState(null); // null | "sortie" | "entree"
+  const [poste,setPoste]=useState(false);
+  const posteAutoFait=useRef(false);
+  const ctxPersonne=useContext(PersonneCtx);
+  const iniMoi=ctxPersonne&&ctxPersonne.moi&&ctxPersonne.moi.initiales?String(ctxPersonne.moi.initiales):"";
   const [inv,setInv]=useState(false);
   const [tel,setTel]=useState(false);
   const [remiseMax,setRemiseMax]=useState(false);
@@ -1349,6 +1558,13 @@ export default function PageStock({techs,sessionTech,admin}){
     if(r.ok&&Array.isArray(r.data))setDemandes(new Set(r.data.map(d=>cle(d.designation))));
   },[]);
   useEffect(()=>{if(disponible){chargerRecents();chargerDemandes();}},[disponible,chargerRecents,chargerDemandes]);
+  // le poste douchette s'ouvre tout seul si la tablette l'a demandé (une seule fois à l'ouverture du Stock)
+  useEffect(()=>{
+    if(posteAutoFait.current||disponible!==true||!articles.length)return;
+    posteAutoFait.current=true;
+    let auto=false;try{auto=localStorage.getItem(CLE_POSTE_AUTO)==="1";}catch(e){/* facultatif */}
+    if(auto)setPoste(true);
+  },[disponible,articles.length]);
   const apresMouvement=useCallback(async()=>{await recharger();chargerRecents();},[recharger,chargerRecents]);
 
   const article=ficheId?articles.find(a=>a.id===ficheId):null;
@@ -1441,6 +1657,7 @@ export default function PageStock({techs,sessionTech,admin}){
       <button type="button" className="stk-grand stk-grand--s" disabled={!articles.length} onClick={()=>setSession("sortie")}>📤 Sortie<small>scanner ce qu'on prend</small></button>
       <button type="button" className="stk-grand stk-grand--e" disabled={!articles.length} onClick={()=>setSession("entree")}>📥 Entrée<small>scanner ce qui arrive</small></button>
     </div>
+    <button type="button" className="stk-grand" disabled={!articles.length} onClick={()=>{son(0,0);setPoste(true);}} style={{marginBottom:10,borderColor:"#1B4F8A",background:"#1B4F8A",color:"#fff"}}>🎯 Poste douchette<small>mains libres : scanner suffit, sans toucher la tablette</small></button>
     {admin&&articles.length>0&&<button type="button" className="stk-grand stk-grand--i" onClick={()=>setInv(true)}>📋 {brouillon?"Reprendre l'inventaire ("+Object.keys(brouillon.comptes).length+" comptées)":"Inventaire"}<small>{brouillon?"comptage en cours sur cette tablette":"scanner, compter, terminer"}</small></button>}
     {admin&&disponible===true&&articles.length===0&&<div className="stk-vide">
       <div><strong>Aucun article pour le moment.</strong><br/>Importez une feuille de votre fichier Excel (roulements, garniture mécanique…) pour démarrer.</div>
@@ -1485,6 +1702,7 @@ export default function PageStock({techs,sessionTech,admin}){
       </>}
     </>}
 
+    {poste&&<PosteDouchette articles={articles} techs={techs} quiInit={liste.includes(iniMoi)?iniMoi:(qui||"")} setQui={setQui} onChange={apresMouvement} onFermer={()=>setPoste(false)}/>}
     {session&&<SessionScan mode={session} articles={articles} techs={techs} qui={qui} setQui={setQui} onFermer={()=>setSession(null)} onChange={apresMouvement} afficherToast={afficherToast}/>}
     {admin&&tel&&<LienTelephone onFermer={()=>setTel(false)}/>}
     {admin&&remiseMax&&<RemiseMax liste={base} libelle={famille==="toutes"?"toutes les familles":LIB_FAMILLE[famille]} qui={qui} onFermer={n=>{setRemiseMax(false);if(n)afficherToast("✓ "+n+" référence"+(n>1?"s":"")+" remise"+(n>1?"s":"")+" au stock maximum");}} onFait={apresMouvement}/>}
