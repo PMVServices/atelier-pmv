@@ -5531,7 +5531,9 @@ function pageAutorisee(page,role){
 }
 
 // Mode "Stock seul" (adresse /stock/, utilisée par l'icône PMV Stock du téléphone) : une seule page, sans menu.
-const MODE_STOCK=typeof window!=="undefined"&&(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search));
+// Mode « Gestion de stock » (adresse /poste/, application installée sur l'ordinateur du stock) : même page Stock, sans menu, avec le poste douchette ouvert d'office.
+const MODE_POSTE=typeof window!=="undefined"&&/^\/poste(\/|$)/.test(window.location.pathname);
+const MODE_STOCK=MODE_POSTE||(typeof window!=="undefined"&&(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search)));
 
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>{try{return localStorage.getItem(CLE_PIN)==="1";}catch(e){return false;}});
@@ -5639,18 +5641,20 @@ export default function App(){
   const fenetrePersonne=menuPersonne&&<MenuPersonne moi={moi} onChanger={()=>{setMenuPersonne(false);setChangerPers(true);}} onAcces={()=>{setMenuPersonne(false);setMenuOuvert(false);setPage("acces");}} onFermer={()=>setMenuPersonne(false)}/>;
   const chipPersonne=(compact)=><button onClick={()=>setMenuPersonne(true)} title={nomComplet(moi)+" — "+PROFILS[role].label+" (toucher pour changer de personne)"} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis"}}>{PROFILS[role].icone}{compact?"":" "+nomCourt(moi)}</button>;
   if(MODE_STOCK){
-    return(<div style={S.app}>
+    return(<PersonneCtx.Provider value={ctxPersonne}><div style={S.app}>
       <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
-        <img src={LOGO_B64} alt="PMV" style={{height:30,objectFit:"contain",borderRadius:4,flexShrink:0}}/>
-        <span style={{color:"#fff",fontWeight:700,fontSize:16,marginLeft:10}}>Stock</span>
-        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{chipPersonne(true)}<a href="/" style={{color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a></span>
+        {MODE_POSTE
+          ?<img src={(process.env.PUBLIC_URL||"")+"/poste96.png"} alt="" style={{height:38,width:38,objectFit:"contain",flexShrink:0}}/>
+          :<img src={LOGO_B64} alt="PMV" style={{height:30,objectFit:"contain",borderRadius:4,flexShrink:0}}/>}
+        <span style={{color:"#fff",fontWeight:700,fontSize:MODE_POSTE?20:16,marginLeft:10}}>{MODE_POSTE?"Gestion de stock":"Stock"}</span>
+        <span style={{marginLeft:"auto",display:"flex",alignItems:"center",gap:10}}>{chipPersonne(true)}{!MODE_POSTE&&<a href="/" style={{color:"#fff",fontSize:12,opacity:0.85,textDecoration:"underline"}}>Application complète</a>}</span>
       </div>
       {commercial
         ?<div style={{maxWidth:520,margin:"40px auto",padding:"0 16px",textAlign:"center",color:"#6B7280",fontSize:14}}>Le stock n'est pas accessible avec le profil Commercial.<div style={{marginTop:12}}><button onClick={()=>setChangerPers(true)} style={S.p1}>🔁 Changer de personne</button></div></div>
-        :<PageStockRail techs={techs} sessionTech={sessionTech} admin={admin} clients={clients}/>}
+        :<PageStockRail techs={techs} sessionTech={sessionTech} admin={admin} clients={clients} modePoste={MODE_POSTE}/>}
       {fenetrePersonne}
       {ecranChoix}
-    </div>);
+    </div></PersonneCtx.Provider>);
   }
 
   const navItems=navPourRole(role);

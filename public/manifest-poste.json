@@ -1,0 +1,51 @@
+{
+  "short_name": "Gestion de stock",
+  "name": "Gestion de stock",
+  "description": "Gestion de stock de l'atelier : poste douchette, sorties, entrées, inventaire",
+  "id": "/poste/",
+  "icons": [
+    {
+      "src": "/poste72.png",
+      "sizes": "72x72",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/poste96.png",
+      "sizes": "96x96",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/poste144.png",
+      "sizes": "144x144",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/poste192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/poste512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/poste-masque512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "start_url": "/poste/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#1B4F8A",
+  "background_color": "#F5F6F8",
+  "lang": "fr",
+  "scope": "/poste/"
+}

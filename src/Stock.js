@@ -1337,7 +1337,7 @@ async function htmlCommandesPoste(){
   return "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Étiquettes de commande — poste douchette</title><style>@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0}.f{display:flex;flex-direction:column;align-items:center;border:3px solid;border-radius:8mm;margin:0 0 7mm;padding:5mm;page-break-inside:avoid}.f h1{font-size:28pt;margin:0 0 3mm}.f svg{width:52mm;height:52mm}.f p{font-size:11pt;color:#444;margin:3mm 0 0;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>"+blocs+"</body></html>";
 }
 
-function PosteDouchette({articles,techs,quiInit,setQui,onFermer,onChange}){
+function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChange}){
   const liste=(techs||[]).filter(t=>t!=="Autre");
   const [mode,setMode]=useState("sortie");
   const [op,setOp]=useState(quiInit||"");
@@ -1443,7 +1443,9 @@ function PosteDouchette({articles,techs,quiInit,setQui,onFermer,onChange}){
   // écran allumé tant que le poste est ouvert ; le son demande un premier contact avec l'écran pour se réveiller
   useEffect(()=>{
     let verrou=null;
-    const demander=async()=>{try{if(navigator.wakeLock&&document.visibilityState==="visible")verrou=await navigator.wakeLock.request("screen");}catch(e){/* facultatif */}};
+    const demander=async()=>{
+      if(modePoste)return; // ordinateur du stock : la veille reste gérée par Windows
+      try{if(navigator.wakeLock&&document.visibilityState==="visible")verrou=await navigator.wakeLock.request("screen");}catch(e){/* facultatif */}};
     const visible=()=>{if(document.visibilityState==="visible")demander();};
     const reveil=()=>son(0,0);
     demander();
@@ -1505,7 +1507,7 @@ function PosteDouchette({articles,techs,quiInit,setQui,onFermer,onChange}){
       </div>}
     </div>
     <div className="stk-session-pied">
-      <label style={{display:"flex",alignItems:"center",gap:10,fontSize:14}}><input type="checkbox" checked={auto} onChange={e=>basculerAuto(e.target.checked)} style={{width:22,height:22,minHeight:0,padding:0}}/>Ouvrir ce poste automatiquement quand le Stock s'ouvre sur cette tablette</label>
+      {!modePoste&&<label style={{display:"flex",alignItems:"center",gap:10,fontSize:14}}><input type="checkbox" checked={auto} onChange={e=>basculerAuto(e.target.checked)} style={{width:22,height:22,minHeight:0,padding:0}}/>Ouvrir ce poste automatiquement quand le Stock s'ouvre sur cette tablette</label>}
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
         <button type="button" className="stk-btn stk-btn--s" disabled={imprEnCours} onClick={()=>imprimerCommandes(false)} style={{flex:"1 1 200px"}}>🖨 Imprimer les étiquettes ENTRÉE / SORTIE / ANNULER</button>
         <button type="button" className="stk-btn stk-btn--s" disabled={imprEnCours} onClick={()=>imprimerCommandes(true)} style={{flex:"1 1 200px"}}>⬇ Télécharger (à imprimer depuis le PC)</button>
@@ -1516,7 +1518,7 @@ function PosteDouchette({articles,techs,quiInit,setQui,onFermer,onChange}){
 }
 
 // ─── Page Stock : tout part du scan ; l'écran d'accueil montre ce qui est à renouveler ───────────
-export default function PageStock({techs,sessionTech,admin}){
+export default function PageStock({techs,sessionTech,admin,modePoste}){
   const {articles,disponible,recharger}=useStock();
   const liste=(techs||[]).filter(t=>t!=="Autre");
   const [qui,setQuiEtat]=useState(()=>{
@@ -1563,7 +1565,7 @@ export default function PageStock({techs,sessionTech,admin}){
     if(posteAutoFait.current||disponible!==true||!articles.length)return;
     posteAutoFait.current=true;
     let auto=false;try{auto=localStorage.getItem(CLE_POSTE_AUTO)==="1";}catch(e){/* facultatif */}
-    if(auto)setPoste(true);
+    if(auto||modePoste)setPoste(true);
   },[disponible,articles.length]);
   const apresMouvement=useCallback(async()=>{await recharger();chargerRecents();},[recharger,chargerRecents]);
 
@@ -1702,7 +1704,7 @@ export default function PageStock({techs,sessionTech,admin}){
       </>}
     </>}
 
-    {poste&&<PosteDouchette articles={articles} techs={techs} quiInit={liste.includes(iniMoi)?iniMoi:(qui||"")} setQui={setQui} onChange={apresMouvement} onFermer={()=>setPoste(false)}/>}
+    {poste&&<PosteDouchette articles={articles} techs={techs} quiInit={liste.includes(iniMoi)?iniMoi:(qui||"")} setQui={setQui} modePoste={!!modePoste} onChange={apresMouvement} onFermer={()=>setPoste(false)}/>}
     {session&&<SessionScan mode={session} articles={articles} techs={techs} qui={qui} setQui={setQui} onFermer={()=>setSession(null)} onChange={apresMouvement} afficherToast={afficherToast}/>}
     {admin&&tel&&<LienTelephone onFermer={()=>setTel(false)}/>}
     {admin&&remiseMax&&<RemiseMax liste={base} libelle={famille==="toutes"?"toutes les familles":LIB_FAMILLE[famille]} qui={qui} onFermer={n=>{setRemiseMax(false);if(n)afficherToast("✓ "+n+" référence"+(n>1?"s":"")+" remise"+(n>1?"s":"")+" au stock maximum");}} onFait={apresMouvement}/>}

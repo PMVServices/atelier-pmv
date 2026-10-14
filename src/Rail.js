@@ -226,14 +226,14 @@ export function PageRail({admin,clients,sessionTech}){
 }
 
 // Page « Stock » : le stock général (QR codes) et, pour l'administrateur, l'onglet « RAIL » (isolateurs, à part)
-export default function PageStockRail({techs,sessionTech,admin,clients}){
+export default function PageStockRail({techs,sessionTech,admin,clients,modePoste}){
   const [vue,setVue]=useState("stock");
-  if(!admin)return <PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>;
+  if(!admin)return <PageStock techs={techs} sessionTech={sessionTech} admin={admin} modePoste={modePoste}/>;
   const pastille=(id,label)=><button type="button" onClick={()=>setVue(id)} style={{padding:"8px 18px",minHeight:44,borderRadius:22,border:"1.5px solid "+(vue===id?"#1B4F8A":"#D1D5DB"),background:vue===id?"#1B4F8A":"#fff",color:vue===id?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer"}}>{label}</button>;
   return(<div>
     <div style={{display:"flex",gap:8,flexWrap:"wrap",maxWidth:900,margin:"0 auto",padding:"14px 16px 0"}}>
       {pastille("stock","🗃 Stock")}{pastille("rail","🚆 RAIL")}
     </div>
-    {vue==="stock"?<PageStock techs={techs} sessionTech={sessionTech} admin={admin}/>:<PageRail admin={admin} clients={clients} sessionTech={sessionTech}/>}
+    {vue==="stock"?<PageStock techs={techs} sessionTech={sessionTech} admin={admin} modePoste={modePoste}/>:<PageRail admin={admin} clients={clients} sessionTech={sessionTech}/>}
   </div>);
 }

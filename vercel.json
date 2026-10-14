@@ -7,6 +7,14 @@
     {
       "source": "/stock/",
       "destination": "/index.html"
+    },
+    {
+      "source": "/poste",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/poste/",
+      "destination": "/index.html"
     }
   ]
 }

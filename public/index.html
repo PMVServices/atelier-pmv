@@ -28,6 +28,21 @@
         });
       }
     </script>
+    <script>
+      // Application « Gestion de stock » (ordinateur du stock) : adresse /poste/ -> manifeste, nom et icône carton dédiés.
+      if (/^\/poste(\/|$)/.test(location.pathname)) {
+        document.querySelector('link[rel="manifest"]').setAttribute('href', '%PUBLIC_URL%/manifest-poste.json');
+        document.querySelector('meta[name="apple-mobile-web-app-title"]').setAttribute('content', 'Gestion de stock');
+        document.querySelector('meta[name="theme-color"]').setAttribute('content', '#1B4F8A');
+        document.title = 'Gestion de stock';
+        var ic = document.querySelector('link[rel="icon"]');
+        ic.setAttribute('href', '%PUBLIC_URL%/poste192.png');
+        ic.setAttribute('type', 'image/png');
+        Array.prototype.forEach.call(document.querySelectorAll('link[rel="apple-touch-icon"]'), function (l) {
+          l.setAttribute('href', '%PUBLIC_URL%/poste192.png');
+        });
+      }
+    </script>
     <style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       html, body { overscroll-behavior-y: contain; }
@@ -54,6 +69,7 @@
       (function () {
         function verrouiller() {
           try {
+            if (/^\/poste(\/|$)/.test(location.pathname)) return;
             if (window.screen && window.screen.orientation && window.screen.orientation.lock) {
               window.screen.orientation.lock("portrait").catch(function () {});
             }
