@@ -45,7 +45,7 @@ const ETAPES=["Entrée","Infos électriques","Information rotation avant démont
 const STATUTS_CHANTIER=[
   {id:"A_demonter",label:"À démonter",color:"#D73A49",bg:"#FFF5F5"},
   {id:"Devis",label:"Devis",color:"#E8720C",bg:"#FFF8E1"},
-  {id:"En_commande",label:"En commande",color:"#1B4F8A",bg:"#EEF4FF"},
+  {id:"En_commande",label:"En commande",color:DESIGN_BUREAU?"#2F5D8C":"#1B4F8A",bg:"#EEF4FF"},
   {id:"A_remonter",label:"À remonter",color:"#22863A",bg:"#F0FFF4"},
   {id:"Peinture",label:"Peinture",color:"#0D9488",bg:"#F0FDFA"},
   {id:"Termine",label:"Terminé",color:"#6B7280",bg:"#F5F6F8"},
@@ -697,6 +697,8 @@ function slug(s){return (s||"").replace(/\s+/g,"_").replace(/[^a-zA-Z0-9_\-]/g,"
 function deSlug(de){return (de||"").replace(/-/g,"");}
 function cheminFiche(v){const client=slug(v.client||"Client");const de=deSlug(v.de||"DE");const mat=slug(v.materiel_lieu||v.type_moteur||"Materiel");return {client,de,mat,chemin:client+"/"+de+"/"+mat};}
 function statutInfo(id){return STATUTS_CHANTIER.find(s=>s.id===id)||STATUTS_CHANTIER[0];}
+// design « bureau d'études » : étiquette de statut pleine (fond de la couleur du statut, texte blanc) ; sans effet sinon
+const stPlein=st=>DESIGN_BUREAU?{background:st.color,color:"#fff",borderColor:st.color}:null;
 // Données d'une fiche pour l'export HTML / ZIP : valeurs, photos, statut, commentaires et pièces à commander (comme l'aperçu)
 async function chargerPourExport(f,photosDeja){
   const [valRows,photoRows,pieceRows]=await Promise.all([
@@ -1239,7 +1241,7 @@ function ModalIdent({techs,onConfirm}){
 
 function SelecteurStatut({statutId,onChange}){
   const st=statutInfo(statutId||"A_demonter");
-  return(<select value={statutId||"A_demonter"} onChange={e=>onChange(e.target.value)} style={{padding:"4px 10px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:12,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>);
+  return(<select value={statutId||"A_demonter"} onChange={e=>onChange(e.target.value)} style={{padding:"4px 10px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:12,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer",...stPlein(st)}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>);
 }
 
 // ─── SECTION MATÉRIEL À COMMANDER (fin de fiche) ────────────────────────
@@ -1268,7 +1270,7 @@ function SectionCommandesLiees({de,onOuvrirCommandes}){
     {commandes.map(c=>{
       const st=statutCommande(rowToCommande(c));
       return(<div key={c.id} style={{background:"#F8F9FA",border:"1px solid #E2E6EA",borderRadius:6,padding:"8px 10px",marginBottom:6,fontSize:12}}>
-        <span style={{display:"inline-block",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700,color:st.color,background:st.bg,marginRight:6}}>● {st.label}</span>
+        <span style={{display:"inline-block",padding:"2px 8px",borderRadius:20,fontSize:10,fontWeight:700,color:st.color,background:st.bg,marginRight:6,...stPlein(st)}}>● {st.label}</span>
         <strong>{c.fournisseur||"—"}</strong> — Cmd {c.numero_commande||"—"}
         {c.montant_ht&&<span style={{color:"#6B7280"}}> · {fmtMontant(c.montant_ht)}</span>}
       </div>);
@@ -1723,6 +1725,22 @@ function PageStats({fiches,pieces}){
 
 
 // ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
+// Design « bureau d'études » : reprendre la fiche en cours la plus récente (le bandeau remplace les grosses tuiles de raccourcis)
+function CarteReprise({f,onOuvrir}){
+  const type=f.type_materiel||"Moteur";
+  let nb=5;try{nb=etapesPourType(type,{}).length||5;}catch(e){/* nombre d'étapes par défaut */}
+  const etape=Math.min((Number(f.etape_active)||0)+1,nb);
+  const st=statutInfo(f.statut_chantier);
+  return(<div style={{display:"flex",alignItems:"center",gap:16,flexWrap:"wrap",background:"#fff",border:"1px solid #E2E6EA",borderLeft:"5px solid #1B4F8A",padding:"14px 18px",marginBottom:14}}>
+    <div style={{flex:"1 1 280px",minWidth:0}}>
+      <div style={{fontSize:11,fontWeight:600,letterSpacing:".1em",textTransform:"uppercase",color:"#6B7280"}}>Reprendre là où vous en étiez</div>
+      <div style={{fontSize:16,fontWeight:600,margin:"2px 0",overflowWrap:"anywhere"}}>{f.de||"Sans DE"} · {f.client||"—"}{f.materiel?", "+f.materiel:""}</div>
+      <div style={{fontSize:12.5,color:"#6B7280",display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>Étape {etape} sur {nb}<span style={{padding:"2px 8px",fontSize:10.5,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",background:st.color,color:"#fff"}}>{st.label}</span></div>
+    </div>
+    <button onClick={()=>onOuvrir(f)} style={{...S.p1,fontSize:15,padding:"12px 22px",minHeight:46}}>Reprendre l'étape {etape} →</button>
+  </div>);
+}
+
 function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemandeMateriel,onVoirMateriel,onOuvrirFiche,onNaviguer}){
   const telephone=useWidth()<600; // sur téléphone : raccourcis seulement, les notifications restent sur tablette et ordinateur
   const [delaisMap,setDelaisMap]=useState({});
@@ -1741,6 +1759,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
   const devisEnAttente=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis");
 
   const fichesActives=fiches.filter(f=>!["Termine","Abandonne"].includes(f.statut_chantier||"A_demonter"));
+  const reprise=DESIGN_BUREAU?fichesActives[0]:null;
   const avecUrgence=fichesActives
     .map(f=>({f,urgence:delaisMap[f.id]?urgenceInfo(delaisMap[f.id]):null}))
     .filter(x=>x.urgence&&(x.urgence.id==="urgent"||x.urgence.id==="rapide"))
@@ -1811,7 +1830,8 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
       </span>
     </button>}
 
-    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:14,marginBottom:24}}>
+    {reprise&&<CarteReprise f={reprise} onOuvrir={onOuvrirFiche}/>}
+    {!DESIGN_BUREAU&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:14,marginBottom:24}}>
       {navPourRole(admin?"admin":"tech").filter(n=>n.id!=="dashboard").map(n=>{
         const sep=n.label.indexOf(" ");const icone=n.label.slice(0,sep);const texte=n.label.slice(sep+1);
         return(<button key={n.id} onClick={()=>onNaviguer(n.id)} style={{background:"#fff",border:"1px solid #E2E6EA",borderRadius:14,padding:"24px 12px",minHeight:118,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:10,cursor:"pointer",boxShadow:"0 2px 6px rgba(0,0,0,0.06)"}}>
@@ -1819,7 +1839,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
           <span style={{fontSize:16,fontWeight:700,color:"#1A1A2E"}}>{texte}</span>
         </button>);
       })}
-    </div>
+    </div>}
 
     {!telephone&&<>
     {rienASignaler&&<div style={{textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
@@ -2101,7 +2121,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
         <p style={{margin:0,fontSize:13,fontWeight:600,color:"#1B4F8A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.materiel||"Sans identification"}</p>
         <p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{fmt(f.created_at)}</p>
       </div>
-      <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:12,whiteSpace:"nowrap",background:st.bg,color:st.color}}>{st.label}</span>
+      <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:12,whiteSpace:"nowrap",background:st.bg,color:st.color,...stPlein(st)}}>{st.label}</span>
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
 
@@ -2577,7 +2597,7 @@ function PageRapportsListe({fiches,onOpen}){
         {parClient[c].map(f=>{const st=statutInfo(f.statut_chantier);return(
           <div key={f.id} onClick={()=>onOpen(f)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:6,cursor:"pointer",background:"#F8F9FA",marginBottom:6}}>
             <span style={{fontSize:13}}>{f.de} · {f.materiel||"—"}</span>
-            <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:st.bg,color:st.color}}>{st.label}</span>
+            <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:st.bg,color:st.color,...stPlein(st)}}>{st.label}</span>
           </div>
         );})}
       </div>

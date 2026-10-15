@@ -3,6 +3,7 @@
 // Aucune logique de l'application n'est touchée : désactivé, rien ne change.
 //   - interrupteur : menu de la personne connectée (administrateur) ;
 //   - ou adresse : ?design=bureau pour l'activer, ?design=ancien pour revenir à l'affichage habituel (mémorisé sur l'appareil).
+import {CSS_EMOJI} from "./emojiMono";
 const CLE_DESIGN="pmv_design";
 
 const pageComplete=()=>typeof window!=="undefined"
@@ -57,24 +58,28 @@ function reglesCouleurs(){
   }).join("\n");
 }
 
-const CSS_THEME=`
-body.design-bureau{--pmv-p:#5C2257;--pmv-a:#8E3584;--pmv-soft:#F4ECF3;--pmv-soft2:#E3D2E1;--pmv-vive:#52B83A;--pmv-bg:#EEEDF0;--pmv-bg2:#F6F5F8;--pmv-bord:#D6D3DB;--pmv-bord2:#C2BEC8;--pmv-gris:#625D69;--pmv-ink:#231F26;--pmv-acier:#A29FAA;--pmv-haut:52px;--pmv-cadre:1240px;background:var(--pmv-bg)}
+const CSS_THEME=CSS_EMOJI+`
+body.design-bureau{--pmv-p:#5C2257;--pmv-a:#8E3584;--pmv-soft:#F4ECF3;--pmv-soft2:#E3D2E1;--pmv-vive:#52B83A;--pmv-bg:#EEEDF0;--pmv-bg2:#F6F5F8;--pmv-bord:#D6D3DB;--pmv-bord2:#C2BEC8;--pmv-gris:#625D69;--pmv-ink:#231F26;--pmv-acier:#A29FAA;--pmv-haut:52px;--pmv-cadre:1160px;background:var(--pmv-bg)}
 @media (min-width:600px){body.design-bureau{--pmv-haut:60px}}
 @media (min-width:1400px){body.design-bureau{--pmv-haut:64px}}
-body.design-bureau,body.design-bureau *:not([style*="monospace"]){font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif !important}
+body.design-bureau,body.design-bureau *:not([style*="monospace"]){font-family:"PMV Emoji","IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif !important}
+body.design-bureau select option{color:#231F26;background:#fff}
+/* pages plus larges sur grand écran : listes et tableau de bord alignés sur le cadre du bandeau, fiches un peu plus larges */
+body.design-bureau [style*="max-width: 900px"],body.design-bureau [style*="max-width: 1000px"]{max-width:1160px !important}
+body.design-bureau [style*="max-width: 820px"],body.design-bureau [style*="max-width: 800px"]{max-width:980px !important}
 body.design-bureau [style*="border-radius"],body.design-bureau .mat *,body.design-bureau .stk *{border-radius:2px !important}
 body.design-bureau button,body.design-bureau input,body.design-bureau select,body.design-bureau textarea{border-radius:2px}
 ${reglesCouleurs()}
 body.design-bureau [style*="position: sticky"][style*="background: rgb(27, 79, 138)"]{background-color:var(--pmv-p) !important}
 /* bandeau : barre du haut + 10 onglets */
-.pmvb-top{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:14px;box-sizing:border-box;height:var(--pmv-haut);padding:0 max(16px,calc((100% - var(--pmv-cadre)) / 2));background:var(--pmv-p);color:#fff;border-bottom:3px solid var(--pmv-acier)}
+.pmvb-top{position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:14px;box-sizing:border-box;height:var(--pmv-haut);padding:0 max(16px,calc((100% - var(--pmv-cadre)) / 2 + 16px));background:var(--pmv-p);color:#fff;border-bottom:3px solid var(--pmv-acier)}
 .pmvb-logo{height:34px;width:auto;flex:none;cursor:pointer;display:block}
 .pmvb-mot{font-weight:600;letter-spacing:.16em;font-size:12px;white-space:nowrap}
 .pmvb-page{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;padding-left:14px;border-left:1px solid rgba(255,255,255,.35);opacity:.92}
 @media (min-width:600px){.pmvb-logo{height:44px}.pmvb-mot{font-size:14px}.pmvb-page{font-size:15px}}
 .pmvb-droite{margin-left:auto;display:flex;align-items:center;gap:8px;flex:none}
 .pmvb-menu{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.4);color:#fff;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
-.pmvb-rub{display:flex;align-items:stretch;background:#fff;border-bottom:1px solid var(--pmv-acier);padding:0 max(16px,calc((100% - var(--pmv-cadre)) / 2))}
+.pmvb-rub{display:flex;align-items:stretch;background:#fff;border-bottom:1px solid var(--pmv-acier);padding:0 max(16px,calc((100% - var(--pmv-cadre)) / 2 + 16px))}
 .pmvb-gr{min-width:0;display:flex;flex-direction:column;border-right:1px solid var(--pmv-bord)}
 .pmvb-gr:last-child{border-right:0}
 .pmvb-cap{font-size:9px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--pmv-gris);padding:6px 10px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
