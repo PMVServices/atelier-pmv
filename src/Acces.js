@@ -141,7 +141,7 @@ export function EcranPremierDemarrage({codeAdmin,onCree,logo}){
 }
 
 // ── fenêtre de la personne connectée ───────────────────────────────────
-export function MenuPersonne({moi,onChanger,onAcces,onFermer}){
+export function MenuPersonne({moi,onChanger,onAcces,onFermer,design,onDesign}){
   return(<div onClick={onFermer} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16}}>
     <div onClick={e=>e.stopPropagation()} style={{...CARTE,maxWidth:340,padding:"22px 20px"}}>
       <div style={{fontSize:12,color:"#6B7280",marginBottom:2}}>Connecté</div>
@@ -150,6 +150,7 @@ export function MenuPersonne({moi,onChanger,onAcces,onFermer}){
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         <button type="button" onClick={onChanger} style={BTN1}>🔁 Changer de personne</button>
         {moi.profil==="admin"&&<button type="button" onClick={onAcces} style={BTN2}>🔑 Gérer les accès</button>}
+        {moi.profil==="admin"&&onDesign&&<button type="button" onClick={onDesign} style={BTN2}>🎨 Nouveau design (essai) : {design?"activé, revenir à l'ancien":"désactivé, l'essayer"}</button>}
         <button type="button" onClick={onFermer} style={{...BTN2,border:"1.5px solid #D1D5DB",color:"#6B7280"}}>Fermer</button>
       </div>
     </div>

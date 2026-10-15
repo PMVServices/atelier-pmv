@@ -1,4 +1,5 @@
 import React, {useState, useEffect, useCallback, useRef, useContext} from "react";
+import {habiller} from "./themeBureau";
 import {PersonneCtx} from "./Acces";
 import {SUPA_URL, H, db} from "./supabase";
 import {NoticeActivation} from "./Activation";
@@ -1082,7 +1083,7 @@ export function ScanDemande({typeDefaut,etats,onTermine,onRetour}){
   const basculerType=d=>setLignes(ls=>ls.map(l=>{if(l.designation!==d)return l;const i=liste.findIndex(e=>e.id===l.type);return {...l,type:liste[(i+1)%liste.length].id};}));
   const retirer=d=>setLignes(ls=>ls.filter(l=>l.designation!==d));
   const nb=lignes.reduce((s,l)=>s+l.qty,0);
-  return(<div className="stk" style={{padding:0,maxWidth:"none"}}><style>{CSS_STOCK}</style>
+  return(<div className="stk" style={{padding:0,maxWidth:"none"}}><style>{habiller(CSS_STOCK)}</style>
     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12,flexWrap:"wrap"}}>
       <button type="button" className="stk-btn stk-btn--s" onClick={onRetour}>‹ Catégories</button>
       <h2 style={{margin:0,fontSize:19}}>📷 Scanner une étiquette</h2>
@@ -1740,12 +1741,12 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
   const sousTitre=(f,l,bouton)=><div className="stk-titre" style={{margin:"16px 0 6px"}}><h3 style={{fontSize:15}}>{LIB_FAMILLE[f]} ({l.length})</h3>{bouton}</div>;
 
   if(disponible===false){
-    return(<div className="stk"><style>{CSS_STOCK}</style>
+    return(<div className="stk"><style>{habiller(CSS_STOCK)}</style>
       <div className="stk-tete"><h2>🗃 Stock</h2></div>
       <div style={{marginTop:14}}>{!admin?<p className="stk-aide">Le stock n'est pas encore activé : prévenez l'administration.</p>:<NoticeActivation titre="Une étape reste à faire pour activer le stock" intro="La base de données doit recevoir trois petites tables (articles, mouvements, codes). C'est à faire une seule fois, par le responsable (compte Supabase)." sql={SQL_STOCK} onVerifier={recharger}/>}</div>
     </div>);
   }
-  return(<div className="stk"><style>{CSS_STOCK}</style>
+  return(<div className="stk"><style>{habiller(CSS_STOCK)}</style>
     <div className="stk-barre">
       <div className="stk-tete"><h2>🗃 Stock</h2><p className="stk-sous">Scannez, le reste suit. Le catalogue vient d'Excel.</p></div>
       <select className="stk-select" value={qui||""} onChange={e=>setQui(e.target.value||null)} aria-label="Opérateur"><option value="">Opérateur ?</option>{liste.map(t=><option key={t} value={t}>{t}</option>)}</select>
