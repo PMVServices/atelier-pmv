@@ -117,6 +117,8 @@ export const CHAMPS_CHEMINEE={
     {id:"n_cheminee",label:"N° de cheminée",type:"text",required:true,aide:{texte:"Le n° de cheminée se lit sur la plaque jaune de la cheminée, à la ligne « n° de série »."}},
     {id:"cheminee_origine",label:"SNCF ou IMATEQ",type:"choix",options:["SNCF","IMATEQ"],required:true,note:"décide du changement des isolateurs"},
     {id:"msg_sncf",type:"conseil",condition:siSncf,texte:"Cheminée SNCF : tous les isolateurs sont changés. "+ISOLATEURS_SNCF_PAR_CHEMINEE+" isolateurs sont décomptés automatiquement du stock SNCF dès l'enregistrement de cette étape. Le numéro de gravure des 8 plaques est à noter à la fin (Remontage cheminée)."},
+    {id:"n_engin",label:"N° d'engin",type:"text",required:true,condition:siSncf,note:"étiquette rouge",groupe:"rail_engin"},
+    {id:"symbole",label:"Symbole",type:"text",required:true,condition:siSncf,groupe:"rail_engin"},
     {id:"msg_imateq",type:"conseil",condition:siImateq,texte:"Cheminée IMATEQ : seuls les isolateurs cassés sont changés. Le nombre d'isolateurs changés est demandé à la fin (Remontage cheminée) et décompté du stock IMATEQ. Indiquez ici le n° de loco."},
     {id:"n_loco",label:"N° de loco",type:"text",required:true,condition:siImateq},
     {id:"enleve_nos_soins",label:"Enlèvement par nos soins",type:"oui_non",required:true,groupe:"rail_transport"},
