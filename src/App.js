@@ -1212,12 +1212,22 @@ function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBas
   return <>{rendus}</>;
 }
 
-function SectionEtape({nom,idx,total,actif,validees,v,nr,onChange,onNR,onValider,onSauvegarder,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,onPhotoRemoved,champsSource}){
+// Case « Étape non réalisable » + justification obligatoire (étape en cours ou déjà validée)
+function BlocNonRealisable({nom,v,nr,onNR,onChange}){
+  const manque=!String(v[cleNrJust(nom)]||"").trim();
+  return(<>
+    <div style={S.nr} onClick={onNR}><input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/><div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché : les champs disparaissent de l'aperçu et une justification est obligatoire</p></div></div>
+    {nr&&<div style={{marginBottom:14}}><label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>Justification — pourquoi l'étape n'est pas réalisable<span style={{color:"#D73A49"}}> *</span></label><ChampTexteDictee champId={cleNrJust(nom)} valeur={v[cleNrJust(nom)]} onChange={onChange} erreur={manque}/></div>}
+  </>);
+}
+
+function SectionEtape({nom,idx,total,actif,validees,v,nr,onChange,onNR,onValider,onSauvegarder,onEnregistrerEtape,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,onPhotoRemoved,champsSource}){
   const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2,photos);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
   function resume(){if(v[cleNr(nom)]==="Oui")return "Non réalisable — "+(v[cleNrJust(nom)]||"justification manquante");return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${(c.unitesChoix&&v[c.id+"__unite"])||c.unite?" "+((c.unitesChoix&&v[c.id+"__unite"])||c.unite):""}`).join(" · ");}
+  const champsEtape=<RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/>;
   if(estLock)return<div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
-  if(estVal&&!estAct)return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>✅</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}}</span></div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modification tracée dans l'historique.</div><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
-  return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{total||ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>{idx!==0&&<div style={S.nr} onClick={onNR}><input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/><div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché : les champs disparaissent de l'aperçu et une justification est obligatoire</p></div></div>}{nr&&<div style={{marginBottom:14}}><label style={{...S.lbl,color:String(v[cleNrJust(nom)]||"").trim()?"#6B7280":"#D73A49"}}>Justification — pourquoi l'étape n'est pas réalisable<span style={{color:"#D73A49"}}> *</span></label><ChampTexteDictee champId={cleNrJust(nom)} valeur={v[cleNrJust(nom)]} onChange={onChange} erreur={!String(v[cleNrJust(nom)]||"").trim()}/></div>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/></div>{!ok&&<div style={{...S.alert,marginBottom:10}}>⚠ {nr?"Indiquez la justification (obligatoire).":"Des champs obligatoires (*) sont manquants."}</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{ok&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{!ok&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ {nr?"Renseignez la justification pour continuer":"Remplissez les champs obligatoires (*) pour continuer"}</div>}</div>);
+  if(estVal&&!estAct)return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>{nr?"⚠️":"✅"}</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}</span>{nr&&<span style={{fontSize:12,color:"#E8720C",fontWeight:600,marginLeft:8}}>· non réalisable</span>}</div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modifiez puis enregistrez : la modification est tracée dans l'historique.</div>{idx!==0&&<BlocNonRealisable nom={nom} v={v} nr={nr} onNR={onNR} onChange={onChange}/>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}>{champsEtape}</div>{!ok&&<div style={{...S.alert,marginBottom:10}}>⚠ {nr?"Indiquez la justification (obligatoire).":"Des champs obligatoires (*) sont manquants."}</div>}<button onClick={onEnregistrerEtape} disabled={saving||!ok} style={{...S.p1,marginTop:8,width:"100%",justifyContent:"center",opacity:(saving||!ok)?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer cette étape"}</button></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
+  return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{total||ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>{idx!==0&&<BlocNonRealisable nom={nom} v={v} nr={nr} onNR={onNR} onChange={onChange}/>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}>{champsEtape}</div>{!ok&&<div style={{...S.alert,marginBottom:10}}>⚠ {nr?"Indiquez la justification (obligatoire).":"Des champs obligatoires (*) sont manquants."}</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{ok&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{!ok&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ {nr?"Renseignez la justification pour continuer":"Remplissez les champs obligatoires (*) pour continuer"}</div>}</div>);
 }
 
 function ModalIdent({techs,onConfirm}){
@@ -2794,6 +2804,12 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const nrMap={};etapesActives.forEach((nomE,iE)=>{if(v[cleNr(nomE)]==="Oui")nrMap[iE]=true;});
   const typeRef=useRef(typeMateriel);typeRef.current=typeMateriel;
   const [avisRail,setAvisRail]=useState(null);
+  // modifications non enregistrées : on compare l'état courant au dernier état enregistré (pris 1,2 s après le chargement, le temps des préremplissages automatiques)
+  const [confirmQuitter,setConfirmQuitter]=useState(false);
+  const [chargeFini,setChargeFini]=useState(!ficheInit?.id);
+  const baseRef=useRef(null); // {v, c} : valeurs et commentaires tels qu'enregistrés
+  const modifie=baseRef.current!==null&&(JSON.stringify(v)!==baseRef.current.v||commentaires!==baseRef.current.c);
+  const marquerV=inst=>{const b=baseRef.current||{v:null,c:""};baseRef.current={v:inst,c:b.c};};
 
   useEffect(()=>{
     if(seedValeurs&&onSeedConsumed)onSeedConsumed();
@@ -2808,13 +2824,25 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   },[ouvrirApercu]);
   useEffect(()=>{
     if(!ficheInit?.id)return;
-    db.get("fiche_valeurs","?fiche_id=eq."+ficheInit.id).then(rows=>{if(!Array.isArray(rows))return;const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});setV(p=>{const merge={...p,...m};const d=draftSiCorrespond();return d?{...merge,...d.v}:merge;});setCommentaires(m["__commentaires"]||"");});
+    db.get("fiche_valeurs","?fiche_id=eq."+ficheInit.id).then(rows=>{if(!Array.isArray(rows))return;const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});setV(p=>{const merge={...p,...m};const d=draftSiCorrespond();return d?{...merge,...d.v}:merge;});setCommentaires(m["__commentaires"]||"");setChargeFini(true);});
     db.get("fiche_photos","?fiche_id=eq."+ficheInit.id+"&order=created_at").then(rows=>{if(!Array.isArray(rows))return;setPhotos(rows.map(p=>({...p,url:db.photoUrl(p.storage_path)})));});
     db.get("suivi_pieces","?fiche_id=eq."+ficheInit.id).then(rows=>{if(Array.isArray(rows))setPiecesCommande(rows);});
   },[ficheInit?.id]);
   useEffect(()=>{
     saveDraft({ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier});
   },[ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier]);
+  const instantaneRef=useRef({v:"",c:""});instantaneRef.current={v:JSON.stringify(v),c:commentaires};
+  useEffect(()=>{
+    if(!chargeFini)return undefined;
+    const t=setTimeout(()=>{if(baseRef.current===null)baseRef.current={v:instantaneRef.current.v,c:instantaneRef.current.c};},1200);
+    return()=>clearTimeout(t);
+  },[chargeFini]);
+  useEffect(()=>{
+    if(!modifie)return undefined;
+    const h=e=>{e.preventDefault();e.returnValue="";};
+    window.addEventListener("beforeunload",h);
+    return()=>window.removeEventListener("beforeunload",h);
+  },[modifie]);
 
 const autoSaveTimer=useRef(null);
 const onChange=useCallback((id,val)=>setV(p=>{
@@ -2844,6 +2872,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
     try{
       await db.del("fiche_valeurs","?fiche_id=eq."+ficheId+"&champ_id=in.(__commentaires)");
       if(commentaires)await db.post("fiche_valeurs",[{fiche_id:ficheId,champ_id:"__commentaires",valeur:commentaires}]);
+      if(baseRef.current)baseRef.current={...baseRef.current,c:commentaires};
     }catch(e){}
     setSavingComm(false);
   }
@@ -2864,10 +2893,12 @@ const onChange=useCallback((id,val)=>setV(p=>{
   }
 
   async function savePartiel(idxEtape){
-    if(saving)return;
+    if(saving)return false;
     setSaving(true);setErreur(null);
+    const instV=JSON.stringify(v);let reussi=false;
     try{
       let fid=ficheId;
+      const toutFini=etapesActives.every((_,i)=>validees.includes(i));
       if(!fid){
         const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||matDefaut,client:v.client||"",statut:"En cours",statut_chantier:statutChantier||"A_demonter",etape_active:idxEtape,etapes_validees:validees,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;
@@ -2877,7 +2908,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       }else{
         const passeARemonter=suiviDevisComplet(v)&&statutChantier==="Devis";
         const patchSC=passeARemonter?{statut_chantier:"A_remonter"}:{};
-        await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:"En cours",...patchSC});
+        await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:toutFini?"Terminée":"En cours",...patchSC});
         if(passeARemonter){setStatutChantier("A_remonter");onFicheUpdated(fid,{statut_chantier:"A_remonter"});}
       }
       const champs=Object.keys(v).filter(k=>v[k]!==undefined&&v[k]!=="");
@@ -2890,12 +2921,46 @@ const onChange=useCallback((id,val)=>setV(p=>{
       await synchroniserRail(fid);
       setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);
       if(fid)onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut});
-      clearDraft();
+      marquerV(instV);
+      clearDraft();reussi=true;
     }catch(e){setErreur(e.message||"Erreur de sauvegarde");}
     setSaving(false);
+    return reussi;
+  }
+  // Enregistre toutes les valeurs de la fiche sans valider d'étape : étape déjà validée que l'on modifie, ou « Enregistrer et quitter ».
+  // Les valeurs vidées par l'utilisateur sont supprimées de la base (l'enregistrement simple ne supprimait rien).
+  async function enregistrerModifs(nomEtape){
+    if(saving)return false;
+    if(!ficheId)return await savePartiel(actif);
+    setSaving(true);setErreur(null);
+    const instV=JSON.stringify(v);
+    try{
+      const toutFini=etapesActives.every((_,i)=>validees.includes(i));
+      await db.patch("fiches","?id=eq."+ficheId,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:toutFini?"Terminée":"En cours"});
+      const rows=Object.keys(v).filter(k=>!k.startsWith("__")&&v[k]!==undefined&&v[k]!=="").map(k=>({fiche_id:ficheId,champ_id:k,valeur:String(v[k])}));
+      for(let i=0;i<rows.length;i+=50)await db.upsert("fiche_valeurs",rows.slice(i,i+50),"fiche_id,champ_id");
+      const vides=Object.keys(v).filter(k=>!k.startsWith("__")&&v[k]==="");
+      for(let i=0;i<vides.length;i+=40)await db.del("fiche_valeurs","?fiche_id=eq."+ficheId+"&champ_id=in.("+vides.slice(i,i+40).map(encodeURIComponent).join(",")+")");
+      if(nomEtape)await db.post("fiche_historique",{fiche_id:ficheId,technicien:sessionTech,action:"Étape modifiée",etape:nomEtape});
+      await synchroniserRail(ficheId);
+      onFicheUpdated(ficheId,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut});
+      marquerV(instV);clearDraft();
+      setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);
+      setSaving(false);
+      return true;
+    }catch(e){setErreur(e.message||"Erreur d'enregistrement");setSaving(false);return false;}
+  }
+  // Sortie de la fiche : si des modifications ne sont pas enregistrées, on demande d'abord
+  function quitter(){clearDraft();onRetour();}
+  function demanderSortie(){if(modifie)setConfirmQuitter(true);else quitter();}
+  async function enregistrerEtQuitter(){
+    if(ficheId&&baseRef.current&&commentaires!==baseRef.current.c)await sauvegarderComm();
+    const ok=await enregistrerModifs(null);
+    if(ok){setConfirmQuitter(false);quitter();}
   }
   async function save(idx){
     setSaving(true);setErreur(null);
+    const instV=JSON.stringify(v);
     try{
       let fid=ficheId;const newVal=[...new Set([...validees,idx])];const toutFini=etapesActives.every((_,i)=>newVal.includes(i));const declencheDevis=etapesActives[idx]===ETAPE_DECLENCHE_DEVIS[typeMateriel||"Moteur"];
       let newSC=statutChantier;
@@ -2913,6 +2978,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Étape validée",etape:etapesActives[idx]});
       if(onFicheUpdated)onFicheUpdated(fid,{statut:toutFini?"Terminée":"En cours",statut_chantier:newSC});
       setValidees(newVal);if(idx+1<etapesActives.length)setActif(idx+1);setFlash(idx);setTimeout(()=>setFlash(null),3000);onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut_chantier:newSC});
+      marquerV(instV);
       clearDraft();
     }catch(e){setErreur("Erreur : "+e.message);}finally{setSaving(false);}
   }
@@ -2926,6 +2992,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
   </div>);
 
   return(<div style={{maxWidth:800,margin:"0 auto",paddingBottom:40}}>
+    {confirmQuitter&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget&&!saving)setConfirmQuitter(false);}}><div role="dialog" aria-label="Enregistrer avant de quitter" style={{background:"#fff",borderRadius:14,padding:"24px 22px",maxWidth:400,width:"100%",boxShadow:"0 8px 40px rgba(0,0,0,0.25)"}}><p style={{fontSize:17,fontWeight:700,margin:"0 0 6px"}}>Enregistrer avant de quitter ?</p><p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>Des modifications de cette fiche n'ont pas été enregistrées.</p>{erreur&&<div style={{...S.alert,marginBottom:10}}>{erreur}</div>}<button disabled={saving} onClick={enregistrerEtQuitter} style={{...S.p1,width:"100%",justifyContent:"center",marginBottom:8,opacity:saving?0.6:1}}>{saving?"💾 Enregistrement…":"💾 Enregistrer et quitter"}</button><button disabled={saving} onClick={()=>{setConfirmQuitter(false);quitter();}} style={{...S.pDanger,width:"100%",marginBottom:8,opacity:saving?0.6:1}}>Quitter sans enregistrer</button><button disabled={saving} onClick={()=>setConfirmQuitter(false)} style={{...S.p2,width:"100%",justifyContent:"center"}}>Annuler, rester sur la fiche</button></div></div>}
     {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";}}/>}
     <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
@@ -2934,7 +3001,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
           <select value={statutChantier} onChange={e=>changerStatut(e.target.value)} style={{padding:"3px 8px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:11,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
           <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:prog+"%",transition:"width .4s"}}/></div>
           <span style={{fontSize:11,opacity:0.85}}>{prog}%</span>
-          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>telechargerHtml(genHtml(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives),"Fiche_"+(v.de||"sans_de")+"_"+(v.client||""))}>⬇</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>{clearDraft();onRetour();}}>← Liste</button>
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>telechargerHtml(genHtml(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives),"Fiche_"+(v.de||"sans_de")+"_"+(v.client||""))}>⬇</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={demanderSortie}>← Retour</button>
         </div>
       </div>
     </div>
@@ -2942,7 +3009,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       {flash==="saved_partiel"&&<div style={{...S.ok,background:"#EEF4FF",color:"#1B4F8A",border:"1px solid #D6E4F7"}}>💾 Données sauvegardées.</div>}{flash!==null&&flash!=="saved_partiel"&&<div style={S.ok}>✅ Étape "{etapesActives[flash]}" enregistrée.</div>}
       {erreur&&<div style={{...S.alert,marginBottom:14}}>{erreur}</div>}
       {avisRail&&<div style={{...S.alert,marginBottom:14,background:"#FFF8E1",borderColor:"#E8720C",color:"#8A4B00"}}>⚠ {avisRail}</div>}
-      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>onChange(cleNr(nom),v[cleNr(nom)]==="Oui"?"Non":"Oui")} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={champsActifs}/>)}
+      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>onChange(cleNr(nom),v[cleNr(nom)]==="Oui"?"Non":"Oui")} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onEnregistrerEtape={()=>enregistrerModifs(nom)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={champsActifs}/>)}
 
       <SectionMaterielCommander v={v} ficheId={ficheId} de={v.de} client={v.client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeMateriel}/>
       {onOuvrirCommandes&&<SectionCommandesLiees de={v.de} onOuvrirCommandes={onOuvrirCommandes}/>}
@@ -2970,7 +3037,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
           <button style={S.p2} onClick={()=>telechargerHtml(genHtml(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives),"Fiche_"+(v.de||"sans_de")+"_"+(v.client||""))}>⬇ Télécharger</button>
           <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄 Imprimer / PDF</button>
           {!isPompe&&typeMateriel!=="Ventilateur"&&typeMateriel!==TYPE_CHEMINEE&&<button style={{...S.p2,opacity:ficheId?1:0.5}} disabled={!ficheId} onClick={()=>onOpenRapport(ficheId)}>📧 Rapport client</button>}
-          <button style={S.p2} onClick={onRetour}>← Retour à l'accueil</button>
+          <button style={S.p2} onClick={demanderSortie}>← Retour</button>
         </div>
       </div>
     </div>
