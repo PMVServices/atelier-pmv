@@ -64,6 +64,7 @@ export function conclusionResistances(v){
 
 // ── fabrique de champs ───────────────────────────────────────────────────────────────────
 const photo=(id,label,categorie,extra)=>({id,label,type:"photo_requise",categorie:categorie||label,required:true,...extra});
+const photoLibre=(id,label,categorie,extra)=>({id,label,type:"photo_requise",categorie:categorie||label,required:true,libre:true,...extra});
 const fait=(id,label,extra)=>({id,label,type:"fait",required:true,...extra});
 const titre=(id,label,extra)=>({id,label,type:"titre",...extra});
 const mes=(id,label,unite,groupe,extra)=>({id,label,type:"mesure",unite,required:true,groupe,...extra});
@@ -105,8 +106,6 @@ export const E_MOTEUR_REMONTAGE="Bloc moteur — remontage";
 export const E_CHEMINEE="Remontage cheminée";
 export const ETAPES_CHEMINEE=[E_RECEPTION,E_MOTEUR_CONTROLE,E_MOTEUR_ESSAIS,E_MOTEUR_DEMONTAGE,E_MOTEUR_REMONTAGE,E_CHEMINEE];
 
-const MARQUES_MOTEUR_RAIL=["Siemens","WEG","ABB","Leroy Sommer","Nidec","Autre"];
-
 export const CHAMPS_CHEMINEE={
   [E_RECEPTION]:[
     {id:"tech_reception",label:"Technicien",type:"technicien",required:true},
@@ -120,8 +119,6 @@ export const CHAMPS_CHEMINEE={
     {id:"msg_sncf",type:"conseil",condition:siSncf,texte:"Cheminée SNCF : tous les isolateurs sont changés. "+ISOLATEURS_SNCF_PAR_CHEMINEE+" isolateurs sont décomptés automatiquement du stock SNCF dès l'enregistrement de cette étape. Le numéro de gravure des 8 plaques est à noter à la fin (Remontage cheminée)."},
     {id:"msg_imateq",type:"conseil",condition:siImateq,texte:"Cheminée IMATEQ : seuls les isolateurs cassés sont changés. Le nombre d'isolateurs changés est demandé à la fin (Remontage cheminée) et décompté du stock IMATEQ. Indiquez ici le n° de loco."},
     {id:"n_loco",label:"N° de loco",type:"text",required:true,condition:siImateq},
-    {id:"plaques_deja_gravees",label:"Des plaques de la cheminée sont-elles déjà gravées ?",type:"oui_non",required:true,note:"gravure = entretien déjà fait"},
-    {id:"plaques_gravees_texte",label:"Lesquelles (positions 1 à 8) et quels numéros de gravure",type:"text",required:true,dictee:true,condition:siDejaGravees},
     {id:"enleve_nos_soins",label:"Enlèvement par nos soins",type:"oui_non",required:true,groupe:"rail_transport"},
     {id:"livraison_transporteur",label:"Livraison transporteur",type:"oui_non",required:true,groupe:"rail_transport"},
     titre("t_palette","Contrôle de la palette à la réception"),
@@ -129,6 +126,8 @@ export const CHAMPS_CHEMINEE={
     photo("ph_palette","Photo de la palette à la réception","Palette à la réception"),
     {id:"palettisation_conforme",label:"Palettisation conforme",type:"oui_non",required:true},
     {id:"palette_obs",label:"Observation",type:"text",required:false,dictee:true},
+    {id:"plaques_deja_gravees",label:"Des plaques de la cheminée sont-elles déjà gravées ?",type:"oui_non",required:true,note:"gravure = entretien déjà fait"},
+    {id:"plaques_gravees_texte",label:"Lesquelles (positions 1 à 8) et quels numéros de gravure",type:"text",required:true,dictee:true,condition:siDejaGravees},
     titre("t_deballage","Photos au déballage"),
     photo("ph_globalite","Globalité","Déballage globalité"),
     photo("ph_plaque_jaune","Plaque jaune","Déballage plaque jaune"),
@@ -136,26 +135,17 @@ export const CHAMPS_CHEMINEE={
     photo("ph_plaque_pressostat","Plaque pressostat","Déballage plaque pressostat"),
     photo("ph_plaque_inox","Plaque inox","Déballage plaque inox"),
     {id:"deballage_obs",label:"Observation / défauts constatés",type:"text",required:false,dictee:true},
-    titre("t_ident_res","Résistance de freinage",{prefixe:true}),
-    {id:"res_type",label:"Type (plaque)",type:"text",required:true,groupe:"rail_res"},
-    {id:"res_numero",label:"N° de la résistance",type:"text",required:false,groupe:"rail_res"},
-    titre("t_ident_vent","Ventilateur",{prefixe:true}),
-    {id:"vent_type",label:"Type",type:"text",required:true,groupe:"rail_vent1"},
-    {id:"vent_numero_fab",label:"N° de fabrication",type:"text",required:false,groupe:"rail_vent1"},
-    {id:"vent_debit",label:"Débit",type:"text",unite:"m³/s",required:false,groupe:"rail_vent2"},
-    {id:"vent_pression",label:"Pression",type:"text",unite:"Pa",required:false,groupe:"rail_vent2"},
-    {id:"vent_puissance",label:"Puissance",type:"text",unite:"kW",required:false,groupe:"rail_vent2"},
   ],
   [E_MOTEUR_CONTROLE]:[
     {id:"tech_moteur_controle",label:"Technicien",type:"technicien",required:true},
     titre("t_ident_moteur","Moteur",{prefixe:true}),
-    {id:"marque_moteur",label:"Marque",type:"select",options:MARQUES_MOTEUR_RAIL,required:true,autreTexte:true,groupe:"rail_mot1"},
+    {id:"marque_moteur",label:"Marque",type:"select",options:["Siemens","Autre"],defaut:"Siemens",required:true,autreTexte:true,groupe:"rail_mot1"},
     {id:"type_moteur",label:"Type",type:"text",required:true,groupe:"rail_mot1"},
-    {id:"puissance",label:"Puissance",type:"text",required:true,unite:"kW",unitesChoix:["kW","W","CV","HP","kVA"],groupe:"rail_mot2"},
-    {id:"vitesse",label:"Vitesse",type:"text",required:true,unite:"tr/mn",note:"2 vitesses : ex. 1455/2900",groupe:"rail_mot2"},
+    {id:"puissance",label:"Puissance",type:"select",options:["4,3/17","Autre"],defaut:"4,3/17",required:true,unite:"kW",autreTexte:true,note:"2 vitesses",groupe:"rail_mot2"},
+    {id:"vitesse",label:"Vitesse",type:"select",options:["1455/2900","Autre"],defaut:"1455/2900",required:true,unite:"tr/mn",autreTexte:true,note:"2 vitesses",groupe:"rail_mot2"},
     {id:"numero_serie",label:"N° de série",type:"text",required:true,groupe:"rail_mot3"},
     {id:"fixation",label:"Fixation",type:"text",required:false,groupe:"rail_mot3"},
-    {id:"tension",label:"Tension",type:"text",required:true,unite:"V",note:"ex. 400 Y / YY",groupe:"rail_mot4"},
+    {id:"tension",label:"Tension",type:"select",options:["400V Y/YY","Autre"],defaut:"400V Y/YY",required:true,autreTexte:true,groupe:"rail_mot4"},
     titre("t_bornes","Boîte à bornes"),
     {id:"bornes_etat",label:"État (ouverture de la boîte à bornes)",type:"select",options:OK_HS,required:true,groupe:"rail_bornes1"},
     {id:"bornes_cablage",label:"État du câblage",type:"select",options:OK_HS,required:true,groupe:"rail_bornes1"},
@@ -211,8 +201,8 @@ export const CHAMPS_CHEMINEE={
     {id:"diam_arbre_ar",label:"Diamètre arbre arrière",type:"number",unite:"mm",required:true,groupe:"rail_dar"},
     {id:"diam_flasque_ar",label:"Diamètre flasque arrière",type:"number",unite:"mm",required:true,groupe:"rail_dar"},
     titre("t_photos_demontage","Photos"),
-    photo("ph_bobinage_av","Photo du bobinage avant","Bobinage avant"),
-    photo("ph_bobinage_ar","Photo du bobinage arrière","Bobinage arrière"),
+    photo("ph_bobinage_av","Photo du stator avant","Stator avant",{anciennesCategories:["Bobinage avant"]}),
+    photo("ph_bobinage_ar","Photo du stator arrière","Stator arrière",{anciennesCategories:["Bobinage arrière"]}),
     photo("ph_roulements","Photo des roulements","Roulements"),
     {id:"nettoyage_hp",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true,groupe:"rail_hp"},
     {id:"etuvage_stator",label:"Étuvage",type:"select",options:["Oui","Non"],required:true,groupe:"rail_hp"},
@@ -297,6 +287,9 @@ export const CHAMPS_CHEMINEE={
     titre("t_qualite","Signatures contrôle qualité"),
     {id:"qualite_tech_1",label:"Contrôle qualité — technicien 1",type:"technicien",required:true},
     {id:"qualite_tech_2",label:"Contrôle qualité — technicien 2",type:"technicien",required:true},
+    titre("t_depart_atelier","Départ de l'atelier"),
+    {id:"msg_depart_atelier",type:"conseil",texte:"Photos de la cheminée au départ de notre atelier : au moins une, autant que nécessaire (bouton +)."},
+    photoLibre("ph_depart_atelier","Photos au départ de l'atelier","Départ de l'atelier"),
   ],
 };
 

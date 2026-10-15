@@ -13,7 +13,7 @@ import PageClients, {ouvrirClient} from "./Clients";
 import {PanneauResumeCommercial, verifierResumeCommercial} from "./ResumeCommercial";
 import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
-import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
+import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris, SourcesPhoto} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
 import {CHAMPS_CHEMINEE, ETAPES_CHEMINEE} from "./Cheminee";
 import {TYPE_CHEMINEE, prefixeNumero, normaliserNumero} from "./railClients";
@@ -642,9 +642,11 @@ function champVisible(c,v){if(!c.condition)return true;if(typeof c.condition==="
 // « required » peut être une fonction de la fiche (ex. gravure obligatoire seulement pour une cheminée SNCF)
 function estRequis(c,v){return typeof c.required==="function"?!!c.required(v):!!c.required;}
 // Photo obligatoire (fiche cheminée) : une photo de la catégorie, ou « photo impossible » avec une justification
+// une photo appartient au champ par sa catégorie ; c.anciennesCategories garde reconnues les photos prises sous l'ancien nom après un renommage
+function categorieDuChamp(c,p){return p.categorie_nom===c.categorie||(c.anciennesCategories||[]).includes(p.categorie_nom);}
 function photoRequiseOk(c,v,photos){
   if(v[c.id]==="impossible")return String(v[c.id+"__just"]||"").trim().length>0;
-  return (photos||[]).some(p=>p.categorie_nom===c.categorie);
+  return (photos||[]).some(p=>categorieDuChamp(c,p));
 }
 function etapeOk(nom,v,nr,cs,photos){
   if(nr)return String(v[cleNrJust(nom)]||"").trim()!=="";   // étape non réalisable : justification obligatoire
@@ -961,12 +963,11 @@ function ChampTexteDictee({champId,valeur,onChange,erreur}){
 }
 
 function BoutonPhotoSkf({categorie,ficheId,cheminBase,photos=[],onPhotoAdded}){
-  var fr=React.useRef();
   var uplState=React.useState(false);
   var upl=uplState[0]; var setUpl=uplState[1];
   var photo=photos.find(function(p){return p.categorie_nom===categorie;});
-  function upload(e){
-    var file=e.target.files[0]; if(!file)return;
+  function upload(file){
+    if(!file)return;
     setUpl(true);
     var ext=file.name.split(".").pop();
     var slug=categorie.toLowerCase().replace(/[^a-z0-9]/g,"_");
@@ -978,19 +979,17 @@ function BoutonPhotoSkf({categorie,ficheId,cheminBase,photos=[],onPhotoAdded}){
       setUpl(false);
     }).catch(function(err){alert("Erreur: "+err.message);setUpl(false);});
   }
-  return(<div style={{display:"flex",gap:8,alignItems:"center",marginTop:4}}>
-    <input ref={fr} type="file" accept="image/*" capture="environment" onChange={upload} style={{display:"none"}}/>
-    {photo
-      ?<div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <img src={photo.url} alt={categorie} style={{width:60,height:45,objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA",cursor:"pointer"}} onClick={function(){window.open(photo.url,"_blank");}}/>
-          <span style={{fontSize:11,color:"#22863A"}}>{"OK"}</span>
-          <button onClick={function(){fr.current.click();}} style={{...S.p2,fontSize:11,padding:"3px 8px"}}>{upl?"...":"Remplacer"}</button>
-        </div>
-      :<button onClick={function(){fr.current.click();}} disabled={!ficheId||upl} style={{...S.p2,fontSize:12,padding:"6px 12px",opacity:ficheId?1:0.5}}>{upl?"...":"Photo: "+categorie}</button>
-    }
+  return(<div style={{display:"flex",gap:8,alignItems:"center",marginTop:4,flexWrap:"wrap"}}>
+    <span style={{fontSize:12,fontWeight:600,color:"#374151"}}>{categorie}</span>
+    {photo&&<div style={{display:"flex",gap:8,alignItems:"center"}}>
+      <img src={photo.url} alt={categorie} style={{width:60,height:45,objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA",cursor:"pointer"}} onClick={function(){window.open(photo.url,"_blank");}}/>
+      <span style={{fontSize:11,color:"#22863A"}}>{"OK"}</span>
+    </div>}
+    {ficheId
+      ?<SourcesPhoto multiple={false} petit occupe={upl} onFichiers={function(fs){upload(fs[0]);}} styleBouton={S.p2}/>
+      :<span style={{fontSize:11,color:"#9CA3AF"}}>Enregistrez la fiche pour ajouter cette photo</span>}
   </div>);
 }
-
 
 function ChampGarnitureMobile({valeur,onChange}){
   const isAutre=valeur&&!GM_MOBILE_OPTIONS.slice(0,-1).includes(valeur);
@@ -1015,7 +1014,7 @@ function ChampGarnitureFixe({valeur,onChange}){
 }
 
 function SectionPhotos({etape,ficheId,cheminBase,categories,photos,toutes,onPhotoAdded,onPhotoRemoved,tablePhotos="fiche_photos"}){
-  const [uploading,setUploading]=useState(false);const [cat,setCat]=useState("");const [apercu,setApercu]=useState(null);const [errMsg,setErrMsg]=useState("");const inputRef=useRef(null);
+  const [uploading,setUploading]=useState(false);const [cat,setCat]=useState("");const [apercu,setApercu]=useState(null);const [errMsg,setErrMsg]=useState("");
   const [aSupprimer,setASupprimer]=useState(null);const [suppression,setSuppression]=useState(false);
   const [survol,zoneProps]=useDepotImages(fs=>deposer(fs));
   const photosEtape=photos.filter(p=>p.etape===etape);
@@ -1038,13 +1037,8 @@ function SectionPhotos({etape,ficheId,cheminBase,categories,photos,toutes,onPhot
     }
     onPhotoAdded({...photoData,url:db.photoUrl(path)});
   }
-  async function handleFile(e){
-    const file=e.target.files[0];if(!file||!cat)return;setUploading(true);setErrMsg("");
-    try{await envoyer(file,0);setCat("");}catch(err){setErrMsg("Erreur upload : "+err.message);}
-    setUploading(false);if(inputRef.current)inputRef.current.value="";
-  }
   async function deposer(fs){
-    if(!cat){setErrMsg("Choisissez d'abord une catégorie, puis glissez la photo.");return;}
+    if(!cat){setErrMsg("Choisissez d'abord une catégorie, puis ajoutez la photo.");return;}
     setUploading(true);setErrMsg("");
     try{for(let i=0;i<fs.length;i++)await envoyer(fs[i],i);setCat("");}catch(err){setErrMsg("Erreur upload : "+err.message);}
     setUploading(false);
@@ -1059,8 +1053,8 @@ function SectionPhotos({etape,ficheId,cheminBase,categories,photos,toutes,onPhot
     <p style={{fontSize:11,fontWeight:600,color:"#6B7280",textTransform:"uppercase",letterSpacing:".05em",margin:"0 0 8px"}}>📷 Photos — {etape}</p>
     {photosEtape.length>0&&<div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>{photosEtape.map((p,i)=><div key={i} onClick={()=>setApercu(p)} style={{cursor:"pointer",position:"relative"}}><CroixPhoto onClick={()=>setASupprimer(p)}/><img src={p.url} alt={p.categorie_nom} style={{width:60,height:60,objectFit:"cover",borderRadius:5,border:"1.5px solid #E2E6EA",display:"block"}} onError={e=>e.target.src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Crect width='60' height='60' fill='%23eee'/%3E%3C/svg%3E"}/><div style={{position:"absolute",bottom:0,left:0,right:0,background:"rgba(0,0,0,0.6)",borderRadius:"0 0 4px 4px",padding:"2px 3px",fontSize:8,color:"#fff",textAlign:"center"}}>{p.categorie_nom}</div></div>)}</div>}
     <ConfirmerSuppressionPhoto photo={aSupprimer} occupe={suppression} onConfirmer={confirmerSuppression} onAnnuler={()=>setASupprimer(null)} styleBouton={S.p2} styleBoutonDanger={S.pDanger}/>
-    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><select value={cat} onChange={e=>setCat(e.target.value)} style={{...S.sel,flex:1,minWidth:130,fontSize:12}}><option value="">— Catégorie</option>{categories.map(c=><option key={c.nom}>{c.nom}</option>)}</select><button onClick={()=>{if(!cat){setErrMsg("Choisissez une catégorie");return;}inputRef.current?.click();}} style={{...S.p2,fontSize:12,padding:"6px 12px",opacity:cat?1:0.5,whiteSpace:"nowrap"}}>{uploading?"⏳…":"📷 Photo"}</button><input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={handleFile} style={{display:"none"}}/></div>
-    {avecSouris()&&<p style={{fontSize:10,color:"#9CA3AF",margin:"6px 0 0"}}>ou glissez-déposez des photos ici (après avoir choisi la catégorie)</p>}
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}><select value={cat} onChange={e=>setCat(e.target.value)} style={{...S.sel,flex:1,minWidth:130,fontSize:12}}><option value="">— Catégorie</option>{categories.map(c=><option key={c.nom}>{c.nom}</option>)}</select></div>
+    <div style={{marginTop:8}}><SourcesPhoto occupe={uploading} onFichiers={deposer} styleBouton={S.p2}/></div>
     {errMsg&&<p style={{fontSize:11,color:"#D73A49",marginTop:4}}>{errMsg}</p>}
     {apercu&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}} onClick={()=>setApercu(null)}><img src={apercu.url} alt={apercu.categorie_nom} style={{maxWidth:"92vw",maxHeight:"82vh",objectFit:"contain",borderRadius:8}}/><p style={{color:"#fff",marginTop:10,fontSize:13}}>{apercu.categorie_nom} — {apercu.nom_fichier}</p><p style={{color:"rgba(255,255,255,0.5)",fontSize:11,marginTop:4}}>Appuyez pour fermer</p></div>}
   </div>);
@@ -1080,9 +1074,9 @@ function EnteteAide({lbl,aide}){
 // sauf « Photo impossible » avec une justification obligatoire.
 function ChampPhotoRequise({c,v,onChange,etape,ficheId,cheminBase,photos=[],onPhotoAdded,onPhotoRemoved}){
   const [envoi,setEnvoi]=useState(false);const [erreur,setErreur]=useState("");const [apercu,setApercu]=useState(null);
-  const [aSupprimer,setASupprimer]=useState(null);const [suppression,setSuppression]=useState(false);const inputRef=useRef(null);
+  const [aSupprimer,setASupprimer]=useState(null);const [suppression,setSuppression]=useState(false);
   const slugC=slugCat(c.categorie);
-  const siennes=photos.filter(p=>p.categorie_nom===c.categorie);
+  const siennes=photos.filter(p=>categorieDuChamp(c,p));
   const impossible=v[c.id]==="impossible";
   const requis=!!c.required;const ok=photoRequiseOk(c,v,photos);
   const justif=v[c.id+"__just"]||"";
@@ -1099,11 +1093,11 @@ function ChampPhotoRequise({c,v,onChange,etape,ficheId,cheminBase,photos=[],onPh
     }
     onPhotoAdded({...donnees,url:db.photoUrl(path)});
   }
-  async function choisir(e){
-    const fichiers=Array.from(e.target.files||[]);if(!fichiers.length)return;
+  async function choisir(fichiers){
+    if(!fichiers.length)return;
     setEnvoi(true);setErreur("");
     try{for(let i=0;i<fichiers.length;i++)await envoyer(fichiers[i],i);}catch(err){setErreur("Erreur d'envoi : "+(err&&err.message?err.message:"connexion ?"));}
-    setEnvoi(false);if(inputRef.current)inputRef.current.value="";
+    setEnvoi(false);
   }
   async function confirmerSuppression(){
     const p=aSupprimer;if(!p)return;setSuppression(true);setErreur("");
@@ -1123,10 +1117,9 @@ function ChampPhotoRequise({c,v,onChange,etape,ficheId,cheminBase,photos=[],onPh
         <button type="button" onClick={()=>onChange(c.id,"")} style={{...S.p2,fontSize:12,padding:"6px 12px",marginTop:8}}>📷 Finalement, prendre la photo</button>
       </div>
       :<div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
-        <button type="button" disabled={envoi} onClick={()=>inputRef.current&&inputRef.current.click()} style={{...S.p1,fontSize:13,padding:"9px 16px",minHeight:44,opacity:envoi?0.6:1}}>{envoi?"⏳ Envoi…":(siennes.length?"📷 Ajouter une photo":"📷 Prendre la photo")}</button>
+        <SourcesPhoto occupe={envoi} gros={!!c.libre} onFichiers={choisir} styleBouton={S.p2}/>
         {siennes.length===0&&<button type="button" onClick={()=>onChange(c.id,"impossible")} style={{background:"none",border:"none",padding:"8px 4px",fontSize:12,color:"#6B7280",textDecoration:"underline",cursor:"pointer"}}>Photo impossible ?</button>}
       </div>}
-    <input ref={inputRef} type="file" accept="image/*" capture="environment" onChange={choisir} style={{display:"none"}}/>
     {erreur&&<p style={{fontSize:11,color:"#D73A49",margin:"6px 0 0"}}>{erreur}</p>}
     {apercu&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.9)",zIndex:500,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}} onClick={()=>setApercu(null)}><img src={apercu.url} alt={c.label} style={{maxWidth:"92vw",maxHeight:"82vh",objectFit:"contain",borderRadius:8}}/><p style={{color:"#fff",marginTop:10,fontSize:13}}>{c.label}</p><p style={{color:"rgba(255,255,255,0.5)",fontSize:11,marginTop:4}}>Appuyez pour fermer</p></div>}
   </div>);
@@ -1207,7 +1200,7 @@ function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBas
   for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>);}else{vus.add(c.id);rendus.push(un(c));}}
   rendus.push(<CasesLibres key="libres" etape={nom} v={v} onChange={onChange}/>);
   // les photos obligatoires (champs « photo_requise ») s'affichent dans leur champ : on ne les répète pas dans « Photos — étape »
-  const catsRequises=new Set(champs.filter(c=>c.type==="photo_requise").map(c=>c.categorie));
+  const catsRequises=new Set(champs.filter(c=>c.type==="photo_requise").flatMap(c=>[c.categorie,...(c.anciennesCategories||[])]));
   rendus.push(<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom&&!catsRequises.has(p.categorie_nom))} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>);
   return <>{rendus}</>;
 }
@@ -2020,7 +2013,6 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
   const [uploadEnCours,setUploadEnCours]=useState(false);
   const [photoASuppr,setPhotoASuppr]=useState(null);const [supprEnCours,setSupprEnCours]=useState(false);
   const [survolDepot,depotProps]=useDepotImages(fs=>deposerPhotos(fs));
-  const fileRef=React.useRef();
   const ch=cheminFiche({client:f.client,de:f.de,materiel_lieu:f.materiel});
   const st=statutInfo(f.statut_chantier);
 
@@ -2059,12 +2051,6 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
     const rec=await db.post("fiche_photos",{fiche_id:f.id,storage_path:path,nom_fichier:file.name,categorie_nom:catPhoto,categorie_slug:((categories||[]).find(c=>c.nom===catPhoto)||{}).slug||slugCat(catPhoto),etape:""});
     if(!(rec&&rec[0])){await db.deleteFile(path);throw new Error("La photo n'a pas pu être rattachée à la fiche.");}
     setPhotos(prev=>[...prev,{...rec[0],url:db.photoUrl(path)}]);
-  }
-  async function uploadPhoto(e){
-    const file=e.target.files[0];if(!file||!catPhoto)return;
-    setUploadEnCours(true);
-    try{await envoyerFichierPhoto(file,0);setAjoutPhoto(false);setCatPhoto("");}catch(err){alert("Erreur upload: "+err.message);}
-    setUploadEnCours(false);
   }
   async function deposerPhotos(fs){
     if(!ajoutPhoto||!catPhoto){alert("Ouvrez « Ajouter photo », choisissez une catégorie, puis glissez la photo.");return;}
@@ -2128,9 +2114,8 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
           <option value="">— Choisir une catégorie</option>
           {(categories||[]).map(c=><option key={c.nom} value={c.nom}>{c.nom}</option>)}
         </select>
-        {catPhoto&&<div style={{display:"flex",gap:8}}>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={uploadPhoto} style={{display:"none"}}/>
-          <button onClick={()=>fileRef.current.click()} disabled={uploadEnCours} style={{...S.p1,fontSize:12,background:"#22863A",opacity:uploadEnCours?0.6:1}}>{uploadEnCours?"⏳ Upload...":"📷 Choisir photo"}</button>
+        {catPhoto&&<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-start"}}>
+          <SourcesPhoto occupe={uploadEnCours} onFichiers={deposerPhotos} styleBouton={S.p2}/>
           <button onClick={()=>{setAjoutPhoto(false);setCatPhoto("");}} style={{...S.p2,fontSize:12}}>Annuler</button>
         </div>}
       </div>}
@@ -2323,14 +2308,12 @@ function LigneVerdict({label,rk,data,upd}){
 }
 
 function BlocPhotoRapport({slot,url,ficheId,uploading,onUpload}){
-  const fr=useRef();
   return(<div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"center"}}>
     {url
       ?<img src={url} alt={slot.label} style={{width:110,height:80,objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA",cursor:"pointer"}} onClick={()=>window.open(url,"_blank")}/>
       :<div style={{width:110,height:80,borderRadius:6,border:"1.5px dashed #D1D5DB",display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,color:"#9CA3AF",textAlign:"center",padding:4}}>Non disponible</div>
     }
-    <input ref={fr} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>{if(e.target.files[0])onUpload(slot.key,e.target.files[0]);}}/>
-    <button onClick={()=>fr.current.click()} disabled={!ficheId||uploading===slot.key} style={{...S.p2,fontSize:11,padding:"4px 10px",opacity:ficheId?1:0.5}}>{uploading===slot.key?"...":(url?"Remplacer":"Ajouter")}</button>
+    {ficheId?<SourcesPhoto multiple={false} petit occupe={uploading===slot.key} onFichiers={fs=>onUpload(slot.key,fs[0])} styleBouton={S.p2}/>:<span style={{fontSize:10,color:"#9CA3AF"}}>Enregistrez d'abord la fiche</span>}
     <span style={{fontSize:10,color:"#6B7280",textAlign:"center"}}>{slot.label}</span>
   </div>);
 }
@@ -2345,7 +2328,6 @@ function PageRapport({ficheId,techs,onRetour}){
   const [uploading,setUploading]=useState(null);
   const [exportingWord,setExportingWord]=useState(false);
   const [modeleOk,setModeleOk]=useState(false);
-  const captureFileRef=useRef();
 
   useEffect(()=>{
     if(!ficheId){setLoading(false);return;}
@@ -2498,8 +2480,7 @@ function PageRapport({ficheId,techs,onRetour}){
           <button onClick={()=>supprimerCapture(i)} style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,color:"#D73A49",padding:"6px 10px",cursor:"pointer"}}>✕</button>
         </div>
       ))}
-      <input ref={captureFileRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>{if(e.target.files[0])ajouterCapture(e.target.files[0]);e.target.value="";}}/>
-      <button onClick={()=>captureFileRef.current.click()} disabled={!ficheId||uploading==="capture"} style={{...S.p2,fontSize:12,padding:"6px 12px",opacity:ficheId?1:0.5}}>{uploading==="capture"?"...":"+ Ajouter une capture"}</button>
+      {ficheId?<SourcesPhoto multiple={false} occupe={uploading==="capture"} onFichiers={fs=>ajouterCapture(fs[0])} styleBouton={S.p2}/>:<span style={{fontSize:11,color:"#9CA3AF"}}>Enregistrez d'abord la fiche pour ajouter une capture.</span>}
     </div>
 
     <div style={S.card}>
@@ -2811,6 +2792,12 @@ const CHAMPS_VENTILATEUR={
 };
 
 // Champs et étapes d'une fiche selon son type (utilisé par la fiche, l'aperçu, le PDF et les exports ZIP)
+// Valeurs préremplies à la création d'une fiche : champ « defaut » (ex. marque Siemens du moteur de cheminée). Une fiche déjà créée n'est jamais modifiée.
+function valeursParDefaut(type){
+  const out={};const cs=champsPourType(type)||{};
+  Object.keys(cs).forEach(e=>(cs[e]||[]).forEach(c=>{if(c.defaut!==undefined)out[c.id]=c.defaut;}));
+  return out;
+}
 function champsPourType(type){
   if(type===TYPE_CHEMINEE)return CHAMPS_CHEMINEE;
   return type==="Pompe"?CHAMPS_POMPE:type==="Moto-réducteur"?CHAMPS_REDUCTEUR:type==="Ventilateur"?CHAMPS_VENTILATEUR:type==="Autre"?CHAMPS_AUTRE:CHAMPS;
@@ -2824,7 +2811,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const isPompe=typeMateriel==="Pompe";
   const champsActifs=champsPourType(typeMateriel);
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
-  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {de:ficheInit?.de||"",date_entree:today(),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
+  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {...(!ficheInit?.id?valeursParDefaut(typeMateriel):{}),de:ficheInit?.de||"",date_entree:today(),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
   const etapesActives=insererEtapeSuiviDevis(etapesPourType(typeMateriel,v),v,typeMateriel||"Moteur");
   const matDefaut=typeMateriel===TYPE_CHEMINEE?"Cheminée":"Moteur";
   const nrMap={};etapesActives.forEach((nomE,iE)=>{if(v[cleNr(nomE)]==="Oui")nrMap[iE]=true;});

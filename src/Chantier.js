@@ -3,7 +3,7 @@ import {LectureCtx} from "./Acces";
 import {db} from "./supabase";
 import {normaliserNumero} from "./railClients";
 import {genHtml, afficherApercu, telechargerZip} from "./pdfUtils";
-import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris} from "./Photos";
+import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, SourcesPhoto} from "./Photos";
 
 // Fiche chantier : liste en dossiers (client > N° DE > lieu) comme la fiche atelier, mais dans une autre couleur
 // (vert pétrole) pour ne jamais confondre les deux. Le formulaire lui-même (FicheChantier) reste dans App.js.
@@ -82,7 +82,6 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
   const [confP,setConfP]=useState(false);const [confF,setConfF]=useState(false);
   const [photoASuppr,setPhotoASuppr]=useState(null);const [supprEnCours,setSupprEnCours]=useState(false);
   const [survolDepot,depotProps]=useDepotImages(fs=>deposerPhotos(fs));
-  const fileRef=useRef();
   const recup=f.statut_recuperation==="Récupéré";
   const type=f.type_equipement||"Autre";
   const de=normaliserDE(f.de,f.client);
@@ -118,15 +117,8 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
     if(!(rec&&rec[0])){await db.deleteFile(path);throw new Error("La photo n'a pas pu être rattachée à la fiche.");}
     setPhotos(prev=>[...(prev||[]),{...rec[0],url:db.photoUrl(path)}]);
   }
-  async function envoyerPhoto(e){
-    const file=e.target.files[0];if(!file||!cat)return;
-    setOccupe("photo");setErreur(null);
-    try{await envoyerFichier(file,0);setAjout(false);setCat("");}catch(err){echec(err);}
-    if(fileRef.current)fileRef.current.value="";
-    setOccupe(null);
-  }
   async function deposerPhotos(fs){
-    if(!ajout||!cat){setErreur("Ouvrez « Ajouter photo », choisissez une catégorie, puis glissez la photo.");return;}
+    if(!ajout||!cat){setErreur("Ouvrez « Ajouter photo », choisissez une catégorie, puis ajoutez la photo.");return;}
     setOccupe("photo");setErreur(null);
     try{for(let i=0;i<fs.length;i++)await envoyerFichier(fs[i],i);setAjout(false);setCat("");}catch(err){echec(err);}
     setOccupe(null);
@@ -178,14 +170,12 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
       </div>
       {erreur&&<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,padding:"6px 10px",fontSize:12,color:"#D73A49",marginBottom:8}}>{erreur}</div>}
       {ajout&&<div {...depotProps} style={{background:TEINTE.fond,border:"1px solid "+TEINTE.bord,borderRadius:8,padding:"10px 12px",marginBottom:10,...styleDepot(survolDepot)}}>
-        {avecSouris()&&<div style={{fontSize:11,color:"#6B7280",marginBottom:6}}>Choisissez la catégorie, puis glissez-déposez la photo ici (ou utilisez le bouton).</div>}
         <select value={cat} onChange={e=>setCat(e.target.value)} style={{...INP,marginBottom:8,fontSize:12}}>
           <option value="">— Choisir une catégorie</option>
           {(categories||[]).map(c=><option key={c.nom} value={c.nom}>{c.nom}</option>)}
         </select>
-        {cat&&<div style={{display:"flex",gap:8}}>
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" onChange={envoyerPhoto} style={{display:"none"}}/>
-          <button type="button" style={BTN} disabled={occupe==="photo"} onClick={()=>fileRef.current&&fileRef.current.click()}>{occupe==="photo"?"⏳ Envoi…":"📷 Choisir photo"}</button>
+        {cat&&<div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-start"}}>
+          <SourcesPhoto occupe={occupe==="photo"} onFichiers={deposerPhotos}/>
           <button type="button" style={BTN_O} onClick={()=>{setAjout(false);setCat("");}}>Annuler</button>
         </div>}
       </div>}

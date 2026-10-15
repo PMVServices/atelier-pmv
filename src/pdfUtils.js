@@ -25,11 +25,12 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
     // champs de la fiche cheminée (PMV Rail) : photo obligatoire, verdict calculé, case « fait »
     if(c.type==="photo_requise"){
       if(val==="impossible")return "Photo impossible — "+esc(v[id+"__just"]||"justification manquante");
-      var np=(photos||[]).filter(function(p){return p.categorie_nom===c.categorie;}).length;
+      var np=(photos||[]).filter(function(p){return p.categorie_nom===c.categorie||(c.anciennesCategories||[]).indexOf(p.categorie_nom)>=0;}).length;
       return np?"✓ "+np+" photo"+(np>1?"s":""):"—";
     }
     if(c.type==="verdict"){var rv=c.verdict(v);return esc(rv.texte);}
     if(!val)return "—";
+    if(c.type==="select"&&String(val).indexOf("Autre:")===0)val=String(val).slice(6)||"Autre";
     if(c.type==="fait")return "Fait ✓";
     if(c.type==="ohm"){var p=val.split("_");return(p[0]||"")+(p[1]?" "+p[1]:"");}
     if(c.type==="joints"){try{var j=JSON.parse(val);return j.map(function(x){if(x.type==="VA"||x.type==="VS")return x.type+(x.int||"?");return x.int+"x"+x.ext+"x"+x.ep+" "+(x.type==="Double"?"DL":"SL");}).join(", ");}catch(e){return val;}}
