@@ -9,6 +9,7 @@ export const PROFILS={
   admin:{label:"Administrateur",icone:"🔓"},
   tech:{label:"Technicien",icone:"🛠"},
   commercial:{label:"Commercial",icone:"💼"},
+  maintenance:{label:"Maintenance",icone:"⚙️"}, // ne remplit aucune fiche : modifie seulement les champs, intitulés et colonnes du planning (page « Maintenance »)
 };
 export const LectureCtx=React.createContext(false);
 // Personne connectée + « demander qui utilise l'appli » (fenêtre de choix par-dessus l'écran en cours, sans le fermer) : sert aux fiches
