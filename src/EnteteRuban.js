@@ -27,12 +27,13 @@ function Icone({id}){
 
 export default function EnteteRuban({navItems,page,onPage,badges,logo,largeur,onLogo,chip,stockage}){
   const refRuban=useRef(null);
+  const refHaut=useRef(null);
   const [visible,setVisible]=useState(true);
   // le bandeau défile avec la page : quand il n'est plus à l'écran, la barre du haut propose « ▲ Menu » pour y remonter
   useEffect(()=>{
     const el=refRuban.current;
     if(!el||typeof IntersectionObserver==="undefined")return undefined;
-    const haut=largeur>=1400?56:52;
+    const haut=refHaut.current?refHaut.current.offsetHeight:52;
     const io=new IntersectionObserver(([e])=>setVisible(e.isIntersecting),{rootMargin:"-"+haut+"px 0px 0px 0px"});
     io.observe(el);
     return()=>io.disconnect();
@@ -42,11 +43,11 @@ export default function EnteteRuban({navItems,page,onPage,badges,logo,largeur,on
     const g=GROUPES[n.id]||"Suivi";const dernier=groupes[groupes.length-1];
     if(dernier&&dernier.nom===g)dernier.items.push(n);else groupes.push({nom:g,items:[n]});
   });
-  const etroit=largeur<600,moyen=!etroit&&largeur<1000;
+  const etroit=largeur<600,moyen=!etroit&&largeur<1000,grand=largeur>=1400;
   const colonnes=Math.ceil(navItems.length/2);
   const titre=LIBELLES[page]||AUTRES[page]||"";
   return(<>
-    <div className="pmvb-top" style={{height:largeur>=1400?56:52}}>
+    <div className="pmvb-top" ref={refHaut}>
       <img className="pmvb-logo" src={logo} alt="PMV" onClick={onLogo}/>
       {largeur>=480&&<span className="pmvb-mot">ATELIER</span>}
       {titre&&(!etroit||!visible)&&<span className="pmvb-page">{titre}</span>}
@@ -55,7 +56,7 @@ export default function EnteteRuban({navItems,page,onPage,badges,logo,largeur,on
         {chip}{stockage}
       </span>
     </div>
-    <nav ref={refRuban} className={"pmvb-rub"+(etroit?" etroit":moyen?" moyen":"")} aria-label="Menu principal" style={etroit?{gridTemplateColumns:"repeat("+colonnes+",minmax(0,1fr))"}:undefined}>
+    <nav ref={refRuban} className={"pmvb-rub"+(etroit?" etroit":moyen?" moyen":grand?" large":"")} aria-label="Menu principal" style={etroit?{gridTemplateColumns:"repeat("+colonnes+",minmax(0,1fr))"}:undefined}>
       {groupes.map(g=>(
         <div className="pmvb-gr" key={g.nom} style={etroit?undefined:{flex:g.items.length+" 1 0"}}>
           <span className="pmvb-cap">{g.nom}</span>

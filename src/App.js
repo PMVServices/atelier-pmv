@@ -3022,7 +3022,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
   return(<div style={{maxWidth:800,margin:"0 auto",paddingBottom:40}}>
     {confirmQuitter&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget&&!saving)setConfirmQuitter(false);}}><div role="dialog" aria-label="Enregistrer avant de quitter" style={{background:"#fff",borderRadius:14,padding:"24px 22px",maxWidth:400,width:"100%",boxShadow:"0 8px 40px rgba(0,0,0,0.25)"}}><p style={{fontSize:17,fontWeight:700,margin:"0 0 6px"}}>Enregistrer avant de quitter ?</p><p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>Des modifications de cette fiche n'ont pas été enregistrées.</p>{erreur&&<div style={{...S.alert,marginBottom:10}}>{erreur}</div>}<button disabled={saving} onClick={enregistrerEtQuitter} style={{...S.p1,width:"100%",justifyContent:"center",marginBottom:8,opacity:saving?0.6:1}}>{saving?"💾 Enregistrement…":"💾 Enregistrer et quitter"}</button><button disabled={saving} onClick={()=>{setConfirmQuitter(false);quitter();}} style={{...S.pDanger,width:"100%",marginBottom:8,opacity:saving?0.6:1}}>Quitter sans enregistrer</button><button disabled={saving} onClick={()=>setConfirmQuitter(false)} style={{...S.p2,width:"100%",justifyContent:"center"}}>Annuler, rester sur la fiche</button></div></div>}
     {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";}}/>}
-    <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
+    <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:"var(--pmv-haut,56px)",zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div><p style={{margin:0,fontSize:12,fontWeight:700}}>{v.de} · {v.client||"Client"} · {[v.type_materiel_libre,v.materiel_lieu].filter(Boolean).join(" — ")||typeMateriel||"Moteur"}</p><p style={{margin:0,fontSize:10,opacity:0.7}}>📁 {chem.client}/{chem.de}/{chem.mat} · {typeMateriel||"Moteur"}</p></div>
         <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
@@ -3455,7 +3455,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(deAff||"de")+"/"+typeEquipement.replace(/[^a-z0-9]/gi,"_");
 
   return(<div style={{paddingBottom:80}}>
-    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<1400?52:56,zIndex:90}}>
+    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:"var(--pmv-haut,"+(largeur<1400?52:56)+"px)",zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div style={{minWidth:0,flex:largeur<600?"1 1 100%":"0 1 auto"}}>
           <p style={{margin:0,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:largeur<600?"nowrap":"normal"}}>{(v.ch_client||"Client")+" / "+(deAff||"DE")+" / "+(v.ch_eq_nom||typeEquipement)}</p>
