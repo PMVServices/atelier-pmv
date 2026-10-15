@@ -2171,12 +2171,16 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
 }
 
 // ─── DOSSIER DE (niveau 2) ───────────────────────────────────────────────
-function DossierDE({de,fiches,onOpen,onApercu,onDelete,onStatutChange,categories,onDupliquer}){
-  const [ouvert,setOuvert]=useState(false);
-  return(<div style={{marginLeft:16,marginBottom:6,borderLeft:"2px solid #D6E4F7",paddingLeft:12}}>
+function DossierDE({de,client,cible,fiches,onOpen,onApercu,onDelete,onStatutChange,categories,onDupliquer}){
+  const vise=!!cible&&cible.client===client&&cible.de===de; // arrivé depuis la liste des fiches : ce dossier s'ouvre tout seul
+  const [ouvert,setOuvert]=useState(vise);
+  const ref=useRef(null);
+  useEffect(()=>{if(vise&&ref.current&&ref.current.scrollIntoView)ref.current.scrollIntoView({block:"center"});},[]);
+  return(<div ref={ref} style={{marginLeft:16,marginBottom:6,borderLeft:"2px solid #D6E4F7",paddingLeft:12}}>
     <div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 12px",background:"#EEF4FF",borderRadius:8,border:"1px solid #D6E4F7"}}>
       <span style={{fontSize:15}}>{ouvert?"📂":"📁"}</span>
       <span style={{fontSize:13,fontWeight:700,color:"#1B4F8A",flex:1}}>{de}</span>
+      {fiches.length===1&&<button type="button" onClick={e=>{e.stopPropagation();onOpen(fiches[0]);}} title="Ouvrir la fiche directement" style={{...S.p2,fontSize:11,padding:"3px 10px",minHeight:0}}>📄 Fiche</button>}
       <span style={{fontSize:11,color:"#6B7280",background:"#fff",padding:"2px 8px",borderRadius:10,border:"1px solid #E2E6EA"}}>{fiches.length} fiche{fiches.length>1?"s":""}</span>
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
@@ -2187,8 +2191,8 @@ function DossierDE({de,fiches,onOpen,onApercu,onDelete,onStatutChange,categories
 }
 
 // ─── DOSSIER CLIENT (niveau 1) ───────────────────────────────────────────
-function DossierClient({client,fiches,onOpen,onApercu,onDelete,onStatutChange,categories,onDupliquer}){
-  const [ouvert,setOuvert]=useState(false);
+function DossierClient({client,cible,fiches,onOpen,onApercu,onDelete,onStatutChange,categories,onDupliquer}){
+  const [ouvert,setOuvert]=useState(!!cible&&cible.client===client);
   // Grouper par DE
   const parDE={};
   fiches.forEach(f=>{const d=f.de||"Sans DE";if(!parDE[d])parDE[d]=[];parDE[d].push(f);});
@@ -2204,7 +2208,7 @@ function DossierClient({client,fiches,onOpen,onApercu,onDelete,onStatutChange,ca
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{padding:"8px 0 8px 0"}}>
-      {deList.map(de=><DossierDE key={de} de={de} fiches={parDE[de]} onOpen={onOpen} onApercu={onApercu} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories} onDupliquer={onDupliquer}/>)}
+      {deList.map(de=><DossierDE key={de} de={de} client={client} cible={cible} fiches={parDE[de]} onOpen={onOpen} onApercu={onApercu} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories} onDupliquer={onDupliquer}/>)}
     </div>}
   </div>);
 }
@@ -2224,6 +2228,14 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
   });
   const parClient={};filtrees.forEach(f=>{const c=f.client||"Sans client";if(!parClient[c])parClient[c]=[];parClient[c].push(f);});
   const clientList=Object.keys(parClient).sort();
+  // sous-onglets : « Fiches » (une ligne par fiche : N° DE, client, matériel) et « Dossiers » (client > N° DE > fiche) ; le dernier choisi est mémorisé sur l'appareil
+  const largeur=useWidth();
+  const [sous,setSousEtat]=useState(()=>{try{return localStorage.getItem("pmv_atelier_sous")==="dossiers"?"dossiers":"fiches";}catch(e){return "fiches";}});
+  const [cible,setCible]=useState(null);
+  const setSous=x=>{setSousEtat(x);setCible(null);try{localStorage.setItem("pmv_atelier_sous",x);}catch(e){/* mémorisation facultative */}};
+  const versDossier=fi=>{setCible({client:fi.client||"Sans client",de:fi.de||"Sans DE"});setSousEtat("dossiers");try{localStorage.setItem("pmv_atelier_sous","dossiers");}catch(e){/* facultatif */}};
+  const nbDossiers=new Set(filtrees.map(fi=>(fi.client||"Sans client")+"|"+(fi.de||"Sans DE"))).size;
+  const grille=largeur>=700;
   const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
@@ -2243,9 +2255,23 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
         {STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
       </select>
     </div>
+    <div role="tablist" aria-label="Affichage des fiches atelier" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+      {[["fiches","📋 Fiches ("+filtrees.length+")"],["dossiers","📁 Dossiers ("+nbDossiers+")"]].map(([id,lib])=><button key={id} type="button" role="tab" aria-selected={sous===id} onClick={()=>setSous(id)} style={{padding:"8px 18px",minHeight:44,borderRadius:22,border:"1.5px solid "+(sous===id?"#1B4F8A":"#D1D5DB"),background:sous===id?"#1B4F8A":"#fff",color:sous===id?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer"}}>{lib}</button>)}
+    </div>
     {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>Chargement…</div>}
     {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{fiches.length===0?"Aucune fiche — créez la première !":"Aucun résultat."}</div>}
-    {clientList.map(c=><DossierClient key={c} client={c} fiches={parClient[c]} onOpen={onOpen} onApercu={onApercu} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories} onDupliquer={onDupliquer}/>)}
+    {sous==="fiches"&&!loading&&filtrees.length>0&&<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",overflow:"hidden"}}>
+      {grille&&<div style={{display:"grid",gridTemplateColumns:"120px minmax(0,1fr) minmax(0,1.3fr) 110px",gap:12,padding:"9px 16px",background:"#F3F6FA",fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".04em"}}><span>N° DE</span><span>Client</span><span>Matériel</span><span/></div>}
+      {filtrees.map(fi=><div key={fi.id} role="button" tabIndex={0} onClick={()=>onOpen(fi)} onKeyDown={e=>{if(e.key==="Enter")onOpen(fi);}} style={grille
+        ?{display:"grid",gridTemplateColumns:"120px minmax(0,1fr) minmax(0,1.3fr) 110px",gap:12,alignItems:"center",padding:"10px 16px",borderTop:"1px solid #EEF1F5",cursor:"pointer"}
+        :{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:"1px solid #EEF1F5",cursor:"pointer"}}>
+        {grille
+          ?<><span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{fi.de||"Sans DE"}</span><span style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.client||""}>{fi.client||"—"}</span><span style={{fontSize:13,color:"#4B5563",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.materiel||""}>{fi.materiel||"—"}</span></>
+          :<div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#1B4F8A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fi.de||"Sans DE"} <span style={{color:"#1A1A2E",fontWeight:600}}>· {fi.client||"—"}</span></div><div style={{fontSize:12,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fi.materiel||"—"}</div></div>}
+        <button type="button" onClick={e=>{e.stopPropagation();versDossier(fi);}} title="Voir ce dossier (client > N° DE)" style={{...S.p2,fontSize:12,padding:"5px 10px",minHeight:36,whiteSpace:"nowrap"}}>📁 Dossier</button>
+      </div>)}
+    </div>}
+    {sous==="dossiers"&&clientList.map(c=><DossierClient key={c} client={c} cible={cible} fiches={parClient[c]} onOpen={onOpen} onApercu={onApercu} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories} onDupliquer={onDupliquer}/>)}
   </div>);
 }
 
