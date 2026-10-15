@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import {genHtml, imprimerFiche, telechargerZip, apercuRapport, afficherApercu, telechargerHtml, lancerImpression} from "./pdfUtils";
+import {cleNr, cleNrJust} from "./etapeNr";
 import {exporterRapportDocx} from "./rapportDocx";
 import {SUPA_URL,SUPA_KEY,H,db} from "./supabase";
 import {NoticeActivation} from "./Activation";
@@ -646,7 +647,7 @@ function photoRequiseOk(c,v,photos){
   return (photos||[]).some(p=>p.categorie_nom===c.categorie);
 }
 function etapeOk(nom,v,nr,cs,photos){
-  if(nr)return true;
+  if(nr)return String(v[cleNrJust(nom)]||"").trim()!=="";   // étape non réalisable : justification obligatoire
   for(const c of((cs||CHAMPS)[nom]||[])){
     if(!champVisible(c,v))continue;
     if(c.type==="photo_requise"){if(c.required&&!photoRequiseOk(c,v,photos))return false;continue;}
@@ -694,6 +695,19 @@ function slug(s){return (s||"").replace(/\s+/g,"_").replace(/[^a-zA-Z0-9_\-]/g,"
 function deSlug(de){return (de||"").replace(/-/g,"");}
 function cheminFiche(v){const client=slug(v.client||"Client");const de=deSlug(v.de||"DE");const mat=slug(v.materiel_lieu||v.type_moteur||"Materiel");return {client,de,mat,chemin:client+"/"+de+"/"+mat};}
 function statutInfo(id){return STATUTS_CHANTIER.find(s=>s.id===id)||STATUTS_CHANTIER[0];}
+// Données d'une fiche pour l'export HTML / ZIP : valeurs, photos, statut, commentaires et pièces à commander (comme l'aperçu)
+async function chargerPourExport(f,photosDeja){
+  const [valRows,photoRows,pieceRows]=await Promise.all([
+    db.get("fiche_valeurs","?fiche_id=eq."+f.id),
+    photosDeja&&photosDeja.length?Promise.resolve(null):db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at"),
+    db.get("suivi_pieces","?fiche_id=eq."+f.id),
+  ]);
+  const valeurs={};(Array.isArray(valRows)?valRows:[]).forEach(r=>{valeurs[r.champ_id]=r.valeur;});
+  valeurs.de=valeurs.de||f.de;valeurs.client=valeurs.client||f.client;valeurs.materiel_lieu=valeurs.materiel_lieu||f.materiel;
+  valeurs._type=f.type_materiel||"Moteur";
+  const photos=photosDeja&&photosDeja.length?photosDeja:(Array.isArray(photoRows)?photoRows:[]).map(p=>({...p,url:db.photoUrl(p.storage_path)}));
+  return {valeurs,photos,opts:{statut:f.statut_chantier||"A_demonter",commentaires:valeurs.__commentaires||"",pieces:Array.isArray(pieceRows)?pieceRows:[]}};
+}
 function useWidth(){const [w,setW]=useState(window.innerWidth);useEffect(()=>{const h=()=>setW(window.innerWidth);window.addEventListener("resize",h);return()=>window.removeEventListener("resize",h);},[]);return w;}
 function grilleCols(n,width){if(width<600)return 1;if(width>=900)return n;return Math.min(n,2);}
 
@@ -1200,10 +1214,10 @@ function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBas
 
 function SectionEtape({nom,idx,total,actif,validees,v,nr,onChange,onNR,onValider,onSauvegarder,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,onPhotoRemoved,champsSource}){
   const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2,photos);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
-  function resume(){return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${(c.unitesChoix&&v[c.id+"__unite"])||c.unite?" "+((c.unitesChoix&&v[c.id+"__unite"])||c.unite):""}`).join(" · ");}
+  function resume(){if(v[cleNr(nom)]==="Oui")return "Non réalisable — "+(v[cleNrJust(nom)]||"justification manquante");return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${(c.unitesChoix&&v[c.id+"__unite"])||c.unite?" "+((c.unitesChoix&&v[c.id+"__unite"])||c.unite):""}`).join(" · ");}
   if(estLock)return<div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
   if(estVal&&!estAct)return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>✅</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}}</span></div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modification tracée dans l'historique.</div><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
-  return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{total||ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>{idx!==0&&<div style={S.nr} onClick={onNR}><input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/><div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché, les champs ne sont plus obligatoires</p></div></div>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/></div>{!ok&&!nr&&<div style={{...S.alert,marginBottom:10}}>⚠ Des champs obligatoires (*) sont manquants.</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{(ok||nr)&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{!ok&&!nr&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ Remplissez les champs obligatoires (*) pour continuer</div>}</div>);
+  return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{total||ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>{idx!==0&&<div style={S.nr} onClick={onNR}><input type="checkbox" checked={nr} onChange={onNR} onClick={e=>e.stopPropagation()}/><div><span style={{fontSize:13,fontWeight:600}}>Étape non réalisable</span><p style={{fontSize:11,color:"#9CA3AF",margin:"1px 0 0"}}>Si coché : les champs disparaissent de l'aperçu et une justification est obligatoire</p></div></div>}{nr&&<div style={{marginBottom:14}}><label style={{...S.lbl,color:String(v[cleNrJust(nom)]||"").trim()?"#6B7280":"#D73A49"}}>Justification — pourquoi l'étape n'est pas réalisable<span style={{color:"#D73A49"}}> *</span></label><ChampTexteDictee champId={cleNrJust(nom)} valeur={v[cleNrJust(nom)]} onChange={onChange} erreur={!String(v[cleNrJust(nom)]||"").trim()}/></div>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}><RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/></div>{!ok&&<div style={{...S.alert,marginBottom:10}}>⚠ {nr?"Indiquez la justification (obligatoire).":"Des champs obligatoires (*) sont manquants."}</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{ok&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{!ok&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ {nr?"Renseignez la justification pour continuer":"Remplissez les champs obligatoires (*) pour continuer"}</div>}</div>);
 }
 
 function ModalIdent({techs,onConfirm}){
@@ -1739,14 +1753,8 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
   async function exporterFiche(f){
     setExportBusy(f.id);
     try{
-      const [valRows,photoRows]=await Promise.all([
-        db.get("fiche_valeurs","?fiche_id=eq."+f.id),
-        db.get("fiche_photos","?fiche_id=eq."+f.id+"&order=created_at"),
-      ]);
-      const valeurs={};(Array.isArray(valRows)?valRows:[]).forEach(r=>{valeurs[r.champ_id]=r.valeur;});
-      valeurs._type=f.type_materiel||"Moteur";
-      const photos=(Array.isArray(photoRows)?photoRows:[]).map(p=>({...p,url:db.photoUrl(p.storage_path)}));
-      await telechargerZip(photos,valeurs,(f.de||"fiche")+"_"+(f.client||""));
+      const d=await chargerPourExport(f);
+      await telechargerZip(d.photos,d.valeurs,(f.de||"fiche")+"_"+(f.client||""),d.opts);
       await db.upsert("fiche_valeurs",{fiche_id:f.id,champ_id:"__export_nas",valeur:"fait"},"fiche_id,champ_id");
       setDelaisMap(p=>({...p,[f.id]:{...p[f.id],__export_nas:"fait"}}));
     }catch(e){}
@@ -2068,11 +2076,9 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
       if(Array.isArray(p)){phots=p.map(pp=>({...pp,url:db.photoUrl(pp.storage_path)}));setPhotos(phots);}}
       catch(e){}
     }
-    // Télécharger même sans photos — on passe les valeurs pour le PDF
-    const vals=await db.get("fiche_valeurs","?fiche_id=eq."+f.id+"&order=created_at");
-    const v=Array.isArray(vals)?Object.fromEntries(vals.map(r=>[r.champ_id,r.valeur])):{};
-    v.de=f.de;v.client=f.client;v.materiel_lieu=f.materiel;v._type=f.type_materiel||"Moteur";
-    await telechargerZip(phots,v,ch.chemin.replace(/\//g,"_")||f.de);
+    // Télécharger même sans photos — mêmes données que l'aperçu (la colonne created_at n'existe pas dans fiche_valeurs : l'ancien tri vidait toutes les valeurs)
+    const d=await chargerPourExport(f,phots);
+    await telechargerZip(d.photos,d.valeurs,ch.chemin.replace(/\//g,"_")||f.de,d.opts);
   }
 
   return(<div style={{marginLeft:20,marginBottom:6,borderLeft:"2px solid #E2E6EA",paddingLeft:12}}>
@@ -2782,9 +2788,10 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const isPompe=typeMateriel==="Pompe";
   const champsActifs=champsPourType(typeMateriel);
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
-  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {de:ficheInit?.de||"",date_entree:today(),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [nrMap,setNrMap]=useState({});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
+  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {de:ficheInit?.de||"",date_entree:today(),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
   const etapesActives=insererEtapeSuiviDevis(etapesPourType(typeMateriel,v),v,typeMateriel||"Moteur");
   const matDefaut=typeMateriel===TYPE_CHEMINEE?"Cheminée":"Moteur";
+  const nrMap={};etapesActives.forEach((nomE,iE)=>{if(v[cleNr(nomE)]==="Oui")nrMap[iE]=true;});
   const typeRef=useRef(typeMateriel);typeRef.current=typeMateriel;
   const [avisRail,setAvisRail]=useState(null);
 
@@ -2935,7 +2942,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       {flash==="saved_partiel"&&<div style={{...S.ok,background:"#EEF4FF",color:"#1B4F8A",border:"1px solid #D6E4F7"}}>💾 Données sauvegardées.</div>}{flash!==null&&flash!=="saved_partiel"&&<div style={S.ok}>✅ Étape "{etapesActives[flash]}" enregistrée.</div>}
       {erreur&&<div style={{...S.alert,marginBottom:14}}>{erreur}</div>}
       {avisRail&&<div style={{...S.alert,marginBottom:14,background:"#FFF8E1",borderColor:"#E8720C",color:"#8A4B00"}}>⚠ {avisRail}</div>}
-      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>setNrMap(p=>({...p,[i]:!p[i]}))} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={champsActifs}/>)}
+      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>onChange(cleNr(nom),v[cleNr(nom)]==="Oui"?"Non":"Oui")} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={champsActifs}/>)}
 
       <SectionMaterielCommander v={v} ficheId={ficheId} de={v.de} client={v.client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeMateriel}/>
       {onOuvrirCommandes&&<SectionCommandesLiees de={v.de} onOuvrirCommandes={onOuvrirCommandes}/>}
