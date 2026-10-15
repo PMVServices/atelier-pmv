@@ -1330,12 +1330,72 @@ function son(freq,duree,fois){
     }
   }catch(e){/* son facultatif */}
 }
-async function htmlCommandesPoste(){
-  const defs=[["ENTRÉE","PMV ENTREE","#22863A","Scannez pour passer en mode ENTRÉE (arrivée de pièces)"],["SORTIE","PMV SORTIE","#D73A49","Scannez pour revenir en mode SORTIE (pièces prises)"],["ANNULER","PMV ANNULER","#4B5563","Scannez pour annuler le dernier scan"]];
-  const svgs=await Promise.all(defs.map(d=>codeSvg("qr",d[1])));
-  const blocs=defs.map((d,i)=>"<div class='f' style='border-color:"+d[2]+"'><h1 style='color:"+d[2]+"'>"+d[0]+"</h1>"+svgs[i]+"<p>"+d[3]+"</p></div>").join("");
-  return "<!DOCTYPE html><html><head><meta charset='utf-8'><title>Étiquettes de commande — poste douchette</title><style>@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0}.f{display:flex;flex-direction:column;align-items:center;border:3px solid;border-radius:8mm;margin:0 0 7mm;padding:5mm;page-break-inside:avoid}.f h1{font-size:28pt;margin:0 0 3mm}.f svg{width:52mm;height:52mm}.f p{font-size:11pt;color:#444;margin:3mm 0 0;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>"+blocs+"</body></html>";
+// Codes de réglage de la douchette Inateck BCST-23 (« Hyper 160 »), relevés dans son manuel : contenu exact de chaque code (QR, ou Code 128 pour « Entrer / Enregistrer »).
+const CMD_DOUCHETTE={
+  memoire:"/*SetFun81*/",normal:"/*SetFun82*/",vider:"/*SetFun83*/",envoyer:"/*SetFun84*/",statistiques:"/*SetFun85*/",
+  entrerReglage:"/*EnterSet*/",enregistrer:"/*ExitSave*/",usine:"/*SetFun00*/",jumelage:"/*SetFun23*/",
+  windows:"/*windowsD*/",mac:"/*mac_osxD*/",anglaisUS:"/*SetFun86*/",anglaisUK:"/*UK_Input*/",gachette:"/*SetFun17*/",continu:"/*SetFun15*/",detection:"/*handfree*/"
+};
+// Feuille A4 de codes à imprimer : groupes = [{titre, intro, codes:[{titre, contenu, format, couleur, texte}]}]
+async function htmlFeuilleCodes(titreDoc,groupes){
+  const tout=groupes.reduce((a,g)=>a.concat(g.codes),[]);
+  const svgs=await Promise.all(tout.map(c=>codeSvg(c.format||"qr",c.contenu)));
+  let i=0;
+  const corps=groupes.map(g=>"<h2>"+g.titre+"</h2>"+(g.intro?"<p class='intro'>"+g.intro+"</p>":"")+"<div class='grille'>"+g.codes.map(c=>{const svg=svgs[i++];return "<div class='f"+(c.format==="code128"?" lin":"")+"' style='border-color:"+c.couleur+"'><h1 style='color:"+c.couleur+"'>"+c.titre+"</h1>"+svg+"<p>"+c.texte+"</p></div>";}).join("")+"</div>").join("");
+  return "<!DOCTYPE html><html><head><meta charset='utf-8'><title>"+titreDoc+"</title><style>@page{size:A4;margin:10mm}*{box-sizing:border-box}body{font-family:Arial,sans-serif;margin:0}h2{font-size:13pt;margin:0 0 2mm;color:#1B4F8A}.intro{font-size:9pt;color:#444;margin:0 0 3mm}.grille{display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-bottom:5mm}.f{display:flex;flex-direction:column;align-items:center;border:2.5px solid;border-radius:5mm;padding:3mm;page-break-inside:avoid}.f h1{font-size:15pt;margin:0 0 2mm;text-align:center}.f svg{width:32mm;height:32mm}.f.lin svg{width:70mm;height:16mm}.f p{font-size:8.5pt;color:#444;margin:2mm 0 0;text-align:center}@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}</style></head><body>"+corps+"</body></html>";
 }
+async function htmlCommandesPoste(){
+  return htmlFeuilleCodes("Étiquettes de commande — poste douchette",[
+    {titre:"Au poste (pour tout le monde)",codes:[
+      {titre:"ENTRÉE",contenu:CMD_POSTE.entree,couleur:"#22863A",texte:"Passer en mode ENTRÉE (arrivée de pièces)"},
+      {titre:"SORTIE",contenu:CMD_POSTE.sortie,couleur:"#D73A49",texte:"Revenir en mode SORTIE (pièces prises)"},
+      {titre:"ANNULER",contenu:CMD_POSTE.annuler,couleur:"#4B5563",texte:"Annuler le dernier scan"}]},
+    {titre:"Mode mémoire (scanner sans que le poste soit ouvert)",intro:"La douchette garde les scans (LED bleue) ; le soir, fenêtre « Gestion de stock » au premier plan : ENVOYER LES SCANS, vérifier le résumé, puis VIDER LA MÉMOIRE.",codes:[
+      {titre:"MODE MÉMOIRE",contenu:CMD_DOUCHETTE.memoire,couleur:"#1B4F8A",texte:"La douchette mémorise les scans. À scanner une fois, la mémoire étant vide."},
+      {titre:"ENVOYER LES SCANS",contenu:CMD_DOUCHETTE.envoyer,couleur:"#1B4F8A",texte:"Envoie d'un coup les scans mémorisés (fenêtre au premier plan)."},
+      {titre:"VIDER LA MÉMOIRE",contenu:CMD_DOUCHETTE.vider,couleur:"#B45309",texte:"À scanner seulement après avoir vérifié le résumé de l'envoi."}]}
+  ]);
+}
+async function htmlReglagesDouchette(){
+  const bleu="#1B4F8A",gris="#4B5563";
+  return htmlFeuilleCodes("Réglages de la douchette — administrateur",[
+    {titre:"Entrer et sortir du réglage",intro:"Pour les réglages du bas de la feuille : scannez ENTRER DANS LE RÉGLAGE (LED bleue fixe), puis le code voulu, puis ENREGISTRER ET QUITTER. Les codes « Mode mémoire » se scannent seuls.",codes:[
+      {titre:"ENTRER DANS LE RÉGLAGE",contenu:CMD_DOUCHETTE.entrerReglage,format:"code128",couleur:bleu,texte:"Enter Setup"},
+      {titre:"ENREGISTRER ET QUITTER",contenu:CMD_DOUCHETTE.enregistrer,format:"code128",couleur:bleu,texte:"Save and Exit"}]},
+    {titre:"Mode mémoire (se scannent seuls)",codes:[
+      {titre:"MODE NORMAL",contenu:CMD_DOUCHETTE.normal,couleur:gris,texte:"Revenir à l'envoi direct des scans au PC. Envoyer d'abord les scans mémorisés."},
+      {titre:"STATISTIQUES",contenu:CMD_DOUCHETTE.statistiques,couleur:gris,texte:"Envoie le récapitulatif des scans mémorisés (mode mémoire seulement)."}]},
+    {titre:"Réglages (entre ENTRER DANS LE RÉGLAGE et ENREGISTRER ET QUITTER)",codes:[
+      {titre:"WINDOWS / ANDROID",contenu:CMD_DOUCHETTE.windows,couleur:bleu,texte:"Système de l'appareil (réglage d'usine)"},
+      {titre:"MAC OS / iOS",contenu:CMD_DOUCHETTE.mac,couleur:bleu,texte:"Système de l'appareil Apple"},
+      {titre:"CLAVIER ANGLAIS US",contenu:CMD_DOUCHETTE.anglaisUS,couleur:bleu,texte:"Langue du clavier (réglage d'usine)"},
+      {titre:"CLAVIER ANGLAIS UK",contenu:CMD_DOUCHETTE.anglaisUK,couleur:bleu,texte:"Langue du clavier (le français se règle dans l'appli Inateck)"},
+      {titre:"MODE GÂCHETTE",contenu:CMD_DOUCHETTE.gachette,couleur:bleu,texte:"Un scan par appui (réglage d'usine)"},
+      {titre:"MODE CONTINU",contenu:CMD_DOUCHETTE.continu,couleur:bleu,texte:"Scans à la suite sans relâcher"},
+      {titre:"DÉTECTION AUTO",contenu:CMD_DOUCHETTE.detection,couleur:bleu,texte:"La douchette scanne dès qu'elle voit un code"},
+      {titre:"JUMELAGE 1 POUR 1",contenu:CMD_DOUCHETTE.jumelage,couleur:bleu,texte:"Refaire la connexion avec la clé ou le Bluetooth"},
+      {titre:"RÉGLAGES D'USINE",contenu:CMD_DOUCHETTE.usine,couleur:"#B42318",texte:"Remet tous les réglages à zéro (après ENTRER DANS LE RÉGLAGE)"}]}
+  ]);
+}
+
+// ─── Administration : codes de réglage de la douchette ───────────────────────────────────────────
+function ReglagesDouchette({onFermer}){
+  const [html,setHtml]=useState(null);
+  const [erreur,setErreur]=useState(null);
+  useEffect(()=>{let a=false;htmlReglagesDouchette().then(h=>{if(!a)setHtml(h);}).catch(()=>{if(!a)setErreur("Impossible de générer les codes.");});return()=>{a=true;};},[]);
+  const larg=Math.min(typeof window!=="undefined"?window.innerWidth:800,720)-64;
+  const k=Math.max(0.3,Math.min(1,larg/794));
+  return(<Feuille titre="🎛 Codes de réglage de la douchette" onFermer={onFermer} large>
+    <p className="stk-aide">Codes relevés dans le manuel de l'Inateck BCST-23 (« Hyper 160 »). À réserver à l'administration : un mauvais réglage change le comportement de la douchette (« Réglages d'usine » remet tout à zéro). Les codes « mode mémoire » pour tout le monde sont sur la feuille du poste douchette.</p>
+    {erreur&&<div className="stk-alerte">{erreur}</div>}
+    {html&&<div className="stk-apercu" style={{width:794*k,height:Math.min(1123*k,520)}}><iframe title="Codes de réglage" srcDoc={html} style={{width:794,height:1123*2,transform:"scale("+k+")"}} scrolling="no"/></div>}
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>
+      <button type="button" className="stk-btn stk-btn--p" disabled={!html} onClick={()=>lancerImpression(html)} style={{flex:"1 1 200px"}}>🖨 Imprimer</button>
+      <button type="button" className="stk-btn" disabled={!html} onClick={()=>telechargerHtml(html,"codes-reglage-douchette")} style={{flex:"1 1 200px"}}>⬇ Télécharger (à imprimer depuis le PC)</button>
+    </div>
+  </Feuille>);
+}
+
 
 function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChange}){
   const liste=(techs||[]).filter(t=>t!=="Autre");
@@ -1353,6 +1413,11 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
   const chaine=useRef(Promise.resolve());
   const inactif=useRef(null);
   const rechargement=useRef(null);
+  const serie=useRef({n:0,t:0,ok:0,annul:0,inconnus:[]}); // scans reçus à la suite (envoi groupé de la mémoire de la douchette)
+  const attenteRef=useRef(0);
+  const minuteBilan=useRef(null);
+  const [attente,setAttente]=useState(0);
+  const [bilan,setBilan]=useState(null);
   const changerMode=m=>{modeRef.current=m;setMode(m);};
   const majHisto=fn=>{const n=fn(histoRef.current);histoRef.current=n;setHisto(n);};
   const planifierRechargement=()=>{clearTimeout(rechargement.current);rechargement.current=setTimeout(()=>{onChange();},1500);};
@@ -1380,6 +1445,7 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
     const apres=m.apres,avant=apres===null?null:apres-delta;
     majHisto(h=>[{cle:m.id,article_id:a.id,ref:a.reference,type,delta,t:Date.now(),annule:false}].concat(h).slice(0,15));
     setDernier({genre:"ok",type,delta,article:a,avant,apres});
+    serie.current.ok++;
     if(type==="sortie"&&apres!==null&&apres<0)son(300,0.25,2);else if(type==="entree")son(1320,0.09,2);else son(1040,0.09,1);
     planifierRechargement();
   }
@@ -1392,11 +1458,15 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
     majHisto(l=>l.map(x=>x.cle===h.cle?{...x,annule:true}:x));
     setDernier({genre:"cmd",titre:"↩ Annulé",detail:h.ref+" : "+(m.apres!==null?"stock remis à "+m.apres:"mouvement annulé")});
     son(700,0.12,1);
+    serie.current.annul++;
     planifierRechargement();
   }
   async function traiter(brut){
     const code=String(brut||"").trim();if(!code)return;
     armerInactivite();
+    const maintenant=Date.now();
+    if(maintenant-serie.current.t>5000){serie.current={n:0,t:maintenant,ok:0,annul:0,inconnus:[]};setBilan(null);}
+    serie.current.n++;serie.current.t=maintenant;
     const c=cle(code);
     if(c===CMD_POSTE.entree){changerMode("entree");setDernier({genre:"cmd",titre:"Mode ENTRÉE",detail:"Les scans suivants ajoutent des pièces au stock."});son(1320,0.09,2);return;}
     if(c===CMD_POSTE.sortie){changerMode("sortie");setDernier({genre:"cmd",titre:"Mode SORTIE",detail:"Les scans suivants retirent des pièces du stock."});son(880,0.09,1);return;}
@@ -1410,16 +1480,26 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
       const r=await appel("GET","stock_codes?code=eq."+encodeURIComponent(code)+"&select=article_id");
       if(r.ok&&Array.isArray(r.data)&&r.data[0])a=articlesRef.current.find(x=>x.id===r.data[0].article_id);
     }
-    if(!a){setDernier({genre:"err",titre:"Code inconnu",detail:code,code});son(300,0.25,2);return;}
+    if(!a){serie.current.inconnus.push(code);setDernier({genre:"err",titre:"Code inconnu",detail:code,code});son(300,0.25,2);return;}
     await enregistrer(a);
   }
   const traiterRef=useRef(traiter);traiterRef.current=traiter;
+  // fin de chaque scan traité : compteur d'attente et, 4 s après le dernier d'une série d'au moins 3 scans, résumé de l'envoi groupé
+  function finScan(){
+    attenteRef.current=Math.max(0,attenteRef.current-1);setAttente(attenteRef.current);
+    clearTimeout(minuteBilan.current);
+    minuteBilan.current=setTimeout(()=>{
+      const sr=serie.current;
+      if(attenteRef.current===0&&sr.n>=3)setBilan({n:sr.n,ok:sr.ok,annul:sr.annul,inconnus:sr.inconnus.slice()});
+    },4000);
+  }
+  const finScanRef=useRef(finScan);finScanRef.current=finScan;
   // écoute du clavier : une rafale rapide de caractères terminée par Entrée (ou suivie d'un silence) = un scan ; une frappe lente est ignorée
   useEffect(()=>{
     let tampon="",dernierT=0,minut=null;
     const soumettre=()=>{
       const t=tampon;tampon="";clearTimeout(minut);
-      if(t.length>=3)chaine.current=chaine.current.then(()=>traiterRef.current(t)).catch(()=>{});
+      if(t.length>=3){attenteRef.current++;setAttente(attenteRef.current);chaine.current=chaine.current.then(()=>traiterRef.current(t)).catch(()=>{}).then(()=>finScanRef.current());}
     };
     const champTexte=el=>{if(!el)return false;const t=el.tagName;if(t==="TEXTAREA"||t==="SELECT")return true;if(t==="INPUT")return !["checkbox","radio","button","submit"].includes(el.type);return !!el.isContentEditable;};
     const touche=e=>{
@@ -1453,7 +1533,7 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
     document.addEventListener("pointerdown",reveil);
     return()=>{document.removeEventListener("visibilitychange",visible);document.removeEventListener("pointerdown",reveil);try{if(verrou)verrou.release();}catch(e){/* facultatif */}};
   },[]);
-  useEffect(()=>()=>{clearTimeout(inactif.current);clearTimeout(rechargement.current);},[]);
+  useEffect(()=>()=>{clearTimeout(inactif.current);clearTimeout(rechargement.current);clearTimeout(minuteBilan.current);},[]);
   function fermer(){clearTimeout(rechargement.current);onChange();onFermer();}
   function basculerAuto(v){setAuto(v);try{if(v)localStorage.setItem(CLE_POSTE_AUTO,"1");else localStorage.removeItem(CLE_POSTE_AUTO);}catch(e){/* facultatif */}}
   async function imprimerCommandes(telecharger){
@@ -1476,6 +1556,13 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
         <div style={{fontSize:grand,fontWeight:800,letterSpacing:".02em"}}>{sortie?"📤 SORTIE":"📥 ENTRÉE"}</div>
         <div style={{fontSize:13,opacity:.92}}>{sortie?"Chaque scan retire 1 pièce. Scannez l'étiquette « ENTRÉE » pour recevoir des pièces.":"Chaque scan ajoute 1 pièce. Scannez l'étiquette « SORTIE » pour revenir (retour automatique après 2 min sans scan)."}</div>
       </div>
+      {attente>1&&<div className="stk-msg ok">⏳ {attente} scans en cours de traitement…</div>}
+      {bilan&&<div style={{background:"#EEF4FF",border:"2px solid #1B4F8A",borderRadius:14,padding:"14px 16px"}}>
+        <div style={{fontSize:"clamp(20px,5vw,28px)",fontWeight:800,color:"#1B4F8A"}}>📥 Envoi groupé terminé</div>
+        <div style={{fontSize:15,marginTop:4}}><b>{bilan.n}</b> scans lus · <b>{bilan.ok}</b> enregistrés{bilan.annul>0?" · "+bilan.annul+" annulé"+(bilan.annul>1?"s":""):""}{bilan.inconnus.length>0?" · "+bilan.inconnus.length+" non reconnu"+(bilan.inconnus.length>1?"s":""):""}</div>
+        {bilan.inconnus.map((c,i)=><div key={c+i} style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",marginTop:6}}><b style={{fontFamily:MONO,wordBreak:"break-word"}}>{c}</b><button type="button" className="stk-btn stk-btn--s" onClick={()=>setInconnu(c)}>Associer à un article</button></div>)}
+        <div className="stk-sub" style={{marginTop:6,fontSize:13}}>Si le compte est bon, scannez « VIDER LA MÉMOIRE ». Sinon, ne la videz pas.</div>
+      </div>}
       {!dernier&&<div style={{background:"#fff",border:"1px dashed #BFC8D4",borderRadius:14,padding:"28px 16px",textAlign:"center",color:"#6B7280",fontSize:16}}>
         Scannez une étiquette avec la douchette.<br/><span style={{fontSize:13}}>Rien à toucher : le scan enregistre tout de suite.</span>
         {!op&&!modePoste&&<div className="stk-alerte" style={{marginTop:12}}>Choisissez l'opérateur en haut de l'écran.</div>}
@@ -1508,12 +1595,20 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
     </div>
     <div className="stk-session-pied">
       {!modePoste&&<label style={{display:"flex",alignItems:"center",gap:10,fontSize:14}}><input type="checkbox" checked={auto} onChange={e=>basculerAuto(e.target.checked)} style={{width:22,height:22,minHeight:0,padding:0}}/>Ouvrir ce poste automatiquement quand le Stock s'ouvre sur cette tablette</label>}
+      <details style={{fontSize:13,color:"#374151"}}><summary style={{cursor:"pointer",fontWeight:700}}>Mode mémoire : scanner sans que cette fenêtre soit ouverte</summary>
+        <ol style={{margin:"6px 0 0",paddingLeft:20,lineHeight:1.5}}>
+          <li>Scannez « MODE MÉMOIRE » (une fois) : la douchette garde les scans, LED bleue à chaque scan.</li>
+          <li>Scannez normalement toute la journée (ENTRÉE, SORTIE, ANNULER comme d'habitude).</li>
+          <li>Le soir, mettez cette fenêtre au premier plan, puis scannez « ENVOYER LES SCANS ».</li>
+          <li>Vérifiez le résumé « Envoi groupé terminé », puis scannez « VIDER LA MÉMOIRE » (et « MODE MÉMOIRE » si la LED redevient verte).</li>
+        </ol>
+      </details>
       <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-        <button type="button" className="stk-btn stk-btn--s" disabled={imprEnCours} onClick={()=>imprimerCommandes(false)} style={{flex:"1 1 200px"}}>🖨 Imprimer les étiquettes ENTRÉE / SORTIE / ANNULER</button>
+        <button type="button" className="stk-btn stk-btn--s" disabled={imprEnCours} onClick={()=>imprimerCommandes(false)} style={{flex:"1 1 200px"}}>🖨 Imprimer les étiquettes (ENTRÉE, SORTIE, ANNULER, mode mémoire)</button>
         <button type="button" className="stk-btn stk-btn--s" disabled={imprEnCours} onClick={()=>imprimerCommandes(true)} style={{flex:"1 1 200px"}}>⬇ Télécharger (à imprimer depuis le PC)</button>
       </div>
     </div>
-    {inconnu&&<CodeInconnu haut code={inconnu} articles={articles} onFermer={()=>setInconnu(null)} onAssocie={a=>{setInconnu(null);chaine.current=chaine.current.then(()=>enregistrer(a)).catch(()=>{});}}/>}
+    {inconnu&&<CodeInconnu haut code={inconnu} articles={articles} onFermer={()=>setInconnu(null)} onAssocie={a=>{const c=inconnu;setInconnu(null);setBilan(b=>b?{...b,inconnus:b.inconnus.filter(x=>x!==c),ok:b.ok+1}:b);chaine.current=chaine.current.then(()=>enregistrer(a)).catch(()=>{});}}/>}
   </div>);
 }
 
@@ -1534,6 +1629,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
   const [ficheId,setFicheId]=useState(null);
   const [session,setSession]=useState(null); // null | "sortie" | "entree"
   const [poste,setPoste]=useState(false);
+  const [reglages,setReglages]=useState(false);
   const posteAutoFait=useRef(false);
   const ctxPersonne=useContext(PersonneCtx);
   const iniMoi=ctxPersonne&&ctxPersonne.moi&&ctxPersonne.moi.initiales?String(ctxPersonne.moi.initiales):"";
@@ -1690,6 +1786,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
         <button type="button" onClick={()=>setEtiquettes({ids:famille==="toutes"?[]:base.map(a=>a.id)})}>🏷 Étiquettes{famille==="toutes"?"":" ("+LIB_FAMILLE[famille]+")"}</button>
         <button type="button" onClick={()=>setImportOuvert(true)}>⬆ Importer Excel</button>
         <button type="button" onClick={exporter}>⬇ Exporter</button>
+        <button type="button" onClick={()=>setReglages(true)}>🎛 Codes douchette</button>
         <button type="button" onClick={()=>setRemiseMax(true)}>📦 Remettre au maximum{famille==="toutes"?"":" ("+LIB_FAMILLE[famille]+")"}</button>
         {!(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search))&&<button type="button" onClick={()=>setTel(true)}>📱 Sur téléphone</button>}
       </div>
@@ -1707,6 +1804,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
     {poste&&<PosteDouchette articles={articles} techs={techs} quiInit={modePoste?"":(liste.includes(iniMoi)?iniMoi:(qui||""))} setQui={setQui} modePoste={!!modePoste} onChange={apresMouvement} onFermer={()=>setPoste(false)}/>}
     {session&&<SessionScan mode={session} articles={articles} techs={techs} qui={qui} setQui={setQui} onFermer={()=>setSession(null)} onChange={apresMouvement} afficherToast={afficherToast}/>}
     {admin&&tel&&<LienTelephone onFermer={()=>setTel(false)}/>}
+    {admin&&reglages&&<ReglagesDouchette onFermer={()=>setReglages(false)}/>}
     {admin&&remiseMax&&<RemiseMax liste={base} libelle={famille==="toutes"?"toutes les familles":LIB_FAMILLE[famille]} qui={qui} onFermer={n=>{setRemiseMax(false);if(n)afficherToast("✓ "+n+" référence"+(n>1?"s":"")+" remise"+(n>1?"s":"")+" au stock maximum");}} onFait={apresMouvement}/>}
     {admin&&inv&&<SessionInventaire articles={articles} techs={techs} qui={qui} setQui={setQui} recharger={recharger} afficherToast={afficherToast} onFini={apresMouvement} onFermer={()=>{setInv(false);setBrouillon(lireBrouillonInv());}}/>}
     {admin&&article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={qui} depuisScan={false} onFermer={()=>setFicheId(null)} onChange={apresMouvement} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setAssoc(a);}} onTermineScan={()=>{}}/>}
