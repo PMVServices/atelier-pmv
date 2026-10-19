@@ -348,7 +348,7 @@ export function genRapportHtml(v,data,photos,images){
 
 if (typeof window !== "undefined" && process.env.NODE_ENV !== "production") window.__rapportTestHtml = { genRapportHtml, genRapportHtmlLeger };
 
-function reduireImage(url,max,qualite){
+export function reduireImage(url,max,qualite){
   return new Promise(function(resolve){
     fetch(url).then(function(r){if(!r.ok)throw new Error("http");return r.blob();}).then(function(blob){
       var u=URL.createObjectURL(blob);var img=new Image();

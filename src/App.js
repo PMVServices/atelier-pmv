@@ -2,6 +2,9 @@ import React, { useState, useCallback, useEffect, useRef } from "react";
 import {genHtml, imprimerFiche, telechargerZip, apercuRapport, afficherApercu, telechargerHtml, lancerImpression} from "./pdfUtils";
 import {cleNr, cleNrJust} from "./etapeNr";
 import {exporterRapportDocx} from "./rapportDocx";
+import {exporterRapportCheminee} from "./rapportLivretDocx";
+import {apercuRapportCheminee} from "./rapportLivretHtml";
+import {MATERIEL_CHEMINEE_DEFAUT, VERDICTS_CHEMINEE, PHOTOS_RAPPORT_CHEMINEE, SERIES_RAPPORT_CHEMINEE, valeursDepartRapportCheminee, resoudrePhotosCheminee} from "./rapportCheminee";
 import {SUPA_URL,SUPA_KEY,H,db} from "./supabase";
 import {NoticeActivation} from "./Activation";
 import {ScanDemande} from "./Stock";
@@ -2602,9 +2605,203 @@ function PageRapport({ficheId,techs,onRetour}){
   </div>);
 }
 
+// ─── RAPPORT CLIENT (cheminée de freinage, PMV Rail) ───────────────────────
+// Même principe que le rapport moteur : on reprend tout ce que la fiche contient, on complète ici ce qu'elle ne contient pas (plaques, remarques, conformités), puis aperçu / PDF et Word.
+// Les réponses de ce formulaire sont rangées avec la fiche sous le préfixe « rapportch_ » (aucune confusion avec les champs de la fiche).
+const PREFIXE_RAPPORT_CHEMINEE="rapportch_";
+
+function ListePhotosRapport({serie,urlsFiche,urlsMain,ficheId,uploading,onAjouter,onRetirer}){
+  const miniature=(url,retirable,i)=>(<div key={url+i} style={{position:"relative"}}>
+    <img src={url} alt={serie.label} style={{width:110,height:80,objectFit:"cover",borderRadius:6,border:"1px solid #E2E6EA",cursor:"pointer"}} onClick={()=>window.open(url,"_blank")}/>
+    {retirable&&<button type="button" onClick={()=>onRetirer(serie.key,url)} title="Retirer cette photo du rapport" style={{position:"absolute",top:2,right:2,background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,color:"#D73A49",padding:"0 6px",cursor:"pointer",fontSize:12}}>✕</button>}
+  </div>);
+  return(<div style={{marginBottom:14}}>
+    <label style={S.lbl}>{serie.label}</label>
+    <div style={{display:"flex",flexWrap:"wrap",gap:10,alignItems:"center",marginTop:4}}>
+      {urlsFiche.map((u,i)=>miniature(u,false,i))}
+      {urlsMain.map((u,i)=>miniature(u,true,i+100))}
+      {urlsFiche.length+urlsMain.length===0&&<span style={{fontSize:11,color:"#9CA3AF"}}>Aucune photo</span>}
+    </div>
+    <div style={{marginTop:6}}>{ficheId?<SourcesPhoto multiple={false} petit occupe={uploading==="serie_"+serie.key} onFichiers={fs=>onAjouter(serie.key,fs[0])} styleBouton={S.p2}/>:null}</div>
+  </div>);
+}
+
+function PageRapportCheminee({ficheId,techs,onRetour}){
+  const [loading,setLoading]=useState(true);
+  const [v,setV]=useState({});
+  const [photos,setPhotos]=useState([]);
+  const [data,setData]=useState({});
+  const [saving,setSaving]=useState(false);
+  const [saved,setSaved]=useState(false);
+  const [uploading,setUploading]=useState(null);
+  const [exportingWord,setExportingWord]=useState(false);
+  const [modeleOk,setModeleOk]=useState(false);
+
+  useEffect(()=>{
+    if(!ficheId){setLoading(false);return;}
+    setLoading(true);
+    Promise.all([
+      db.get("fiche_valeurs","?fiche_id=eq."+ficheId),
+      db.get("fiche_photos","?fiche_id=eq."+ficheId+"&order=created_at"),
+      chargerParamsApp(),
+    ]).then(([valeurs,fotos,params])=>{
+      const vv={};
+      if(Array.isArray(valeurs))valeurs.forEach(r=>{vv[r.champ_id]=r.valeur;});
+      setV(vv);
+      if(Array.isArray(fotos))setPhotos(fotos.map(p=>({...p,url:db.photoUrl(p.storage_path)})));
+      // proposé d'après la fiche, puis ce qui a déjà été enregistré dans ce rapport
+      const d=valeursDepartRapportCheminee(vv);
+      Object.keys(vv).forEach(k=>{if(k.indexOf(PREFIXE_RAPPORT_CHEMINEE)===0)d[k.slice(PREFIXE_RAPPORT_CHEMINEE.length)]=vv[k];});
+      if(d.materiel_controle===undefined)d.materiel_controle=(params&&params.rapportch_materiel_controle)||MATERIEL_CHEMINEE_DEFAUT;
+      setData(d);
+      setLoading(false);
+    });
+  },[ficheId]);
+
+  const cheminBase=cheminFiche(v).chemin;
+  function upd(k,val){setData(p=>({...p,[k]:val}));}
+  const resolues=resoudrePhotosCheminee(photos,data);
+  const listeMain=cle=>{try{const a=JSON.parse(data["liste_"+cle]||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}};
+
+  async function envoyer(file,nom){
+    const ext=(file.name.split(".").pop()||"jpg").toLowerCase();
+    const path=(cheminBase||"photos")+"/"+PREFIXE_RAPPORT_CHEMINEE+nom+"_"+Date.now()+"."+ext;
+    await db.uploadPhoto(path,file);
+    return db.photoUrl(path);
+  }
+  async function uploadManuel(cle,file){
+    if(!file||!ficheId)return;
+    setUploading(cle);
+    try{upd("photo_"+cle+"_url",await envoyer(file,cle));}catch(e){alert("Erreur upload : "+e.message);}
+    setUploading(null);
+  }
+  async function ajouterSerie(cle,file){
+    if(!file||!ficheId)return;
+    setUploading("serie_"+cle);
+    try{const url=await envoyer(file,cle);upd("liste_"+cle,JSON.stringify([...listeMain(cle),url]));}catch(e){alert("Erreur upload : "+e.message);}
+    setUploading(null);
+  }
+  function retirerSerie(cle,url){upd("liste_"+cle,JSON.stringify(listeMain(cle).filter(u=>u!==url)));}
+
+  async function enregistrer(){
+    if(!ficheId)return;
+    setSaving(true);
+    try{
+      const rows=Object.keys(data).filter(k=>data[k]!==undefined&&data[k]!=="").map(k=>({fiche_id:ficheId,champ_id:PREFIXE_RAPPORT_CHEMINEE+k,valeur:String(data[k])}));
+      if(rows.length>0)await db.upsert("fiche_valeurs",rows,"fiche_id,champ_id");
+      setSaved(true);setTimeout(()=>setSaved(false),3000);
+    }catch(e){alert("Erreur enregistrement : "+e.message);}
+    setSaving(false);
+  }
+  async function exporterWord(){
+    setExportingWord(true);
+    try{await exporterRapportCheminee(v,data,resolues,(v.de||"rapport"));}catch(e){alert("Erreur export Word : "+e.message);}
+    setExportingWord(false);
+  }
+  async function memoriserMateriel(){
+    try{await db.upsert("parametres_app",[{cle:"rapportch_materiel_controle",valeur:data.materiel_controle||""}],"cle");setModeleOk(true);setTimeout(()=>setModeleOk(false),2500);}
+    catch(e){alert("Erreur : "+e.message);}
+  }
+
+  const champTexte=(cle,label,placeholder,largeur)=>(<div style={{marginBottom:10}}><label style={S.lbl}>{label}</label><input type="text" value={data[cle]||""} onChange={e=>upd(cle,e.target.value)} placeholder={placeholder||""} style={{...S.inp,...(largeur?{maxWidth:largeur}:{})}}/></div>);
+  const champVerdict=(cle,label)=>(<div style={{display:"flex",flexWrap:"wrap",gap:"6px 10px",alignItems:"center",marginBottom:10}}>
+    <label style={{...S.lbl,margin:0,flex:"1 1 200px"}}>{label}</label>
+    <select value={data[cle]||""} onChange={e=>upd(cle,e.target.value)} style={{...S.sel,flex:"1 1 200px",maxWidth:260}}><option value="">— ne pas afficher</option>{VERDICTS_CHEMINEE.map(o=><option key={o} value={o}>{o}</option>)}</select>
+  </div>);
+  const origine=v.cheminee_origine==="SNCF"?"SNCF":v.cheminee_origine==="IMATEQ"?"IMATEQ":null;
+  const techsList=techs||[];
+
+  if(loading)return <div style={{textAlign:"center",padding:60,color:"#9CA3AF"}}>Chargement…</div>;
+
+  return(<div style={{maxWidth:820,margin:"0 auto",padding:"20px 16px"}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
+      <h2 style={{fontSize:20,fontWeight:700,margin:0}}>📧 Rapport client cheminée — {v.client||"—"} / {v.de||"—"}</h2>
+      <button style={S.p2} onClick={onRetour}>← Retour</button>
+    </div>
+    {saved&&<div style={S.ok}>✅ Rapport enregistré.</div>}
+    <div style={{...S.card,border:"1.5px solid #1B4F8A"}}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Livret de rapport d'intervention{origine?" — cheminée "+origine:""}</p>
+      <p style={{fontSize:11,color:"#6B7280",margin:0}}>Tout ce que la fiche contient (mesures, conformités, plaques, photos) est repris automatiquement. Complétez seulement ce qui est vide ci-dessous, puis vérifiez l'aperçu.{origine==="SNCF"?" Cheminée SNCF : le N° d'engin, le symbole, les numéros de gravure et le lot d'isolateurs sont ajoutés.":origine==="IMATEQ"?" Cheminée IMATEQ : N° de loco, nombre d'isolateurs changés.":""}</p>
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 10px"}}>Page de garde et identification</p>
+      {champTexte("mois_annee","Mois/année (page de garde)","MM/AAAA",200)}
+      <div style={{marginBottom:0}}><label style={S.lbl}>Descriptif des travaux réalisés</label><textarea value={data.descriptif_travaux||""} onChange={e=>upd("descriptif_travaux",e.target.value)} style={{...S.inp,minHeight:56,resize:"vertical",fontFamily:"inherit"}}/></div>
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Relevé des plaques</p>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px"}}>À recopier depuis les photos des plaques (plaque jaune, plaque du ventilateur).</p>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10}}>
+        {champTexte("res_type","Résistance de freinage — type","BWD 143-1")}
+        {champTexte("res_numero","Résistance de freinage — N° (Art.-Nr.)","Ex : 0272800 2")}
+        {champTexte("vent_type","Ventilateur MDEXX — type","Ex : 2CS1632-4AB81-5JB7")}
+        {champTexte("vent_numero","Ventilateur MDEXX — N° de fabrication","Ex : B202000152516003")}
+      </div>
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>📷 Photos du rapport</p>
+      <div style={{display:"flex",flexWrap:"wrap",gap:16}}>
+        {PHOTOS_RAPPORT_CHEMINEE.map(s=><BlocPhotoRapport key={s.key} slot={s} url={resolues[s.key]} ficheId={ficheId} uploading={uploading} onUpload={uploadManuel}/>)}
+      </div>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"10px 0 14px"}}>Les photos déjà prises sur la fiche (catégories correspondantes) sont utilisées automatiquement. Sinon, ajoutez-les ici.</p>
+      {SERIES_RAPPORT_CHEMINEE.map(s=>{
+        const dejaFiche=resoudrePhotosCheminee(photos,{})[s.key]||[];
+        return <ListePhotosRapport key={s.key} serie={s} urlsFiche={dejaFiche} urlsMain={listeMain(s.key)} ficheId={ficheId} uploading={uploading} onAjouter={ajouterSerie} onRetirer={retirerSerie}/>;
+      })}
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Contrôle visuel</p>
+      <div style={{marginBottom:0}}><label style={S.lbl}>Défauts constatés au déballage (une ligne par défaut ; vide = « Aucun défaut »)</label><textarea value={data.defauts_texte||""} onChange={e=>upd("defauts_texte",e.target.value)} style={{...S.inp,minHeight:60,resize:"vertical",fontFamily:"inherit"}}/></div>
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Conformités et commentaires du moteur</p>
+      {champVerdict("verdict_onde","Onde de choc (analyse moteur et ADX6)")}
+      {champVerdict("verdict_portees","Valeurs des portées moteurs")}
+      {champTexte("etat_rou_av","Roulement déposé côté commande — état","Ex : usure à 50%")}
+      {champTexte("etat_rou_ar","Roulement déposé côté opposé commande — état","Ex : usure à 50%")}
+      <div style={{marginBottom:10}}><label style={S.lbl}>Conclusion moteur</label><textarea value={data.conclusion_moteur||""} onChange={e=>upd("conclusion_moteur",e.target.value)} style={{...S.inp,minHeight:70,resize:"vertical",fontFamily:"inherit"}}/></div>
+      {champVerdict("verdict_moteur","L'ensemble de la partie moteur / ventilateur est")}
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Remarques de fin de rapport</p>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px"}}>Facultatif. Le déflecteur d'air manquant ou fourni par le client est signalé automatiquement en rouge.</p>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Attention (texte en rouge, une ligne par remarque)</label><textarea value={data.attention_rouge||""} onChange={e=>upd("attention_rouge",e.target.value)} placeholder="Ex : Le numéro de porte de la cheminée correspond à notre DV0033…" style={{...S.inp,minHeight:56,resize:"vertical",fontFamily:"inherit"}}/></div>
+      {champTexte("transport_texte","Pour le transport (avec la photo « Transport »)","Ex : Les serrures sont dans un sac comme à l'arrivée.")}
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Signatures</p>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Travaux et rapport réalisés par</label><ChampTechniciensMultiples valeur={data.realise_par||""} onChange={nv=>upd("realise_par",nv)} techs={techsList}/></div>
+      <div style={{marginBottom:0}}><label style={S.lbl}>Vérification de l'ensemble (le premier signe les « par … » du rapport)</label><ChampTechniciensMultiples valeur={data.certifie_par||""} onChange={nv=>upd("certifie_par",nv)} techs={techsList}/></div>
+    </div>
+
+    <div style={S.card}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Matériel de contrôle utilisé — dates de validité</p>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px"}}>Imprimé en fin de rapport, une ligne par appareil. Vérifiez les dates avant chaque envoi.</p>
+      <textarea value={data.materiel_controle||""} onChange={e=>upd("materiel_controle",e.target.value)} style={{...S.inp,minHeight:110,resize:"vertical",fontFamily:"inherit"}}/>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginTop:8,flexWrap:"wrap"}}>
+        <button type="button" style={{...S.p2,fontSize:12,padding:"6px 12px"}} onClick={memoriserMateriel}>💾 Garder cette liste comme liste habituelle</button>
+        {modeleOk&&<span style={{fontSize:12,color:"#22863A"}}>✓ Liste mémorisée pour les prochains rapports</span>}
+      </div>
+    </div>
+
+    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:30}}>
+      <button style={S.p2} onClick={enregistrer} disabled={saving||!ficheId}>{saving?"💾 ...":"💾 Enregistrer le rapport"}</button>
+      <button style={S.p1} onClick={()=>apercuRapportCheminee(v,data,resolues)}>👁 Aperçu</button>
+      <button style={{...S.p1,background:"#22863A"}} onClick={exporterWord} disabled={exportingWord}>{exportingWord?"⏳ ...":"📝 Exporter en Word"}</button>
+    </div>
+  </div>);
+}
+
 function PageRapportsListe({fiches,onOpen}){
   const [q,setQ]=useState("");
-  const moteurFiches=fiches.filter(f=>["Moteur","Autre"].includes(f.type_materiel||"Moteur"));
+  const moteurFiches=fiches.filter(f=>["Moteur","Autre",TYPE_CHEMINEE].includes(f.type_materiel||"Moteur"));
   const filtrees=moteurFiches.filter(f=>{
     const qq=q.toLowerCase();
     return !qq||(f.de||"").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq);
@@ -2613,11 +2810,11 @@ function PageRapportsListe({fiches,onOpen}){
   const clientList=Object.keys(parClient).sort();
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>📧 Rapports client</h1>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>{moteurFiches.length} fiche{moteurFiches.length>1?"s":""} moteur · sélectionnez-en une pour créer ou modifier son rapport.</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>{moteurFiches.length} fiche{moteurFiches.length>1?"s":""} (moteur, cheminée) · sélectionnez-en une pour créer ou modifier son rapport.</p>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16}}>
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={S.inp}/>
     </div>
-    {clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>Aucune fiche moteur.</div>}
+    {clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>Aucune fiche moteur ni cheminée.</div>}
     {clientList.map(c=>(
       <div key={c} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,padding:"12px 16px"}}>
         <p style={{fontWeight:700,fontSize:14,margin:"0 0 8px"}}>{c}</p>
@@ -3124,7 +3321,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
           <button style={S.p1} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁 Aperçu fiche</button>
           <button style={S.p2} onClick={()=>telechargerHtml(genHtml(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives),"Fiche_"+(v.de||"sans_de")+"_"+(v.client||""))}>⬇ Télécharger</button>
           <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄 Imprimer / PDF</button>
-          {!isPompe&&typeMateriel!=="Ventilateur"&&typeMateriel!==TYPE_CHEMINEE&&<button style={{...S.p2,opacity:ficheId?1:0.5}} disabled={!ficheId} onClick={()=>onOpenRapport(ficheId)}>📧 Rapport client</button>}
+          {!isPompe&&typeMateriel!=="Ventilateur"&&<button style={{...S.p2,opacity:ficheId?1:0.5}} disabled={!ficheId} onClick={()=>onOpenRapport(ficheId)}>📧 Rapport client</button>}
           <button style={S.p2} onClick={demanderSortie}>← Retour</button>
         </div>
       </div>
@@ -5932,7 +6129,7 @@ export default function App(){
     {page==="fiche"&&<EcritureAtelier><PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/></EcritureAtelier>}
     {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
-    {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
+    {page==="rapport"&&rapportFicheId&&((fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel===TYPE_CHEMINEE?<PageRapportCheminee ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>:<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>)}
     {page==="suivi"&&(admin
       ?<PageMateriel pieces={pieces} setPieces={setPieces} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>
       :<PageMesDemandes techs={techs} sessionTech={sessionTech} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>)}

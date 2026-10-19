@@ -13,9 +13,9 @@ import { construireRapport, BANDE } from "./rapportModele";
 const FONT = "Arial";
 const BLEU = "1B4F8A", VERT = "00B050", GRIS = "6B7280", TEXTE = "1F2937", LIGNE = "D1D5DB", FOND = "F3F6FA";
 const PX_CM = 37.8;                       // 96 dpi : taille des images en pixels
-const cm = (x) => Math.round(x * PX_CM);
-const MARGE_LR = 1247;                    // 2,2 cm
-const LARGEUR_TWIPS = 11906 - 2 * MARGE_LR; // largeur utile = 16,6 cm
+export const cm = (x) => Math.round(x * PX_CM);
+export const MARGE_LR = 1247;                    // 2,2 cm
+export const LARGEUR_TWIPS = 11906 - 2 * MARGE_LR; // largeur utile = 16,6 cm
 const LARGEUR = cm(16.6);
 
 // ─── Images ─────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ function recompresser(bytes, max, qualite) {
     img.src = url;
   });
 }
-async function chargerImage(src, compresser) {
+export async function chargerImage(src, compresser) {
   if (!src) return null;
   try {
     let bytes;
@@ -80,13 +80,13 @@ async function chargerImage(src, compresser) {
     return out;
   } catch (e) { return null; }
 }
-function fitBox(img, maxW, maxH) {
+export function fitBox(img, maxW, maxH) {
   if (!img) return { width: 1, height: 1 };
   const ratio = Math.min(maxW / img.w, maxH / img.h, 1);
   return { width: Math.max(1, Math.round(img.w * ratio)), height: Math.max(1, Math.round(img.h * ratio)) };
 }
 // Bande décorative de la page de garde, dessinée sur un canvas d'après la géométrie partagée avec le PDF
-async function dessinerBande() {
+export async function dessinerBande() {
   const c = document.createElement("canvas"); c.width = BANDE.w; c.height = BANDE.h;
   const g = c.getContext("2d");
   BANDE.formes.forEach((f) => {
