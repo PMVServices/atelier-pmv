@@ -2899,6 +2899,10 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
     if(seedValeurs&&onSeedConsumed)onSeedConsumed();
   },[]);
 
+  const apercuAutoFait=useRef(false);
+  useEffect(()=>{
+    if(lecture&&ficheInit?.id&&chargeFini&&!apercuAutoFait.current){apercuAutoFait.current=true;setApercu(true);}
+  },[lecture,ficheInit?.id,chargeFini]);
   useEffect(()=>{
     if(ouvrirApercu&&ficheInit?.id){
       // Attendre que les données soient chargées puis ouvrir aperçu
@@ -3070,7 +3074,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
   const prog=Math.round((validees.length/etapesActives.length)*100);const chem=cheminFiche(v);const st=statutInfo(statutChantier);
 
   if(lecture)return(<div style={{maxWidth:800,margin:"0 auto",padding:"40px 16px",textAlign:"center",color:"#6B7280"}}>
-    {!apercu&&"Chargement de l'aperçu…"}
+    {!apercu&&(chargeFini?<button type="button" style={S.p1} onClick={()=>setApercu(true)}>👁 Voir l'aperçu</button>:"Chargement de l'aperçu…")}
     {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";onRetour();}}/>}
     <div style={{marginTop:16}}><button style={S.p2} onClick={onRetour}>← Retour à la liste</button></div>
   </div>);
