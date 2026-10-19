@@ -66,8 +66,9 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 | Zone | Technicien | Administrateur | Commercial |
 |---|---|---|---|
 | Tableau de bord | sans le bloc de traitement | complet | oui, version à lui : relances à faire + raccourcis de ses onglets |
-| Fiche Atelier / Fiche Chantier | création et modification | idem | **lecture seule** : liste, aperçu, ZIP + PDF ; ni création, ni modification, ni photos, ni suppression, ni statut |
-| Planning | déplacement des cartes, statuts | idem | lecture seule (carte → aperçu) |
+| Fiche Atelier | création et modification | idem | **comme le technicien** (décision du 20/10/2026) : liste, création, modification, photos, aperçu, ZIP + PDF, matériel et décompte du stock |
+| Fiche Chantier | création et modification | idem | **lecture seule** : liste, aperçu, ZIP + PDF ; ni création, ni modification, ni photos, ni suppression |
+| Planning | déplacement des cartes, statuts | idem | lecture seule (la carte ouvre la fiche atelier, modifiable) |
 | Rapport | oui | oui | oui |
 | Calendrier | oui | oui + stock de départ | oui |
 | Suivi clients (relance devis, prospection, RDV, devis refusés) | non | non | oui, **lui seul** |

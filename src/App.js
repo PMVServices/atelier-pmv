@@ -5714,7 +5714,7 @@ const NAV_ITEMS=[
 ];
 // Ordre des onglets du profil Commercial (le suivi clients passe avant tout le reste)
 const ORDRE_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport"];
-const PAGES_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","fiche"];
+const PAGES_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","fiche","choix"];
 function navPourRole(role){
   const l=NAV_ITEMS.filter(n=>n.roles.includes(role));
   return role==="commercial"?l.sort((a,b)=>ORDRE_COMMERCIAL.indexOf(a.id)-ORDRE_COMMERCIAL.indexOf(b.id)):l;
@@ -5731,6 +5731,10 @@ function pageAutorisee(page,role){
 const MODE_POSTE=typeof window!=="undefined"&&/^\/poste(\/|$)/.test(window.location.pathname);
 const PERSONNE_POSTE={id:"poste",nom:"Poste",prenom:"stock",initiales:"",profil:"tech"};
 const MODE_STOCK=MODE_POSTE||(typeof window!=="undefined"&&(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search)));
+
+// Les pages des fiches atelier ne sont jamais en lecture seule, même pour le profil Commercial : il les ouvre, les modifie et en crée comme un technicien.
+// Les fiches chantier et le planning gardent la lecture seule du Commercial.
+function EcritureAtelier({children}){return <LectureCtx.Provider value={false}>{children}</LectureCtx.Provider>;}
 
 export default function App(){
   const [pinOk,setPinOk]=useState(()=>{try{return localStorage.getItem(CLE_PIN)==="1";}catch(e){return false;}});
@@ -5923,10 +5927,10 @@ export default function App(){
       }}
       rendreApercu={(liste,etape)=><div>{liste.map(c=><UnChamp key={c.id} c={c} v={{}} onChange={()=>{}} techs={techs} clients={clients} onAddClient={()=>{}} ficheId={null} cheminBase="" photos={[]} onPhotoAdded={()=>{}} onPhotoRemoved={()=>{}} etape={etape}/>)}</div>}/>}
     {page==="dashboard"&&role!=="maintenance"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
-    {page==="accueil"&&<PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/>}
-    {page==="choix"&&<PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"&&m!==TYPE_CHEMINEE){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/>}
-    {page==="fiche"&&<PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/>}
-    {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{if(commercial)setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
+    {page==="accueil"&&<EcritureAtelier><PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/></EcritureAtelier>}
+    {page==="choix"&&<EcritureAtelier><PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"&&m!==TYPE_CHEMINEE){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/></EcritureAtelier>}
+    {page==="fiche"&&<EcritureAtelier><PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/></EcritureAtelier>}
+    {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>}
     {page==="suivi"&&(admin
