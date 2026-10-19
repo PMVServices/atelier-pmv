@@ -68,7 +68,7 @@ Un téléphone qui affiche la page dézoomée ou décalée = régression majeure
 | Tableau de bord | sans le bloc de traitement | complet | oui, version à lui : relances à faire + raccourcis de ses onglets |
 | Fiche Atelier | création et modification | idem | **comme le technicien** (décision du 20/10/2026) : liste, création, modification, photos, aperçu, ZIP + PDF, matériel et décompte du stock |
 | Fiche Chantier | création et modification | idem | **lecture seule** : liste, aperçu, ZIP + PDF ; ni création, ni modification, ni photos, ni suppression |
-| Planning | déplacement des cartes, statuts | idem | lecture seule (la carte ouvre la fiche atelier, modifiable) |
+| Planning | déplacement des cartes, statuts, **chantiers sans fiche** (§ 6 septies), nouvelle fiche | idem | lecture seule (la carte ouvre la fiche atelier, modifiable) ; peut lancer une nouvelle fiche |
 | Rapport | oui | oui | oui |
 | Calendrier | oui | oui + stock de départ | oui |
 | Suivi clients (relance devis, prospection, RDV, devis refusés) | non | non | oui, **lui seul** |
@@ -223,6 +223,14 @@ Modèles : « Rapport DV0040 » (cheminée IMATEQ) et « Rapport DV0044 » (chem
 - **Ce que le formulaire ajoute** (non saisi dans la fiche, comme le rapport moteur) : mois/année, descriptif, relevé des plaques (type et N° de la résistance de freinage, type et N° de fabrication du ventilateur MDEXX), photos manuelles (défauts, déflecteur, transport), défauts constatés (proposés d'après « Observation / défauts »), verdicts (onde de choc, portées, ensemble moteur), état des roulements déposés (proposé : usé / RAS / hors service ; ex. « usure à 50% » à taper), conclusion moteur (phrase proposée d'après les mesures : modifiable), « Attention » en rouge, texte de transport, « réalisé par » / « vérification de l'ensemble » (proposés d'après les techniciens de la fiche ; le premier de « vérification » signe les « (par CD) »), matériel de contrôle.
 - **Couleurs** (légende du rapport) : Conforme = vert, Conforme sous réserve = jaune (état visuel d'une résistance aux isolateurs cassés ; portées « marquées »), Non conforme = rouge. Isolement ≥ 1 GΩ (hypothèse, voir § 6 sexies) ; résistance 0,8025 Ω ± 5 % ; partielle 3,21 Ω ± 5 %.
 - Images fixes (dessin de la cheminée, logo IMATEQ, figures 5 et 6, rack) : `public/rail/rapport-*.png`, extraites des rapports d'exemple. Test en développement : `window.__rapportCheminee.genRapportLivretDocx(v, data, photos)` et `window.__rapportLivretHtml.genRapportLivretHtmlLeger(...)`.
+
+## 6 septies. Planning : nouvelle fiche et chantiers sans fiche
+
+- **➕ Nouvelle fiche** (en haut du Planning) : ouvre le même écran « Quel matériel ? » que l'onglet Fiche Atelier ; en quittant la fiche (ou en revenant en arrière) on retombe dans le Planning. Visible par tous les profils qui peuvent créer une fiche atelier (Commercial compris). Les cartes du Planning ouvertes comme avant (retour à Fiche Atelier : inchangé).
+- **📌 Ajouter au planning (sans fiche)** : pour un chantier qui ne demande pas de fiche. Formulaire : **description des travaux** (obligatoire), **client** (obligatoire, liste des clients connus proposée), **N° de DE** (facultatif ; préfixe DE / DV ajouté comme pour les fiches), **contact**, colonne du planning. Administrateur et technicien ; le profil Commercial voit les cartes en lecture seule (le planning reste en lecture seule pour lui, voir § 4).
+- La carte « sans fiche » a une **bordure en pointillés** et l'étiquette « 📌 Sans fiche » ; elle se déplace entre les colonnes (glisser-déposer ou liste), se modifie (✏️), se supprime (🗑 avec confirmation) et est trouvée par la recherche (client, DE, description, contact). **Elle n'apparaît que dans le Planning** : pas dans Fiche Atelier, le tableau de bord, les statistiques ni le mail du matin, et elle ne compte pas dans « devis en attente ». Quand on filtre le planning sur un technicien, elle est masquée (aucun technicien associé).
+- **Stockage** : `parametres_app`, clé `planning_libre` (liste JSON de cartes : id, DE, client, description, contact, colonne, date, auteur) — aucune table à créer. Chaque enregistrement relit d'abord la liste en base (`src/planningLibre.js`) pour ne pas écraser le travail d'une autre personne ; si la base ne répond pas, rien n'est écrasé et un message l'indique. Une colonne retirée par la Maintenance : la carte passe dans la première colonne.
+- Pas prévu pour l'instant : transformer une carte en fiche atelier, date d'intervention, technicien associé.
 
 ## 7. Matériel à commander
 

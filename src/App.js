@@ -3,6 +3,7 @@ import {genHtml, imprimerFiche, telechargerZip, apercuRapport, afficherApercu, t
 import {cleNr, cleNrJust} from "./etapeNr";
 import {exporterRapportDocx} from "./rapportDocx";
 import {exporterRapportCheminee} from "./rapportLivretDocx";
+import {lirePlanningLibre, modifierPlanningLibre, nouvelIdLibre, estIdLibre} from "./planningLibre";
 import {apercuRapportCheminee} from "./rapportLivretHtml";
 import {MATERIEL_CHEMINEE_DEFAUT, VERDICTS_CHEMINEE, PHOTOS_RAPPORT_CHEMINEE, SERIES_RAPPORT_CHEMINEE, valeursDepartRapportCheminee, resoudrePhotosCheminee} from "./rapportCheminee";
 import {SUPA_URL,SUPA_KEY,H,db} from "./supabase";
@@ -1941,11 +1942,33 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
 }
 
 // ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
-function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
+function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche,onNouvelleFiche}){
   const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);
   const [recherche,setRecherche]=useState("");
   const [dragId,setDragId]=useState(null);const [dragOver,setDragOver]=useState(null);
   const [delaisMap,setDelaisMap]=useState({});
+  // chantiers « sans fiche » : seulement dans le planning (planningLibre.js)
+  const lecture=React.useContext(LectureCtx);
+  const ctxP=React.useContext(PersonneCtx);const moiP=ctxP&&ctxP.moi;
+  const [libres,setLibres]=useState([]);const [erreurLibre,setErreurLibre]=useState("");
+  const [formLibre,setFormLibre]=useState(null);const [enregLibre,setEnregLibre]=useState(false);
+  useEffect(()=>{let vivant=true;lirePlanningLibre().then(l=>{if(vivant){setLibres(l);setErreurLibre("");}}).catch(e=>{if(vivant)setErreurLibre(e.message);});return()=>{vivant=false;};},[]);
+  async function changerLibres(modifier){
+    try{const l=await modifierPlanningLibre(modifier);setLibres(l);setErreurLibre("");return true;}
+    catch(e){setErreurLibre("Enregistrement impossible : "+e.message);return false;}
+  }
+  // une carte « sans fiche » change de colonne dans la liste du planning, une fiche dans la base des fiches
+  function onStatutChange(id,statut){
+    if(estIdLibre(id)){const avant=libres;setLibres(l=>l.map(e=>e.id===id?{...e,statut}:e));changerLibres(l=>l.map(e=>e.id===id?{...e,statut}:e)).then(ok=>{if(!ok)setLibres(avant);});}
+    else onStatutFiche(id,statut);
+  }
+  async function enregistrerLibre(e){
+    setEnregLibre(true);
+    const ok=await changerLibres(l=>e.id?l.map(x=>x.id===e.id?{...x,...e}:x):[...l,{...e,id:nouvelIdLibre(),cree:new Date().toISOString(),par:nomCourt(moiP)}]);
+    setEnregLibre(false);
+    if(ok)setFormLibre(null);
+  }
+  function supprimerLibre(e){changerLibres(l=>l.filter(x=>x.id!==e.id));}
   useEffect(()=>{
     if(!fiches.length){setDelaisMap({});return;}
     const ids=fiches.map(f=>f.id).join(",");
@@ -1964,12 +1987,14 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
   });
   const parStatut={};STATUTS_CHANTIER.forEach(s=>{parStatut[s.id]=[];});
   fichesFilt.forEach(f=>{const sid=f.statut_chantier||"A_demonter";if(parStatut[sid])parStatut[sid].push(f);});
+  // chantiers sans fiche (pas de technicien : masqués quand on filtre sur un technicien) ; colonne inconnue (retirée par la Maintenance) = première colonne
+  libres.filter(e=>filtTech==="tous"&&(!rq||[e.de,e.client,e.description,e.contact].some(x=>String(x||"").toLowerCase().includes(rq)))).forEach(e=>{const sid=parStatut[e.statut]?e.statut:STATUTS_CHANTIER[0].id;parStatut[sid].push({...e,libre:true});});
   // En recherche : on affiche toutes les colonnes qui ont un résultat, y compris Terminé/Abandonné
   // même masqués, pour retrouver un N° de chantier n'importe où. Sans recherche, comportement normal.
   const statuts=rq
     ?STATUTS_CHANTIER.filter(s=>(parStatut[s.id]||[]).length>0)
     :(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");return s;})();
-  const devisCount=parStatut["Devis"]?.length||0;
+  const devisCount=(parStatut["Devis"]||[]).filter(x=>!x.libre).length;
   const techs=[...new Set(fiches.map(f=>f.tech_entree).filter(Boolean))];
 
   function handleDragStart(e,ficheId){
@@ -2007,6 +2032,8 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
         {devisCount>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"3px 10px",borderRadius:20,fontWeight:600}}>⚠ {devisCount} devis en attente</span>}
       </div>
       <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+        {onNouvelleFiche&&<button onClick={onNouvelleFiche} style={{...S.p1,fontSize:12,padding:"6px 12px"}}>➕ Nouvelle fiche</button>}
+        {!lecture&&<button onClick={()=>setFormLibre({id:"",de:"",client:"",description:"",contact:"",statut:STATUTS_CHANTIER[0].id})} style={{...S.p2,fontSize:12,padding:"5px 12px"}}>📌 Ajouter au planning (sans fiche)</button>}
         <input value={recherche} onChange={e=>setRecherche(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={{...S.inp,width:170}}/>
         <select value={filtTech} onChange={e=>setFiltTech(e.target.value)} style={{...S.sel,width:130}}>
           <option value="tous">Tous</option>
@@ -2016,6 +2043,8 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
         <button onClick={()=>setShowAbandonne(!showAbandonne)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#9B59B6",borderColor:"#9B59B6"}}>{showAbandonne?"Masquer Abandonné":"Afficher Abandonné"}</button>
       </div>
     </div>
+    {erreurLibre&&<div style={{...S.alert,marginBottom:10}}>⚠ Chantiers sans fiche : {erreurLibre}</div>}
+    {formLibre&&!lecture&&<FormPlanningLibre key={formLibre.id||"nouveau"} init={formLibre} clients={clients} enCours={enregLibre} onEnregistrer={enregistrerLibre} onAnnuler={()=>setFormLibre(null)}/>}
     {rq
       ?<p style={{fontSize:11,color:"#1B4F8A",margin:"0 0 10px",textAlign:"right"}}>🔍 Résultats dans tous les statuts, y compris ceux normalement masqués</p>
       :<p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px",textAlign:"right"}}>💡 Glissez les cartes entre les colonnes pour changer le statut</p>}
@@ -2032,10 +2061,87 @@ function PagePlanning({fiches,onOuvrirFiche,onStatutChange}){
             <span style={{fontSize:11,background:"#F5F6F8",border:"1px solid #E2E6EA",borderRadius:20,padding:"1px 8px",color:"#6B7280"}}>{(parStatut[s.id]||[]).length}</span>
           </div>
           {(parStatut[s.id]||[]).length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
-          {(parStatut[s.id]||[]).map(f=><CarteKanban key={f.id} f={f} s={s} urgence={delaisMap[f.id]?urgenceInfo(delaisMap[f.id]):null} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id}/>)}
+          {(parStatut[s.id]||[]).map(f=>f.libre
+            ?<CartePlanningLibre key={f.id} e={f} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id} onModifier={x=>{setFormLibre(x);window.scrollTo&&window.scrollTo({top:0,behavior:"smooth"});}} onSupprimer={supprimerLibre}/>
+            :<CarteKanban key={f.id} f={f} s={s} urgence={delaisMap[f.id]?urgenceInfo(delaisMap[f.id]):null} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id}/>)}
         </div>
       ))}
     </div>
+  </div>);
+}
+// ─── PLANNING : chantiers sans fiche (voir planningLibre.js) ─────────────────
+// Formulaire d'ajout / de modification : description des travaux, client, N° de DE, contact. Ces cartes ne vivent que dans le Planning.
+function FormPlanningLibre({init,clients,onEnregistrer,onAnnuler,enCours}){
+  const [d,setD]=useState(init);
+  const [msg,setMsg]=useState("");
+  const noms=(clients||[]).map(c=>typeof c==="string"?c:(c&&c.nom)).filter(Boolean);
+  const maj=(k,v)=>setD(p=>({...p,[k]:v}));
+  function valider(){
+    const client=String(d.client||"").trim(),description=String(d.description||"").trim();
+    if(!client){setMsg("Indiquez le nom du client.");return;}
+    if(!description){setMsg("Indiquez la description des travaux.");return;}
+    setMsg("");
+    onEnregistrer({...d,client,description,de:normaliserNumero(d.de,client),contact:String(d.contact||"").trim()});
+  }
+  return(<div style={{...S.card,border:"1.5px solid #1B4F8A",marginBottom:14}}>
+    <p style={{fontSize:14,fontWeight:700,margin:"0 0 4px"}}>{init.id?"Modifier le chantier du planning":"Ajouter un chantier au planning (sans fiche)"}</p>
+    <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 12px"}}>Cette carte apparaît seulement dans le Planning : aucune fiche atelier n'est créée.</p>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(220px,1fr))",gap:10,marginBottom:10}}>
+      <div><label style={S.lbl}>Client *</label><input type="text" list="clients-planning-libre" value={d.client||""} onChange={e=>maj("client",e.target.value)} style={S.inp}/><datalist id="clients-planning-libre">{noms.map(n=><option key={n} value={n}/>)}</datalist></div>
+      <div><label style={S.lbl}>N° de DE</label><input type="text" value={d.de||""} onChange={e=>maj("de",e.target.value)} onBlur={()=>maj("de",normaliserNumero(d.de,d.client))} placeholder="Ex : 8040" style={S.inp}/></div>
+      <div><label style={S.lbl}>Contact</label><input type="text" value={d.contact||""} onChange={e=>maj("contact",e.target.value)} placeholder="Nom, téléphone…" style={S.inp}/></div>
+    </div>
+    <div style={{marginBottom:10}}><label style={S.lbl}>Description des travaux *</label><textarea value={d.description||""} onChange={e=>maj("description",e.target.value)} style={{...S.inp,minHeight:70,resize:"vertical",fontFamily:"inherit"}}/></div>
+    <div style={{marginBottom:12,maxWidth:260}}><label style={S.lbl}>Colonne du planning</label>
+      <select value={d.statut||"A_demonter"} onChange={e=>maj("statut",e.target.value)} style={S.sel}>{STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}</select>
+    </div>
+    {msg&&<div style={{...S.alert,marginBottom:10}}>{msg}</div>}
+    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+      <button style={S.p1} onClick={valider} disabled={enCours}>{enCours?"💾 ...":"💾 Enregistrer"}</button>
+      <button style={S.p2} onClick={onAnnuler} disabled={enCours}>Annuler</button>
+    </div>
+  </div>);
+}
+
+function CartePlanningLibre({e,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging,onModifier,onSupprimer}){
+  const [ouvert,setOuvert]=useState(false);
+  const [confirmer,setConfirmer]=useState(false);
+  const lecture=React.useContext(LectureCtx);
+  return(<div
+    draggable={!lecture}
+    onDragStart={ev=>{if(lecture){ev.preventDefault();return;}onDragStart(ev,e.id);}}
+    onTouchStart={()=>{if(!lecture)onTouchStart(null,e.id);}}
+    onTouchEnd={ev=>{if(!lecture)onTouchEnd(ev,e.id);}}
+    style={{background:isDragging?"#EEF4FF":"#F8F9FA",border:"1px dashed "+(isDragging?"#1B4F8A":"#9CA3AF"),borderRadius:8,marginBottom:8,cursor:lecture?"default":"grab",opacity:isDragging?0.6:1,transition:"opacity .15s,border-color .15s",userSelect:"none"}}>
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",cursor:"pointer"}} onClick={()=>setOuvert(!ouvert)}>
+      <span style={{fontSize:13,color:"#9CA3AF",cursor:lecture?"default":"grab"}}>⠿</span>
+      <div style={{flex:1,minWidth:0}}>
+        <span style={{fontSize:12,fontWeight:700,color:"#1B4F8A"}}>{e.de||"Sans DE"}</span>
+        <span style={{fontSize:12,color:"#1A1A2E",marginLeft:6,fontWeight:500}}>{e.client||"—"}</span>
+        <span style={{fontSize:11,color:"#6B7280",marginTop:2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.description}</span>
+        <span style={{display:"inline-block",fontSize:10,background:"#EEF4FF",color:"#1B4F8A",borderRadius:10,padding:"1px 7px",marginTop:3}}>📌 Sans fiche</span>
+      </div>
+      <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
+    </div>
+    {ouvert&&<div style={{padding:"8px 10px",borderTop:"1px solid #E2E6EA",background:"#fff"}}>
+      <div style={{fontSize:12,color:"#1A1A2E",whiteSpace:"pre-wrap",marginBottom:6}}>{e.description}</div>
+      {e.contact&&<div style={{fontSize:11,color:"#4B5563",marginBottom:4}}>👤 {e.contact}</div>}
+      <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>Ajouté le {fmt(e.cree)}{e.par?" par "+e.par:""}</div>
+      <select value={e.statut||"A_demonter"} disabled={lecture} onChange={ev=>onStatutChange(e.id,ev.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
+        {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
+      </select>
+      {!lecture&&!confirmer&&<div style={{display:"flex",gap:8}}>
+        <button onClick={()=>onModifier(e)} style={{flex:1,fontSize:11,padding:"5px",borderRadius:6,border:"1px solid #1B4F8A",background:"#EEF4FF",color:"#1B4F8A",cursor:"pointer",fontWeight:600}}>✏️ Modifier</button>
+        <button onClick={()=>setConfirmer(true)} style={{flex:1,fontSize:11,padding:"5px",borderRadius:6,border:"1px solid #D73A49",background:"#FFF5F5",color:"#D73A49",cursor:"pointer",fontWeight:600}}>🗑 Supprimer</button>
+      </div>}
+      {!lecture&&confirmer&&<div>
+        <div style={{fontSize:11,color:"#D73A49",marginBottom:6}}>Supprimer ce chantier du planning ? Cette action est définitive.</div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={()=>onSupprimer(e)} style={{flex:1,fontSize:11,padding:"5px",borderRadius:6,border:"1px solid #D73A49",background:"#D73A49",color:"#fff",cursor:"pointer",fontWeight:600}}>Oui, supprimer</button>
+          <button onClick={()=>setConfirmer(false)} style={{flex:1,fontSize:11,padding:"5px",borderRadius:6,border:"1px solid #E2E6EA",background:"#fff",color:"#4B5563",cursor:"pointer",fontWeight:600}}>Non</button>
+        </div>
+      </div>}
+    </div>}
   </div>);
 }
 function CarteKanban({f,s,urgence,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging}){
@@ -6125,9 +6231,9 @@ export default function App(){
       rendreApercu={(liste,etape)=><div>{liste.map(c=><UnChamp key={c.id} c={c} v={{}} onChange={()=>{}} techs={techs} clients={clients} onAddClient={()=>{}} ficheId={null} cheminBase="" photos={[]} onPhotoAdded={()=>{}} onPhotoRemoved={()=>{}} etape={etape}/>)}</div>}/>}
     {page==="dashboard"&&role!=="maintenance"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
     {page==="accueil"&&<EcritureAtelier><PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/></EcritureAtelier>}
-    {page==="choix"&&<EcritureAtelier><PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"&&m!==TYPE_CHEMINEE){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>setPage("accueil")}/></EcritureAtelier>}
+    {page==="choix"&&<EcritureAtelier><PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"&&m!==TYPE_CHEMINEE){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");}}/></EcritureAtelier>}
     {page==="fiche"&&<EcritureAtelier><PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/></EcritureAtelier>}
-    {page==="planning"&&<PagePlanning fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange}/>}
+    {page==="planning"&&<PagePlanning fiches={fiches} clients={clients} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onNouvelleFiche={()=>askIdent(t=>{setSessionTech(t);setRetourFiche("planning");setPage("choix");})}/>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&((fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel===TYPE_CHEMINEE?<PageRapportCheminee ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>:<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>)}
     {page==="suivi"&&(admin
