@@ -120,13 +120,16 @@ export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts
   // Commentaires
   if(comm){html+="<p style='font-weight:bold;margin:8px 0 4px;'>Commentaires</p><div class='comment'>"+comm+"</div>";}
 
-  // Matériel à commander
+  // Matériel : à commander, déjà commandé (matériel utilisé), pris du stock
   var piecesOk=(pieces||[]).filter(function(p){return p.checked!==false;});
-  if(piecesOk.length>0){
-    html+="<p style='font-weight:bold;margin:8px 0 4px;'>Matériel à commander</p><ul style='padding-left:18px;font-size:9pt;'>";
-    piecesOk.forEach(function(p){html+="<li>"+p.designation+(p.reference?" — "+p.reference:"")+"</li>";});
-    html+="</ul>";
-  }
+  [["Matériel à commander",function(p){return p.statut!=="Deja_commande"&&p.statut!=="Pris_stock";}],["Matériel déjà commandé (utilisé)",function(p){return p.statut==="Deja_commande";}],["Matériel pris du stock",function(p){return p.statut==="Pris_stock";}]].forEach(function(g){
+    var l=piecesOk.filter(g[1]);
+    if(l.length>0){
+      html+="<p style='font-weight:bold;margin:8px 0 4px;'>"+g[0]+"</p><ul style='padding-left:18px;font-size:9pt;'>";
+      l.forEach(function(p){html+="<li>"+p.designation+(p.reference?" — "+p.reference:"")+"</li>";});
+      html+="</ul>";
+    }
+  });
 
   html+="<div class='ft'>Fiche "+ch.de+" · "+ch.client+"/"+ch.de+"/"+ch.mat+" · "+now+" · Atelier PMV</div></div></body></html>";
   return html;
