@@ -1164,70 +1164,51 @@ function LienTelephone({onFermer}){
   </Feuille>);
 }
 
-// ─── Inventaire : scanner, saisir la quantité comptée, passer au suivant, tout enregistrer à la fin ──
-// Comptage "à l'aveugle" (le stock théorique n'est pas montré pendant la saisie, pour ne pas fausser le comptage).
-// Le brouillon est gardé sur la tablette : si l'appli se ferme en cours de route, on reprend où on en était.
+// ─── Inventaire : on choisit une catégorie, la liste s'affiche dans l'ordre des références avec la quantité en stock ──
+// On corrige seulement les lignes qui ne correspondent pas à ce qu'on compte en rayon, puis « Terminer l'inventaire » enregistre les écarts.
+// Le brouillon (lignes corrigées) est gardé sur la tablette : si l'appli se ferme en cours de route, on reprend où on en était.
+// Avec une douchette : scanner l'étiquette dans le champ de recherche (Entrée) place le curseur sur la quantité de la référence ;
+// taper la quantité puis Entrée revient à la recherche pour la référence suivante.
 const CLE_INV="pmv_stock_inventaire";
 const lireBrouillonInv=()=>{try{const v=JSON.parse(localStorage.getItem(CLE_INV)||"null");return v&&v.comptes&&Object.keys(v.comptes).length?v:null;}catch(e){return null;}};
 const ecrireBrouillonInv=c=>{try{if(c&&Object.keys(c).length)localStorage.setItem(CLE_INV,JSON.stringify({comptes:c,maj:Date.now()}));else localStorage.removeItem(CLE_INV);}catch(e){/* brouillon facultatif */}};
 
 function SessionInventaire({articles,techs,qui,setQui,onFermer,onFini,recharger,afficherToast}){
   const liste=(techs||[]).filter(t=>t!=="Autre");
-  const [comptes,setComptes]=useState(()=>{const b=lireBrouillonInv();return b?b.comptes:{};}); // {id:{n,t}}
-  const [courant,setCourant]=useState(null);
-  const [saisie,setSaisie]=useState("");
-  const [message,setMessage]=useState(null);
-  const [manuel,setManuel]=useState("");
-  const [inconnu,setInconnu]=useState(null);
+  const [comptes,setComptes]=useState(()=>{const b=lireBrouillonInv();return b?b.comptes:{};}); // {id:{n,t}} : seulement les lignes dont la quantité a été corrigée
+  const [famille,setFamille]=useState(null);
+  const [serie,setSerie]=useState("toutes");
+  const [recherche,setRecherche]=useState("");
+  const [edition,setEdition]=useState(null); // {id,texte} : ligne dont la quantité est en cours de saisie
   const [fin,setFin]=useState(false);
-  const [restant,setRestant]=useState(false);
   const [quitter,setQuitter]=useState(false);
   const [envoi,setEnvoi]=useState({enCours:false,erreur:null});
-  const articlesRef=useRef(articles);articlesRef.current=articles;
-  const courantRef=useRef(null);courantRef.current=courant;
-  const comptesRef=useRef(comptes);comptesRef.current=comptes;
+  const rechercheRef=useRef(null);
   useEffect(()=>{ecrireBrouillonInv(comptes);},[comptes]);
   const parId=id=>articles.find(a=>a.id===id);
-  const ouvrir=useCallback(a=>{
-    const deja=comptesRef.current[a.id];
-    setCourant(a.id);setSaisie(deja?String(deja.n):"");
-    bip();
-  },[]);
-  const traiter=useCallback(async brut=>{
-    if(courantRef.current)return; // un comptage est en cours de saisie : on ignore les scans
-    const code=String(brut||"").trim();
-    if(!code)return;
-    let a=articlesRef.current.find(x=>cle(x.reference)===cle(code));
-    if(!a){
-      const r=await appel("GET","stock_codes?code=eq."+encodeURIComponent(code)+"&select=article_id");
-      if(r.ok&&Array.isArray(r.data)&&r.data[0])a=articlesRef.current.find(x=>x.id===r.data[0].article_id);
-    }
-    if(a)ouvrir(a);
-    else{setInconnu(code);setMessage({texte:"Code inconnu : "+code,type:"err",code});}
-  },[ouvrir]);
-  const qm=cle(manuel);
-  const sugg=qm?articles.filter(a=>cle(a.reference).includes(qm)||cle(a.dimensions).includes(qm)).slice(0,5):[];
-  function entrerManuel(){
-    const exact=articles.find(a=>cle(a.reference)===qm);
-    const a=exact||(sugg.length===1?sugg[0]:null);
-    if(a){ouvrir(a);setManuel("");}
-    else if(qm)traiter(manuel);
+  const stock=a=>a.quantite||0;
+  const valeur=a=>comptes[a.id]?comptes[a.id].n:stock(a);
+  function fixer(a,n){
+    setComptes(c=>{const x={...c};if(n===stock(a))delete x[a.id];else x[a.id]={n,t:Date.now()};return x;});
   }
-  const n=parseInt(saisie,10);
-  const saisieOk=saisie!==""&&!isNaN(n)&&n>=0;
-  function validerComptage(){
-    if(!saisieOk||!courant)return;
-    const a=parId(courant);
-    setComptes(c=>({...c,[courant]:{n,t:Date.now()}}));
-    setMessage({texte:"✓ "+(a?a.reference:"")+" : "+n+" compté"+(n>1?"s":""),type:"ok"});
-    setCourant(null);setSaisie("");
+  const familles=FAMILLES.filter(f=>articles.some(a=>familleDe(a.reference)===f));
+  const base=famille?articles.filter(a=>familleDe(a.reference)===famille).slice().sort(triRef):[];
+  const series=[...new Set(base.map(a=>serieDe(a.reference)))].sort();
+  const q=cle(recherche);
+  const visibles=base.filter(a=>(serie==="toutes"||serieDe(a.reference)===serie)&&(!q||cle(a.reference).includes(q)||cle(a.dimensions).includes(q)));
+  const lignes=Object.keys(comptes).filter(id=>parId(id)).sort((a,b)=>triRef(parId(a),parId(b)));
+  const infoArt=a=>[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ");
+  const choisirSerie=s=>{setSerie(s);setRecherche("");};
+  function allerAQuantite(){
+    const exact=visibles.find(a=>cle(a.reference)===q)||(visibles.length===1?visibles[0]:null);
+    if(!exact)return;
+    const el=document.getElementById("inv-"+exact.id);
+    if(el){el.scrollIntoView({block:"center"});el.focus();el.select();}
   }
-  const retirer=id=>setComptes(c=>{const x={...c};delete x[id];return x;});
-  const ids=Object.keys(comptes).filter(id=>parId(id));
-  const lignes=ids.sort((a,b)=>comptes[b].t-comptes[a].t);
-  const restants=articles.filter(a=>!comptes[a.id]);
-  const ecarts=lignes.filter(id=>comptes[id].n!==(parId(id).quantite||0));
-  const art=courant?parId(courant):null;
+  function quantiteSuivante(e){
+    e.preventDefault();e.target.blur();setRecherche("");
+    setTimeout(()=>{if(rechercheRef.current)rechercheRef.current.focus();},0);
+  }
   async function enregistrer(){
     if(!qui||envoi.enCours||!lignes.length)return;
     setEnvoi({enCours:true,erreur:null});
@@ -1236,49 +1217,61 @@ function SessionInventaire({articles,techs,qui,setQui,onFermer,onFini,recharger,
     if(!r.ok||!Array.isArray(r.data)){setEnvoi({enCours:false,erreur:"Impossible de lire le stock actuel (connexion ?). Rien n'a été modifié : réessayez."});return;}
     const frais={};r.data.forEach(x=>{frais[x.id]=x.quantite||0;});
     const date=new Date().toLocaleDateString("fr-FR");
-    const corps=lignes.filter(id=>frais[id]!==undefined).map(id=>{
-      const d=comptes[id].n-frais[id];
-      return {article_id:id,type:"inventaire",delta:d,utilisateur:qui,commentaire:d===0?"Inventaire du "+date+" : conforme":"Inventaire du "+date+" : compté "+comptes[id].n};
-    });
-    const w=await appel("POST","stock_mouvements",corps,"return=minimal");
-    if(!w.ok){setEnvoi({enCours:false,erreur:"L'enregistrement n'a pas abouti (connexion ?). Rien n'a été modifié : réessayez."});return;}
+    const corps=lignes.filter(id=>frais[id]!==undefined&&comptes[id].n!==frais[id]).map(id=>({article_id:id,type:"inventaire",delta:comptes[id].n-frais[id],utilisateur:qui,commentaire:"Inventaire du "+date+" : compté "+comptes[id].n}));
+    if(corps.length){
+      const w=await appel("POST","stock_mouvements",corps,"return=minimal");
+      if(!w.ok){setEnvoi({enCours:false,erreur:"L'enregistrement n'a pas abouti (connexion ?). Rien n'a été modifié : réessayez."});return;}
+    }
     ecrireBrouillonInv(null);
     await onFini();
-    const corriges=corps.filter(m=>m.delta!==0).length;
-    afficherToast("✓ Inventaire enregistré : "+corps.length+" référence"+(corps.length>1?"s":"")+" comptée"+(corps.length>1?"s":"")+", "+corriges+" corrigée"+(corriges>1?"s":""));
+    afficherToast(corps.length?"✓ Inventaire enregistré : "+corps.length+" référence"+(corps.length>1?"s":"")+" corrigée"+(corps.length>1?"s":""):"Inventaire terminé : aucune quantité à corriger");
     onFermer(true);
   }
   function fermer(){if(lignes.length&&!quitter){setQuitter(true);return;}onFermer(false);}
-  const infoArt=a=>[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ");
   return(<div className="stk-session">
     <div className="stk-session-tete">
-      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:17}}>📋 Inventaire</div><div className="stk-sub">{lignes.length} comptée{lignes.length>1?"s":""} sur {articles.length}</div></div>
+      {famille&&<button type="button" className="stk-x" onClick={()=>{setFamille(null);setSerie("toutes");setRecherche("");}} aria-label="Changer de catégorie">‹</button>}
+      <div style={{flex:1}}><div style={{fontWeight:700,fontSize:17}}>📋 Inventaire{famille?" — "+LIB_FAMILLE[famille]:""}</div><div className="stk-sub">{famille?visibles.length+" référence"+(visibles.length>1?"s":"")+" affichée"+(visibles.length>1?"s":"")+" · ":""}{lignes.length} corrigée{lignes.length>1?"s":""}</div></div>
       <button type="button" className="stk-x" onClick={fermer} aria-label="Fermer">✕</button>
     </div>
     <div className="stk-session-corps">
-      {quitter&&<div className="stk-alerte" style={{display:"flex",gap:10,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}><span>Le comptage ({lignes.length} référence{lignes.length>1?"s":""}) est gardé sur cette tablette : vous pourrez le reprendre.</span><span style={{display:"flex",gap:8}}><button type="button" className="stk-btn stk-btn--s" onClick={()=>setQuitter(false)}>Continuer</button><button type="button" className="stk-btn stk-btn--s" onClick={()=>onFermer(false)}>Quitter</button><button type="button" className="stk-btn stk-btn--s stk-btn--r" onClick={()=>{ecrireBrouillonInv(null);onFermer(true);}}>Tout effacer</button></span></div>}
-      <ScanneurCode integre continu onCode={traiter}/>
-      {message&&<div className={"stk-msg "+message.type}><span>{message.texte}</span>{message.type==="err"&&<button type="button" className="stk-btn stk-btn--s" onClick={()=>setInconnu(message.code)}>Associer ce code</button>}</div>}
-      <div>
-        <input className="stk-champ" value={manuel} onChange={e=>setManuel(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")entrerManuel();}} placeholder="⌨ Compter à la main : référence (ou douchette)" autoComplete="off"/>
-        {sugg.length>0&&<div className="stk-sugg" style={{marginTop:6}}>{sugg.map(a=><button type="button" key={a.id} className="stk-carte" onClick={()=>{ouvrir(a);setManuel("");}}><div><div className="stk-ref">{a.reference}</div><div className="stk-sub">{infoArt(a)}</div></div><div className="stk-sub">Compter</div></button>)}</div>}
-      </div>
-      {lignes.length===0
-        ?<p className="stk-aide" style={{textAlign:"center",padding:"14px 0"}}>Scannez l'étiquette d'une référence, saisissez la quantité comptée, puis passez à la suivante. À la fin, touchez « Terminer l'inventaire ».</p>
-        :<div className="stk-lignes">{lignes.map(id=>{
-          const a=parId(id),c=comptes[id],th=a.quantite||0,ec=c.n-th;
-          return(<div key={id} className="stk-ligne" style={{gridTemplateColumns:"1fr auto auto"}}>
-            <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>ouvrir(a)}>
+      {quitter&&<div className="stk-alerte" style={{display:"flex",gap:10,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap"}}><span>Vos corrections ({lignes.length} référence{lignes.length>1?"s":""}) sont gardées sur cette tablette : vous pourrez les reprendre.</span><span style={{display:"flex",gap:8}}><button type="button" className="stk-btn stk-btn--s" onClick={()=>setQuitter(false)}>Continuer</button><button type="button" className="stk-btn stk-btn--s" onClick={()=>onFermer(false)}>Quitter</button><button type="button" className="stk-btn stk-btn--s stk-btn--r" onClick={()=>{ecrireBrouillonInv(null);onFermer(true);}}>Tout effacer</button></span></div>}
+      {!famille&&<>
+        <p className="stk-aide">Quelle catégorie voulez-vous inventorier ? La liste s'affiche dans l'ordre des références avec la quantité en stock : corrigez seulement les lignes qui ne correspondent pas à ce que vous comptez en rayon.</p>
+        {familles.map(f=><button type="button" key={f} className="stk-grand stk-grand--i" onClick={()=>setFamille(f)}>{LIB_FAMILLE[f]}<small>{articles.filter(a=>familleDe(a.reference)===f).length} références</small></button>)}
+        {lignes.length>0&&<div className="stk-info">{lignes.length} correction{lignes.length>1?"s":""} en cours, gardée{lignes.length>1?"s":""} sur cette tablette. Choisissez la catégorie pour les retrouver, ou terminez l'inventaire ci-dessous.</div>}
+      </>}
+      {famille&&<>
+        <input ref={rechercheRef} className="stk-champ" value={recherche} onChange={e=>setRecherche(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();allerAQuantite();}}} placeholder="🔍 Référence ou dimensions (ou scanner l'étiquette)" autoComplete="off"/>
+        {series.length>1&&<div className="stk-chips" style={{margin:0}}>
+          <button type="button" className={"stk-chip"+(serie==="toutes"?" on":"")} onClick={()=>choisirSerie("toutes")}>Toutes</button>
+          {series.map(sr=><button type="button" key={sr} className={"stk-chip"+(serie===sr?" on":"")} onClick={()=>choisirSerie(sr)}>{sr}</button>)}
+        </div>}
+        <div className="stk-lignes">{visibles.map(a=>{
+          const v=valeur(a),ec=v-stock(a),change=ec!==0;
+          const edit=edition&&edition.id===a.id;
+          return(<div key={a.id} className="stk-ligne" style={{display:"flex",flexWrap:"wrap",alignItems:"center",justifyContent:"space-between",background:change?"#FFFCF5":"#fff",borderColor:change?"#F3D9A8":"#E2E6EA"}}>
+            <div style={{minWidth:0,flex:"1 1 150px"}}>
               <div className="stk-ref">{a.reference}</div>
-              <div className="stk-sub">{infoArt(a)}</div>
-              <div className="stk-sub">Théorique {th} → compté <b>{c.n}</b></div>
+              <div className="stk-sub">{infoArt(a)}{a.groupe?(infoArt(a)?" · ":"")+"comptée avec "+a.membres.filter(m=>m!==a.reference).join(", "):""}</div>
+              <div className="stk-sub">En stock : <b>{stock(a)}</b></div>
             </div>
-            <span className={"stk-ecart "+(ec===0?"ok":ec>0?"pos":"neg")}>{ec===0?"OK":(ec>0?"+":"")+ec}</span>
-            <button type="button" className="stk-rm" onClick={()=>retirer(id)} aria-label={"Retirer "+a.reference}>✕</button>
+            <div style={{display:"flex",alignItems:"center",gap:6,flex:"0 0 auto"}}>
+              <button type="button" className="stk-x" aria-label={"Une de moins pour "+a.reference} onClick={()=>fixer(a,Math.max(0,v-1))}>−</button>
+              <input id={"inv-"+a.id} className="stk-champ" inputMode="numeric" autoComplete="off" aria-label={"Quantité comptée pour "+a.reference}
+                style={{width:78,minHeight:48,textAlign:"center",fontWeight:700,fontSize:18,borderColor:change?"#E8720C":"#BFC8D4"}}
+                value={edit?edition.texte:String(v)}
+                onFocus={e=>{setEdition({id:a.id,texte:String(v)});e.target.select();}}
+                onChange={e=>{const t=e.target.value.replace(/\D/g,"");setEdition({id:a.id,texte:t});if(t!==""){fixer(a,parseInt(t,10));}}}
+                onBlur={()=>{setEdition(ed=>ed&&ed.id===a.id?null:ed);}}
+                onKeyDown={e=>{if(e.key==="Enter")quantiteSuivante(e);}}/>
+              <button type="button" className="stk-x" aria-label={"Une de plus pour "+a.reference} onClick={()=>fixer(a,v+1)}>+</button>
+              <span className={"stk-ecart "+(ec===0?"ok":ec>0?"pos":"neg")} style={{minWidth:44}}>{ec===0?"OK":(ec>0?"+":"")+ec}</span>
+            </div>
           </div>);
-        })}</div>}
-      <button type="button" className="stk-btn stk-btn--s" onClick={()=>setRestant(r=>!r)}>{restant?"▲ Masquer":"▼ Pas encore comptées ("+restants.length+")"}</button>
-      {restant&&<div className="stk-sugg">{restants.map(a=><button type="button" key={a.id} className="stk-carte" onClick={()=>ouvrir(a)}><div><div className="stk-ref">{a.reference}</div><div className="stk-sub">{infoArt(a)}</div></div><div className="stk-sub">Compter</div></button>)}</div>}
+        })}</div>
+        {visibles.length===0&&<p className="stk-aide" style={{textAlign:"center",padding:"14px 0"}}>Aucune référence ne correspond.</p>}
+      </>}
     </div>
     <div className="stk-session-pied">
       <div style={{display:"flex",gap:10,alignItems:"center"}}>
@@ -1287,27 +1280,14 @@ function SessionInventaire({articles,techs,qui,setQui,onFermer,onFini,recharger,
       </div>
     </div>
 
-    {art&&<div className="stk-voile haut" onClick={e=>{if(e.target===e.currentTarget){setCourant(null);setSaisie("");}}}>
-      <div className="stk-feuille" role="dialog" aria-label={"Comptage "+art.reference}>
-        <div className="stk-feuille-tete"><h2>Combien en stock ?</h2><button type="button" className="stk-x" onClick={()=>{setCourant(null);setSaisie("");}} aria-label="Annuler">✕</button></div>
-        <div className="stk-corps" style={{alignItems:"center",textAlign:"center"}}>
-          <div><div className="stk-ref" style={{fontSize:24}}>{art.reference}</div><div className="stk-sub" style={{fontSize:14}}>{infoArt(art)}</div></div>
-          <input className="stk-gros-input" type="text" inputMode="numeric" value={saisie} onChange={e=>setSaisie(e.target.value.replace(/\D/g,""))} onKeyDown={e=>{if(e.key==="Enter")validerComptage();}} placeholder="0" autoFocus aria-label="Quantité comptée"/>
-          <button type="button" className="stk-btn stk-btn--p" style={{width:"100%"}} disabled={!saisieOk} onClick={validerComptage}>Suivant ▶</button>
-          <p className="stk-aide">Comptez ce qu'il y a réellement en rayon. Tapez 0 s'il n'y en a plus.</p>
-        </div>
-      </div>
-    </div>}
-
     {fin&&<Feuille titre="Terminer l'inventaire" haut onFermer={()=>setFin(false)}>
-      <div className="stk-info"><strong>{lignes.length}</strong> référence{lignes.length>1?"s":""} comptée{lignes.length>1?"s":""}, dont <strong>{ecarts.length}</strong> avec un écart.{restants.length>0&&<> {restants.length} non comptée{restants.length>1?"s":""} : leur stock reste inchangé.</>}</div>
-      {ecarts.length>0&&<div className="stk-histo">{ecarts.map(id=>{const a=parId(id),th=a.quantite||0,ec=comptes[id].n-th;return(<div key={id}><span className="q" style={{minWidth:90}}><b style={{fontFamily:MONO}}>{a.reference}</b></span><span>{th} → <b>{comptes[id].n}</b></span><span className={"stk-ecart "+(ec>0?"pos":"neg")}>{ec>0?"+":""}{ec}</span></div>);})}</div>}
+      <div className="stk-info"><strong>{lignes.length}</strong> référence{lignes.length>1?"s":""} corrigée{lignes.length>1?"s":""}. Les autres gardent leur stock actuel.</div>
+      <div className="stk-histo">{lignes.map(id=>{const a=parId(id),th=stock(a),ec=comptes[id].n-th;return(<div key={id}><span className="q" style={{minWidth:90}}><b style={{fontFamily:MONO}}>{a.reference}</b></span><span>{th} → <b>{comptes[id].n}</b></span><span className={"stk-ecart "+(ec>0?"pos":"neg")}>{ec>0?"+":""}{ec}</span></div>);})}</div>
       {!qui&&<div className="stk-alerte">Choisissez l'opérateur (« Qui ? » en bas de l'écran d'inventaire) pour enregistrer.</div>}
       {envoi.erreur&&<div className="stk-alerte">{envoi.erreur}</div>}
       <button type="button" className="stk-btn stk-btn--v" disabled={!qui||envoi.enCours} onClick={enregistrer}>{envoi.enCours?"Enregistrement…":"Enregistrer dans la base"}</button>
       <button type="button" className="stk-btn" onClick={()=>setFin(false)}>Continuer à compter</button>
     </Feuille>}
-    {inconnu&&<CodeInconnu haut code={inconnu} articles={articles} onFermer={()=>setInconnu(null)} onAssocie={a=>{setInconnu(null);ouvrir(a);}}/>}
   </div>);
 }
 
