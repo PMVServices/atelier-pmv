@@ -1,6 +1,7 @@
 // Page « Maintenance » (profil Maintenance : ne remplit aucune fiche, modifie seulement ce que les autres verront).
 // Les modifications sont préparées en brouillon, puis publiées d'un coup ; elles sont enregistrées en base (config_fiches) et gardées dans un historique.
 import React, {useState, useEffect, useRef} from "react";
+import EditeurRapports from "./EditeurRapports";
 import {configActuelle, surChangementConfig, appliquerConfigEditeur, publierConfig, lireHistorique, statutsAvecConfig, TYPES_AJOUT} from "./configFiches";
 
 const BLEU="#1B4F8A";
@@ -20,7 +21,7 @@ const copie=o=>JSON.parse(JSON.stringify(o));
 const nouvelId=()=>"x_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
 const resume=c=>c.type==="conseil"?"Message : "+String(typeof c.texte==="function"?"(texte calculé)":c.texte||"").slice(0,70):(c.label||c.id);
 
-export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom}){
+export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,rapports}){
   const [onglet,setOnglet]=useState("atelier");
   const [brouillon,setBrouillon]=useState(()=>copie(configActuelle()));
   const [cle,setCle]=useState({atelier:catalogue.atelier[0].cle,chantier:catalogue.chantier[0].cle});
@@ -111,10 +112,10 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom}
 
   return(<div style={{maxWidth:1000,margin:"0 auto",padding:"20px 16px 90px"}}>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 6px"}}>🛠 Maintenance</h2>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>Vous ne remplissez aucune fiche ici : vous changez ce que les autres verront (champs, intitulés, colonnes du planning). Préparez vos modifications puis cliquez sur <b>Publier</b> : elles sont définitives pour toutes les fiches, et vous pouvez revenir en arrière depuis l'historique.</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>Vous ne remplissez aucune fiche ici : vous changez ce que les autres verront (champs, intitulés, colonnes du planning, rapports client). Préparez vos modifications puis cliquez sur <b>Publier</b> : elles sont définitives pour toutes les fiches, et vous pouvez revenir en arrière depuis l'historique.</p>
 
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
-      {[["atelier","📁 Fiches atelier"],["chantier","🏗 Fiches chantier"],["planning","📋 Planning"],["historique","🕘 Historique"]].map(([id,lib])=>
+      {[["atelier","📁 Fiches atelier"],["chantier","🏗 Fiches chantier"],["planning","📋 Planning"],["rapports","📄 Rapports"],["historique","🕘 Historique"]].map(([id,lib])=>
         <button key={id} type="button" onClick={()=>setOnglet(id)} style={pastille(onglet===id)}>{lib}</button>)}
     </div>
 
@@ -177,6 +178,8 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom}
       </div>
     </>}
 
+    {onglet==="rapports"&&rapports&&<EditeurRapports nom={nom} champsDe={rapports.champsDe} categories={rapports.categories} fiches={rapports.fiches} apercu={rapports.apercu}/>}
+
     {onglet==="planning"&&<div style={CARTE}>
       <b style={{fontSize:14}}>Colonnes du planning (statuts des chantiers)</b>
       <p style={{fontSize:12,color:"#6B7280",margin:"4px 0 10px"}}>Renommez, changez la couleur, réordonnez ou ajoutez une colonne. Une colonne existante ne se supprime pas (des fiches peuvent s'y trouver) : renommez-la plutôt.</p>
@@ -200,7 +203,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom}
       </div>))}
     </div>}
 
-    {modifie&&<div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:150,background:"#fff",borderTop:"3px solid "+BLEU,padding:"10px 16px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",justifyContent:"center",boxShadow:"0 -4px 12px rgba(0,0,0,0.12)"}}>
+    {modifie&&onglet!=="rapports"&&<div style={{position:"fixed",left:0,right:0,bottom:0,zIndex:150,background:"#fff",borderTop:"3px solid "+BLEU,padding:"10px 16px",display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",justifyContent:"center",boxShadow:"0 -4px 12px rgba(0,0,0,0.12)"}}>
       <span style={{fontSize:13,fontWeight:600}}>Modifications non publiées</span>
       <button type="button" style={{...BTN,minHeight:42}} disabled={occupe} onClick={publier}>{occupe?"⏳ Publication…":"✔ Publier"}</button>
       <button type="button" style={{...BTN_O,minHeight:42}} disabled={occupe} onClick={annuler}>Annuler les modifications</button>

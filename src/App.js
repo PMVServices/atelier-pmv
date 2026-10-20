@@ -3,6 +3,8 @@ import {genHtml, imprimerFiche, telechargerZip, apercuRapport, afficherApercu, t
 import {cleNr, cleNrJust} from "./etapeNr";
 import {exporterRapportDocx} from "./rapportDocx";
 import {exporterRapportCheminee} from "./rapportLivretDocx";
+import {chargerConfigRapports} from "./configRapports";
+import {typeGenerique} from "./rapportPerso";
 import {lirePlanningLibre, modifierPlanningLibre, nouvelIdLibre, estIdLibre} from "./planningLibre";
 import {apercuRapportCheminee} from "./rapportLivretHtml";
 import {MATERIEL_CHEMINEE_DEFAUT, VERDICTS_CHEMINEE, PHOTOS_RAPPORT_CHEMINEE, SERIES_RAPPORT_CHEMINEE, valeursDepartRapportCheminee, resoudrePhotosCheminee} from "./rapportCheminee";
@@ -2495,7 +2497,55 @@ function BlocPhotoRapport({slot,url,ficheId,uploading,onUpload}){
   </div>);
 }
 
-function PageRapport({ficheId,techs,onRetour}){
+// ─── Rapports client personnalisables (Maintenance → Rapports : configRapports.js, rapportPerso.js) ────
+// champs de la fiche atelier d'un type de matériel, à plat : {id:{type,label,unite}} (sert à écrire une valeur de la fiche dans un rapport)
+function champsRapport(type){
+  const m={};const map=champsPourType(type);
+  Object.keys(map).forEach(e=>map[e].forEach(c=>{if(c.id&&!m[c.id])m[c.id]={type:c.type,label:c.label,unite:c.unite};}));
+  return m;
+}
+// idem en liste pour l'éditeur (sans intertitres, messages, schémas ni conformités calculées)
+function champsRapportListe(type){
+  const out=[];const vus={};const map=champsPourType(type);
+  Object.keys(map).forEach(e=>map[e].forEach(c=>{
+    if(!c.id||vus[c.id]||["titre","conseil","illustration","verdict","calcul"].includes(c.type))return;
+    vus[c.id]=1;
+    out.push({id:c.id,label:c.label||c.id,type:c.type,etape:e,categorie:c.type==="photo_requise"?(c.categorie||c.label):undefined});
+  }));
+  return out;
+}
+// ce que les rapports reçoivent en plus des photos (jamais enregistré) : type de matériel, photos de la fiche, champs, et le brouillon de la Maintenance pour un aperçu
+function metaRapport(type,photosFiche,config){return {type,fiche:photosFiche||[],champs:champsRapport(type),config:config||null};}
+// charge une fiche comme le font les pages de rapport (valeurs, photos, réponses déjà enregistrées) : sert à l'aperçu de la Maintenance
+async function preparerRapport(ficheId,type,config){
+  const [valeurs,fotos,params]=await Promise.all([db.get("fiche_valeurs","?fiche_id=eq."+ficheId),db.get("fiche_photos","?fiche_id=eq."+ficheId+"&order=created_at"),chargerParamsApp()]);
+  const vv={};if(Array.isArray(valeurs))valeurs.forEach(r=>{vv[r.champ_id]=r.valeur;});
+  const photosFiche=Array.isArray(fotos)?fotos.map(p=>({...p,url:db.photoUrl(p.storage_path)})):[];
+  let data,resolues;
+  if(type===TYPE_CHEMINEE){
+    data=valeursDepartRapportCheminee(vv);
+    Object.keys(vv).forEach(k=>{if(k.indexOf(PREFIXE_RAPPORT_CHEMINEE)===0)data[k.slice(PREFIXE_RAPPORT_CHEMINEE.length)]=vv[k];});
+    if(data.materiel_controle===undefined)data.materiel_controle=(params&&params.rapportch_materiel_controle)||MATERIEL_CHEMINEE_DEFAUT;
+    resolues=resoudrePhotosCheminee(photosFiche,data);
+  }else{
+    data={};
+    RAPPORT_TEXT_KEYS.forEach(k=>{if(vv["rapport_"+k]!==undefined)data[k]=vv["rapport_"+k];});
+    RAPPORT_VERDICT_KEYS.forEach(k=>{if(vv["rapport_"+k]!==undefined)data[k]=vv["rapport_"+k];});
+    RAPPORT_PHOTO_SLOTS.forEach(s=>{const k="photo_"+s.key+"_url";if(vv["rapport_"+k]!==undefined)data[k]=vv["rapport_"+k];});
+    if(data.commentaire_apres===undefined)data.commentaire_apres=DEPART_ATELIER_DEFAUT;
+    if(data.materiel_controle===undefined)data.materiel_controle=(params&&params.rapport_materiel_controle)||MATERIEL_CONTROLE_DEFAUT;
+    resolues={};
+    RAPPORT_PHOTO_SLOTS.forEach(s=>{const auto=s.categorie?photosFiche.find(p=>p.categorie_nom===s.categorie):null;resolues[s.key]=auto?auto.url:(data["photo_"+s.key+"_url"]||null);});
+  }
+  resolues._meta=metaRapport(type,photosFiche,config);
+  return {v:vv,data,photos:resolues};
+}
+async function apercuRapportMaintenance(type,ficheId,config){
+  const r=await preparerRapport(ficheId,type,config);
+  if(type===TYPE_CHEMINEE)await apercuRapportCheminee(r.v,r.data,r.photos);else await apercuRapport(r.v,r.data,r.photos);
+}
+
+function PageRapport({ficheId,techs,onRetour,typeMateriel}){
   const [loading,setLoading]=useState(true);
   const [v,setV]=useState({});
   const [photos,setPhotos]=useState([]);
@@ -2546,6 +2596,8 @@ function PageRapport({ficheId,techs,onRetour}){
     const auto=s.categorie?photos.find(p=>p.categorie_nom===s.categorie):null;
     photosResolved[s.key]=auto?auto.url:(data["photo_"+s.key+"_url"]||null);
   });
+  photosResolved._meta=metaRapport(typeMateriel||"Moteur",photos);
+  const generique=typeGenerique(typeMateriel);
 
   async function uploadManuel(slotKey,file){
     if(!file||!ficheId)return;
@@ -2617,7 +2669,8 @@ function PageRapport({ficheId,techs,onRetour}){
     {!ficheId&&<div style={{...S.alert,marginBottom:14}}>⚠ Enregistrez au moins une étape de la fiche avant de remplir le rapport.</div>}
     {saved&&<div style={S.ok}>✅ Rapport enregistré.</div>}
 
-    <div style={{...S.card,border:"1.5px solid #1B4F8A"}}>
+    {generique&&<div style={{...S.card,border:"1.5px solid #1B4F8A"}}><p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Rapport {typeMateriel}</p><p style={{fontSize:11,color:"#6B7280",margin:0}}>Le contenu de ce rapport (titres, textes avec les cases de la fiche, photos) se compose dans la page Maintenance → Rapports. Ici : coordonnées du chantier, signatures et matériel de contrôle, puis aperçu ou export Word.</p></div>}
+    {!generique&&<div style={{...S.card,border:"1.5px solid #1B4F8A"}}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Sections à inclure dans ce rapport</p>
       <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 12px"}}>Informations chantier, sommaire et norme ISO sont toujours inclus. Décochez ce qui ne s'applique pas à cette intervention.</p>
       {RAPPORT_SECTIONS.map(s=>(
@@ -2626,7 +2679,7 @@ function PageRapport({ficheId,techs,onRetour}){
           {s.label}
         </label>
       ))}
-    </div>
+    </div>}
 
     <div style={S.card}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 10px"}}>Informations chantier (à remplir)</p>
@@ -2639,6 +2692,7 @@ function PageRapport({ficheId,techs,onRetour}){
       <div style={{marginBottom:0}}><label style={S.lbl}>Descriptif des travaux réalisés</label><textarea value={data.descriptif_travaux||""} onChange={e=>upd("descriptif_travaux",e.target.value)} style={{...S.inp,minHeight:60,resize:"vertical",fontFamily:"inherit"}}/></div>
     </div>
 
+    {!generique&&<>
     <div style={S.card}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>📷 Photos du rapport</p>
       <div style={{display:"flex",flexWrap:"wrap",gap:16}}>
@@ -2685,6 +2739,7 @@ function PageRapport({ficheId,techs,onRetour}){
       <div style={{marginBottom:10}}><label style={S.lbl}>Départ de nos ateliers — contrôle final</label><textarea value={data.commentaire_apres||""} onChange={e=>upd("commentaire_apres",e.target.value)} placeholder="Ex : L'arbre est protégé et le serrage de la boîte à bornes a été vérifié." style={{...S.inp,minHeight:50,resize:"vertical",fontFamily:"inherit"}}/></div>
       <div style={{marginBottom:0}}><BlocPhotoRapport slot={photoApres} url={photosResolved.apres} ficheId={ficheId} uploading={uploading} onUpload={uploadManuel}/></div>
     </div>
+    </>}
 
     <div style={S.card}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 12px"}}>Signatures</p>
@@ -2767,6 +2822,7 @@ function PageRapportCheminee({ficheId,techs,onRetour}){
   const cheminBase=cheminFiche(v).chemin;
   function upd(k,val){setData(p=>({...p,[k]:val}));}
   const resolues=resoudrePhotosCheminee(photos,data);
+  resolues._meta=metaRapport(TYPE_CHEMINEE,photos);
   const listeMain=cle=>{try{const a=JSON.parse(data["liste_"+cle]||"[]");return Array.isArray(a)?a:[];}catch(e){return [];}};
 
   async function envoyer(file,nom){
@@ -2907,7 +2963,7 @@ function PageRapportCheminee({ficheId,techs,onRetour}){
 
 function PageRapportsListe({fiches,onOpen}){
   const [q,setQ]=useState("");
-  const moteurFiches=fiches.filter(f=>["Moteur","Autre",TYPE_CHEMINEE].includes(f.type_materiel||"Moteur"));
+  const moteurFiches=fiches.filter(f=>["Moteur","Autre","Moto-réducteur","Pompe","Ventilateur",TYPE_CHEMINEE].includes(f.type_materiel||"Moteur"));
   const filtrees=moteurFiches.filter(f=>{
     const qq=q.toLowerCase();
     return !qq||(f.de||"").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq);
@@ -2916,11 +2972,11 @@ function PageRapportsListe({fiches,onOpen}){
   const clientList=Object.keys(parClient).sort();
   return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>📧 Rapports client</h1>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>{moteurFiches.length} fiche{moteurFiches.length>1?"s":""} (moteur, cheminée) · sélectionnez-en une pour créer ou modifier son rapport.</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>{moteurFiches.length} fiche{moteurFiches.length>1?"s":""} · sélectionnez-en une pour créer ou modifier son rapport.</p>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16}}>
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={S.inp}/>
     </div>
-    {clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>Aucune fiche moteur ni cheminée.</div>}
+    {clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>Aucune fiche.</div>}
     {clientList.map(c=>(
       <div key={c} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,padding:"12px 16px"}}>
         <p style={{fontWeight:700,fontSize:14,margin:"0 0 8px"}}>{c}</p>
@@ -3427,7 +3483,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
           <button style={S.p1} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁 Aperçu fiche</button>
           <button style={S.p2} onClick={()=>telechargerHtml(genHtml(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives),"Fiche_"+(v.de||"sans_de")+"_"+(v.client||""))}>⬇ Télécharger</button>
           <button style={{...S.p1,background:"#22863A"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄 Imprimer / PDF</button>
-          {!isPompe&&typeMateriel!=="Ventilateur"&&<button style={{...S.p2,opacity:ficheId?1:0.5}} disabled={!ficheId} onClick={()=>onOpenRapport(ficheId)}>📧 Rapport client</button>}
+          <button style={{...S.p2,opacity:ficheId?1:0.5}} disabled={!ficheId} onClick={()=>onOpenRapport(ficheId)}>📧 Rapport client</button>
           <button style={S.p2} onClick={demanderSortie}>← Retour</button>
         </div>
       </div>
@@ -6106,10 +6162,10 @@ export default function App(){
   const [,setVersionConfig]=useState(0);
   useEffect(()=>{
     const off=surChangementConfig(()=>{synchroniserStatuts();setVersionConfig(x=>x+1);});
-    chargerConfig();
-    const relire=()=>{if(!document.hidden)chargerConfig();};
+    chargerConfig();chargerConfigRapports();
+    const relire=()=>{if(!document.hidden){chargerConfig();chargerConfigRapports();}};
     document.addEventListener("visibilitychange",relire);
-    const t=setInterval(chargerConfig,5*60*1000);
+    const t=setInterval(()=>{chargerConfig();chargerConfigRapports();},5*60*1000);
     return()=>{off();document.removeEventListener("visibilitychange",relire);clearInterval(t);};
   },[]);
 
@@ -6227,6 +6283,7 @@ export default function App(){
         atelier:[["Moteur","Moteur électrique"],["Pompe","Pompe"],["Moto-réducteur","Moto-réducteur"],["Ventilateur","Ventilateur"],[TYPE_CHEMINEE,"Cheminée de freinage"],["Autre","Autre matériel"]].map(([t,l])=>({cle:t,libelle:l,base:()=>champsPourTypeBase(t)})),
         chantier:TYPES_CHANTIER.map(t=>({cle:"ch:"+t,libelle:t,base:()=>champsChantierPourTypeBase(t)}))
       }}
+      rapports={{champsDe:champsRapportListe,categories:(categories||[]).map(c=>c.nom).filter(Boolean),fiches:fiches,apercu:apercuRapportMaintenance}}
       rendreApercu={(liste,etape)=><div>{liste.map(c=><UnChamp key={c.id} c={c} v={{}} onChange={()=>{}} techs={techs} clients={clients} onAddClient={()=>{}} ficheId={null} cheminBase="" photos={[]} onPhotoAdded={()=>{}} onPhotoRemoved={()=>{}} etape={etape}/>)}</div>}/>}
     {page==="dashboard"&&role!=="maintenance"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
     {page==="accueil"&&<EcritureAtelier><PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/></EcritureAtelier>}
@@ -6234,7 +6291,7 @@ export default function App(){
     {page==="fiche"&&<EcritureAtelier><PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/></EcritureAtelier>}
     {page==="planning"&&<EcritureAtelier><PagePlanning fiches={fiches} clients={clients} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onNouvelleFiche={()=>askIdent(t=>{setSessionTech(t);setRetourFiche("planning");setPage("choix");})}/></EcritureAtelier>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
-    {page==="rapport"&&rapportFicheId&&((fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel===TYPE_CHEMINEE?<PageRapportCheminee ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>:<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>)}
+    {page==="rapport"&&rapportFicheId&&((fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel===TYPE_CHEMINEE?<PageRapportCheminee ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>:<PageRapport ficheId={rapportFicheId} typeMateriel={(fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel||"Moteur"} techs={techs} onRetour={()=>setRapportFicheId(null)}/>)}
     {page==="suivi"&&(admin
       ?<PageMateriel pieces={pieces} setPieces={setPieces} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>
       :<PageMesDemandes techs={techs} sessionTech={sessionTech} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>)}

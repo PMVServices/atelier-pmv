@@ -105,6 +105,7 @@ function runsDe(parts, o) {
   return parts.map((p) => {
     if (typeof p === "string") return run(p, o);
     if (p.b !== undefined) return run(p.b, { ...o, bold: true });
+    if (p.rouge !== undefined) return run(p.rouge, { ...o, color: "FF0000" });
     if (p.v === "ok") return run(p.txt, { ...o, bold: true, color: "1E6B2E", shading: { type: ShadingType.CLEAR, fill: "CDEFD4", color: "auto" } });
     if (p.v === "ko") return run(p.txt, { ...o, bold: true, color: "9C1C1C", shading: { type: ShadingType.CLEAR, fill: "F8D0D0", color: "auto" } });
     return run(p.txt, { ...o, bold: true });

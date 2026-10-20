@@ -12,6 +12,9 @@
 //   { t:"iso" }                                 tableau de la norme ISO 10816-3
 // parts = tableau de morceaux : "texte" | { b:"texte en gras" } | { v:"ok"|"ko"|"libre", txt }
 
+import { configDuType } from "./configRapports";
+import { appliquerChapitres, typeGenerique } from "./rapportPerso";
+
 export const SOCIETE = {
   nom: "PMV Services",
   adresse: ["7 rue des entrepreneurs", "37390 La Membrolle sur Choisille"],
@@ -42,6 +45,28 @@ export const BANDE = {
   ],
 };
 
+export const ANCRES_MOTEUR = [
+  { id: "iso", titre: "Norme ISO et identification du matériel", niveau: 1 },
+  { id: "iso.plaque", titre: "Photo plaque moteur", niveau: 2 },
+  { id: "avant", titre: "Mesures avant entretien", niveau: 1 },
+  { id: "avant.arrivee", titre: "Photo à l'arrivée du moteur", niveau: 2 },
+  { id: "avant.essai", titre: "Essai mécanique avant démontage", niveau: 2 },
+  { id: "demontage", titre: "Photo et observation au démontage", niveau: 1 },
+  { id: "mesures", titre: "Mesure des parties mécaniques", niveau: 1 },
+  { id: "electrique", titre: "Rapport électrique du bobinage", niveau: 1 },
+  { id: "apres", titre: "Mesures après entretien", niveau: 1 },
+  { id: "apres.essai", titre: "Essai mécanique après entretien", niveau: 2 },
+  { id: "apres.conso", titre: "Mesure électrique lors des essais en rotation à vide et en charge", niveau: 2 },
+  { id: "conclusion", titre: "Conclusion", niveau: 1 },
+  { id: "conclusion.depart", titre: "Départ de nos ateliers", niveau: 2 },
+  { id: "conclusion.materiel", titre: "Liste du matériel utilisé et date de validité", niveau: 2 },
+];
+// pompe et ventilateur : tout le contenu vient des blocs ajoutés par la Maintenance ; seule la conclusion (signatures, matériel de contrôle) est prévue
+export const ANCRES_GENERIQUE = [
+  { id: "conclusion", titre: "Conclusion et signatures", niveau: 1 },
+  { id: "conclusion.materiel", titre: "Liste du matériel utilisé et date de validité", niveau: 2 },
+];
+
 function clean(val) { return (val || "").replace("Autre:", "").trim(); }
 function has(val) { return val !== undefined && val !== null && String(val).trim() !== ""; }
 
@@ -64,8 +89,12 @@ function capturesAppareil(data) {
   try { const a = JSON.parse((data && data.adx_captures) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; }
 }
 
+// photos._meta (ajouté par les pages de rapport, jamais enregistré) : { type, fiche:[{categorie_nom,url}], champs:{id:{type,label}}, config (brouillon de l'éditeur, sinon la publiée) }
 export function construireRapport(v, data, photos) {
   v = v || {}; data = data || {}; photos = photos || {};
+  const meta = photos._meta || null;
+  const ctxPerso = { v, champs: (meta && meta.champs) || {}, fiche: (meta && meta.fiche) || [] };
+  if (meta && typeGenerique(meta.type)) return construireRapportGenerique(v, data, meta, ctxPerso);
   const txt = (id) => clean(v[id]);
   const num = (id, unite) => (has(v[id]) ? String(v[id]).trim() + (unite ? " " + unite : "") : "");
   // valeur d'isolement "346_GΩ" -> "346 GΩ"
@@ -128,7 +157,7 @@ export function construireRapport(v, data, photos) {
   {
     const b = [{ t: "iso" }];
     if (sec.electrique && (photos.plaque_moteur || descriptionPlaque)) {
-      b.push({ t: "sous", txt: "Photo plaque moteur" });
+      b.push({ t: "sous", id: "iso.plaque", txt: "Photo plaque moteur" });
       if (descriptionPlaque) b.push({ t: "para", parts: [descriptionPlaque] });
       if (photos.plaque_moteur) b.push({ t: "img", url: photos.plaque_moteur, taille: "moyenne" });
     }
@@ -139,7 +168,7 @@ export function construireRapport(v, data, photos) {
   {
     const b = [];
     if (sec.electrique && photos.vue_ensemble) {
-      b.push({ t: "sous", txt: "Photo à l'arrivée du " + (typeLibre ? "matériel" : "moteur") });
+      b.push({ t: "sous", id: "avant.arrivee", txt: "Photo à l'arrivée du " + (typeLibre ? "matériel" : "moteur") });
       b.push({ t: "img", url: photos.vue_ensemble, taille: "grande" });
     }
     if (sec.avant) {
@@ -150,7 +179,7 @@ export function construireRapport(v, data, photos) {
       if (intAvant.length) lignes.push(["Le moteur consomme à vide sous 400 V " + intAvant.join(", ") + " par phase."]);
       const pair = [photos.skf_av_dem && { url: photos.skf_av_dem, legende: "Côté commande" }, photos.skf_ar_dem && { url: photos.skf_ar_dem, legende: "Côté opposé commande" }].filter(Boolean);
       if (pair.length || lignes.length || has(data.commentaire_vibration_avant)) {
-        b.push({ t: "sous", txt: "Essai mécanique avant démontage" });
+        b.push({ t: "sous", id: "avant.essai", txt: "Essai mécanique avant démontage" });
         if (pair.length) b.push({ t: "paire", items: pair });
         if (lignes.length) b.push({ t: "lignes", lignes });
         if (has(data.commentaire_vibration_avant)) b.push({ t: "para", parts: [String(data.commentaire_vibration_avant).trim()] });
@@ -220,7 +249,7 @@ export function construireRapport(v, data, photos) {
     if (num("vib_ar_mms_apres")) vib.push(num("vib_ar_mms_apres", "mm/s") + " COC");
     const pair = [photos.skf_av_rem && { url: photos.skf_av_rem, legende: "CC — côté commande" }, photos.skf_ar_rem && { url: photos.skf_ar_rem, legende: "COC — côté opposé commande" }].filter(Boolean);
     if (vib.length || pair.length) {
-      b.push({ t: "sous", txt: "Essai mécanique après entretien et remplacement des roulements" });
+      b.push({ t: "sous", id: "apres.essai", txt: "Essai mécanique après entretien et remplacement des roulements" });
       if (vib.length) b.push({ t: "para", parts: ["Le moteur vibre à " + vib.join(" et ") + " pour une norme à 3 mm/s."] });
       if (pair.length) b.push({ t: "paire", items: pair });
     }
@@ -234,7 +263,7 @@ export function construireRapport(v, data, photos) {
       conso.push([/^l['’]ensemble/i.test(e) ? e : "L'ensemble est " + e + (/[.!]$/.test(e) ? "" : ".")]);
     }
     if (conso.length) {
-      b.push({ t: "sous", txt: "Mesure électrique lors des essais en rotation à vide et en charge" });
+      b.push({ t: "sous", id: "apres.conso", txt: "Mesure électrique lors des essais en rotation à vide et en charge" });
       b.push({ t: "lignes", lignes: conso });
     }
     ajouter("apres", "Mesures après entretien", b);
@@ -249,19 +278,19 @@ export function construireRapport(v, data, photos) {
     if (ve) lignes.push(["Le moteur est ", ve, " électriquement"]);
     if (lignes.length) b.push({ t: "lignes", lignes });
     if (data.photo_apres_url) b.push({ t: "img", url: data.photo_apres_url, taille: "petite", legende: "Le " + (typeLibre ? "matériel" : "moteur") + " après entretien" });
-    if (has(data.commentaire_apres)) { b.push({ t: "sous", txt: "Départ de nos ateliers" }); b.push({ t: "para", parts: [String(data.commentaire_apres).trim()] }); }
+    if (has(data.commentaire_apres)) { b.push({ t: "sous", id: "conclusion.depart", txt: "Départ de nos ateliers" }); b.push({ t: "para", parts: [String(data.commentaire_apres).trim()] }); }
     const sign = [];
     if (has(data.certifie_par)) sign.push(["Entretien certifié conforme par " + listeEt(data.certifie_par) + " le " + dateRapport]);
     if (has(data.realise_par)) sign.push(["Rapport réalisé par " + listeEt(data.realise_par) + " le " + dateRapport]);
     if (sign.length) b.push({ t: "lignes", lignes: sign, espace: true });
     if (has(data.materiel_controle)) {
-      b.push({ t: "sous", txt: "Liste du matériel utilisé et date de validité pour effectuer ce rapport" });
+      b.push({ t: "sous", id: "conclusion.materiel", txt: "Liste du matériel utilisé et date de validité pour effectuer ce rapport" });
       b.push({ t: "lignes", lignes: String(data.materiel_controle).split(/\r?\n/).map((s) => s.trim()).filter(Boolean).map((s) => [s]), petit: true });
     }
     ajouter("conclusion", "Conclusion", b);
   }
 
-  return {
+  const modele = {
     objet,
     de: txt("de"),
     client: txt("client"),
@@ -272,4 +301,57 @@ export function construireRapport(v, data, photos) {
     chapitres,
     sommaire: chapitres.map((c, i) => (i + 1) + ". " + c.titre),
   };
+  return meta && meta.type ? appliquerChapitres(modele, configDuType(meta.type, meta.config), ctxPerso, ANCRES_MOTEUR) : modele;
+}
+
+// Rapport d'une pompe, d'un ventilateur… : couverture, identification et conclusion automatiques, tout le reste vient de la Maintenance
+function construireRapportGenerique(v, data, meta, ctxPerso) {
+  const txt = (id) => clean(v[id]);
+  const fr = (d) => { try { const x = new Date(d); return isNaN(x.getTime()) ? "" : x.toLocaleDateString("fr-FR"); } catch (e) { return ""; } };
+  const maintenant = new Date();
+  const moisAnnee = has(data.mois_annee) ? String(data.mois_annee).trim() : String(maintenant.getMonth() + 1).padStart(2, "0") + "/" + maintenant.getFullYear();
+  const dateRapport = data.date ? fr(data.date) : fr(maintenant);
+  const lieu = txt("materiel_lieu");
+  const couverture = {
+    titre: "Rapport d'entretien",
+    objet: [meta.type, lieu].filter(Boolean).join(" — "),
+    serie: "",
+    cible: [txt("client"), txt("de")].filter(Boolean).join(" — "),
+    date: moisAnnee,
+  };
+  const identite = [
+    ["Client", txt("client")],
+    ["Référence chantier", txt("de")],
+    ["Adresse du chantier", data.adresse_chantier],
+    ["Contact sur place", data.contact],
+    ["Référence ou localisation", lieu],
+    ["N° / date commande achat", data.commande_achat],
+    ["Bordereau d'expédition", data.bordereau],
+    ["Date de réception", v.date_entree ? fr(v.date_entree) : ""],
+    ["Départ de nos ateliers", data.date_depart ? fr(data.date_depart) : ""],
+    ["Descriptif des travaux réalisés par " + SOCIETE.nom, data.descriptif_travaux],
+  ].filter((f) => has(f[1])).map((f) => ({ k: f[0], v: String(f[1]).trim() }));
+  const chapitres = [];
+  const b = [];
+  const sign = [];
+  if (has(data.certifie_par)) sign.push(["Entretien certifié conforme par " + listeEt(data.certifie_par) + " le " + dateRapport]);
+  if (has(data.realise_par)) sign.push(["Rapport réalisé par " + listeEt(data.realise_par) + " le " + dateRapport]);
+  if (sign.length) b.push({ t: "lignes", lignes: sign, espace: true });
+  if (has(data.materiel_controle)) {
+    b.push({ t: "sous", id: "conclusion.materiel", txt: "Liste du matériel utilisé et date de validité pour effectuer ce rapport" });
+    b.push({ t: "lignes", lignes: String(data.materiel_controle).split(/\r?\n/).map((s) => s.trim()).filter(Boolean).map((s) => [s]), petit: true });
+  }
+  if (b.length) chapitres.push({ id: "conclusion", titre: "Conclusion", blocs: b });
+  const modele = {
+    objet: meta.type,
+    de: txt("de"),
+    client: txt("client"),
+    entete: "Rapport d'entretien — " + [txt("de"), txt("client")].filter(Boolean).join(" — "),
+    couverture,
+    societe: SOCIETE,
+    identite,
+    chapitres,
+    sommaire: chapitres.map((c, i) => (i + 1) + ". " + c.titre),
+  };
+  return appliquerChapitres(modele, configDuType(meta.type, meta.config), ctxPerso, ANCRES_GENERIQUE);
 }

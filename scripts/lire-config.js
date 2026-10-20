@@ -45,6 +45,25 @@ async function lire(cle){
     console.log("\n== Colonnes du planning (dans l'ordre) ==");
     cfg.statuts.forEach(s=>console.log("  "+s.id+" : "+s.label+" ("+s.color+")"));
   }
+  // rapports client personnalisés (onglet « Rapports » de la Maintenance)
+  const brutR=await lire("config_rapports").catch(()=>null);
+  if(brutR&&!process.argv.includes("--json")){
+    try{
+      const r=JSON.parse(brutR).rapports||{};
+      Object.keys(r).forEach(type=>{
+        const c=r[type]||{};
+        console.log("\n== Rapport client — "+type+" ==");
+        (c.masques||[]).forEach(id=>console.log("  rubrique masquée : "+id));
+        Object.keys(c.textes||{}).forEach(id=>console.log("  texte modifié ("+id+") : "+String(c.textes[id]).slice(0,100)));
+        (c.ajouts||[]).forEach(b=>{
+          const contenu=b.type==="photo"?"photos « "+(b.photo&&b.photo.categorie)+" »":String(b.texte||"").replace(/\n/g," / ").slice(0,120);
+          const cond=b.condition&&b.condition.champ?" (si "+b.condition.champ+" "+b.condition.op+(b.condition.valeur?" "+b.condition.valeur:"")+")":"";
+          console.log("  AJOUT avant « "+b.avant+" » ["+b.type+(b.style&&b.style!=="normal"?", "+b.style:"")+"] : "+contenu+cond);
+        });
+      });
+      if(!Object.keys(r).length)console.log("\n== Rapports client : aucune personnalisation ==");
+    }catch(e){console.log("\n(configuration des rapports illisible)");}
+  }else if(!brutR)console.log("\n== Rapports client : aucune personnalisation ==");
   const histo=await lire("config_fiches_historique").catch(()=>null);
   if(histo){try{const h=JSON.parse(histo);console.log("\nHistorique : "+h.length+" version(s) ; dernière publication remplacée le "+(h[0]?new Date(h[0].t).toLocaleString("fr-FR")+" (par "+(h[0].qui||"?")+")":"—"));}catch(e){/* historique illisible : ignoré */}}
 })().catch(e=>{console.error("Erreur : "+e.message);process.exit(1);});

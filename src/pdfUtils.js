@@ -256,6 +256,7 @@ export function genRapportHtml(v,data,photos,images){
     return list.map(function(p){
       if(typeof p==="string")return esc(p);
       if(p.b!==undefined)return "<b>"+esc(p.b)+"</b>";
+      if(p.rouge!==undefined)return "<span style='color:#FF0000'>"+esc(p.rouge)+"</span>";
       if(p.v==="ok")return "<span class='ok'>"+esc(p.txt)+"</span>";
       if(p.v==="ko")return "<span class='ko'>"+esc(p.txt)+"</span>";
       return "<b>"+esc(p.txt)+"</b>";
