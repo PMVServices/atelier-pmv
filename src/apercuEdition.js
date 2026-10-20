@@ -26,11 +26,11 @@ export async function genererHtmlEdition(type,prep,config){
   if(type===TYPE_CHEMINEE){
     const M=construireRapportCheminee(prep.v,prep.data,photos);
     const {images,dims}=await preparerImages(urlsRapportCheminee(M));
-    return genRapportLivretHtml(M,images,dims,{edition:true,ancres:ANCRES_CHEMINEE});
+    return {html:genRapportLivretHtml(M,images,dims,{edition:true,ancres:ANCRES_CHEMINEE}),textes:M.textes||[]};
   }
   const M=construireRapport(prep.v,prep.data,photos);
   const urls=[];
   M.chapitres.forEach(ch=>ch.blocs.forEach(b=>{if(b.url)urls.push(b.url);(b.items||[]).forEach(it=>{if(it.url)urls.push(it.url);});}));
   const {images}=await preparerImages(urls);
-  return genRapportHtml(prep.v,prep.data,photos,images,{modele:M,edition:true,ancres:typeGenerique(type)?ANCRES_GENERIQUE:ANCRES_MOTEUR});
+  return {html:genRapportHtml(prep.v,prep.data,photos,images,{modele:M,edition:true,ancres:typeGenerique(type)?ANCRES_GENERIQUE:ANCRES_MOTEUR}),textes:M.textes||[]};
 }

@@ -10,6 +10,7 @@ export const TYPES_RAPPORT=[
 ];
 export const TYPES_BLOC=[
   ["titre1","Titre de rubrique"],["titre2","Sous-titre"],["texte","Paragraphe"],["lignes","Lignes serrées (une par ligne)"],["photo","Photo(s) de la fiche"],
+  ["identite","Ligne d'identification (page de garde)"],
 ];
 export const STYLES=[["normal","Normal"],["gras","Gras"],["rouge","Rouge (attention)"]];
 export const OPERATEURS=[["rempli","est rempli"],["vide","est vide"],["egal","est égal à"],["different","est différent de"]];
@@ -17,7 +18,7 @@ export const TAILLES_PHOTO=[["petite","Petite"],["moyenne","Moyenne"],["grande",
 // pompe et ventilateur n'avaient pas de rapport : il se compose entièrement ici (couverture, identification et conclusion sont automatiques)
 export const typeGenerique=t=>t==="Pompe"||t==="Ventilateur";
 
-const JETON=/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
+const JETON=/\{\{\s*([A-Za-z0-9_:]+)\s*\}\}/g;
 const vide=s=>s===undefined||s===null||String(s).trim()===""||/^[.\-–—\s]+$/.test(String(s));
 const listeEt=t=>{const l=String(t||"").split(",").map(s=>s.trim()).filter(Boolean);return l.length<=1?(l[0]||""):l.slice(0,-1).join(", ")+" et "+l[l.length-1];};
 
@@ -35,10 +36,33 @@ export function formaterValeur(def,val){
   return s.replace(/^Autre:\s*/,"");
 }
 // remplace {{champ}} par sa valeur ; `manque` : au moins un champ est vide
-export function resoudreJetons(texte,v,champs){
+// {{champ}} = case de la fiche atelier ; {{rapport:cle}} = réponse du formulaire du rapport (data : contact, mois_annee…)
+export function resoudreJetons(texte,v,champs,data){
   let manque=false;
-  const t=String(texte||"").replace(JETON,(m,id)=>{const s=formaterValeur(champs&&champs[id],v&&v[id]);if(!s)manque=true;return s;});
+  const t=String(texte||"").replace(JETON,(m,id)=>{
+    const s=id.indexOf("rapport:")===0?String(data&&data[id.slice(8)]!==undefined&&data[id.slice(8)]!==null?data[id.slice(8)]:"").trim():formaterValeur(champs&&champs[id],v&&v[id]);
+    if(!s)manque=true;
+    return s;
+  });
   return {texte:t,manque};
+}
+
+// Table des textes d'un rapport : chaque morceau de texte écrit dans le code passe par T(id, texte par défaut, variables).
+// Un texte modifié par la Maintenance (textes[id]) remplace le défaut ; il peut contenir des champs {{…}}. Les variables du code s'écrivent {nom} :
+// une variable vide efface aussi l'espace qui la précède. recus = tous les textes demandés (id + texte par défaut), prises() = ceux utilisés depuis le dernier appel
+// (sert à repérer, dans l'aperçu modifiable, quels textes appartiennent à quel bloc).
+export function creerTextes(textes,ctx){
+  const recus=[];const vus={};let pend=[];
+  const T=(id,defaut,vars)=>{
+    if(!vus[id]){vus[id]=1;recus.push({id,defaut});}
+    pend.push(id);
+    const o=textes?textes[id]:undefined;
+    let t=(o===undefined||o===null)?defaut:resoudreJetons(String(o),ctx.v,ctx.champs,ctx.data).texte;
+    if(vars)t=t.replace(/(\s?)\{([A-Za-z_]\w*)\}/g,(m,sp,nom)=>{const x=vars[nom];return (x===undefined||x===null||x==="")?"":sp+x;});
+    return t;
+  };
+  const prises=()=>{const l=pend.filter((x,i)=>pend.indexOf(x)===i);pend=[];return l;};
+  return {T,recus,prises};
 }
 export const jetonsDe=texte=>{const l=[];String(texte||"").replace(JETON,(m,id)=>{if(!l.includes(id))l.push(id);return m;});return l;};
 
@@ -67,7 +91,13 @@ function blocsDepuisAjoutBrut(a,ctx){
     return urls.length?[{k:"photo",urls,taille:a.photo.taille||"moyenne"}]:[];
   }
   const masquer=a.masquerSiVide!==false;
-  const lignes=String(a.texte||"").split(/\r?\n/).map(l=>resoudreJetons(l,v,ctx.champs)).filter(r=>r.texte.trim()&&!(masquer&&r.manque)).map(r=>r.texte.trim());
+  if(a.type==="identite"){
+    const lib=resoudreJetons(a.label,v,ctx.champs,ctx.data).texte.trim();
+    const val=resoudreJetons(a.texte,v,ctx.champs,ctx.data);
+    if(!lib||!val.texte.trim()||(masquer&&val.manque))return [];
+    return [{k:"identite",label:lib,valeur:val.texte.trim()}];
+  }
+  const lignes=String(a.texte||"").split(/\r?\n/).map(l=>resoudreJetons(l,v,ctx.champs,ctx.data)).filter(r=>r.texte.trim()&&!(masquer&&r.manque)).map(r=>r.texte.trim());
   if(!lignes.length)return [];
   if(a.type==="titre1"||a.type==="titre2")return [{k:a.type,txt:lignes.join(" ")}];
   if(a.type==="lignes")return [{k:"lignes",lignes:lignes.map(style)}];
@@ -107,18 +137,21 @@ export function appliquerLivret(M,cfg,ctx,ancres){
     });
     blocs=out;
   }
-  // 2. titres renommés, textes fixes modifiés (les champs {{…}} y sont permis)
-  const res=t=>resoudreJetons(t,ctx.v,ctx.champs).texte;
-  blocs=blocs.map(b=>{
-    const o=b.id?cfg.textes[b.id]:undefined;
-    if(o===undefined||o===null||!String(o).trim())return b;
-    if(b.t==="h1"||b.t==="h2")return {...b,txt:res(String(o).replace(/\r?\n/g," ").trim())};
-    if(b.fixe&&b.t==="para"){const t=res(String(o).replace(/\r?\n/g," ").trim());const p0=b.parts&&b.parts[0];return {...b,parts:[p0&&typeof p0==="object"?("bu" in p0?{bu:t}:("b" in p0?{b:t}:t)):t]};}
-    if(b.fixe&&b.t==="lignes")return {...b,lignes:String(o).split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>[res(l)])};
-    return b;
+  // 2. page d'identification : lignes masquées, lignes ajoutées (juste avant la ligne visée, ou à la fin)
+  let identite=(M.identite||[]).filter(l=>!l.id||!cfg.masques.includes(l.id));
+  const lignesId=ancres.filter(a=>a.kind==="ligne").map(a=>a.id);
+  cfg.ajouts.filter(a=>a.type==="identite").forEach(a=>{
+    const n=blocsDepuisAjout(a,ctx)[0];
+    if(!n)return;
+    const nl={id:"perso:"+a.id,k:n.label,v:n.valeur,ajout:a.id};
+    let i=identite.length;
+    const k0=lignesId.indexOf(a.avant);
+    if(k0>=0)for(let k=k0;k<lignesId.length;k++){const j=identite.findIndex(l=>l.id===lignesId[k]);if(j>=0){i=j;break;}}
+    identite=identite.slice(0,i).concat([nl],identite.slice(i));
   });
   // 3. blocs ajoutés, posés avant leur rubrique (ou la suivante qui existe, ou à la fin)
-  if(cfg.ajouts.length){
+  const ajoutsCorps=cfg.ajouts.filter(a=>a.type!=="identite");
+  if(ajoutsCorps.length){
     const ordre=ancres.map(a=>a.id);
     const indice=id=>{
       if(id==="__debut")return 0;
@@ -128,7 +161,7 @@ export function appliquerLivret(M,cfg,ctx,ancres){
       return blocs.length;
     };
     const devant=new Map();const fin=[];
-    cfg.ajouts.forEach(a=>{
+    ajoutsCorps.forEach(a=>{
       const neutres=blocsDepuisAjout(a,ctx);
       const nouveaux=[].concat(...neutres.map(blocsLivret));
       if(!nouveaux.length)return;
@@ -141,7 +174,7 @@ export function appliquerLivret(M,cfg,ctx,ancres){
     blocs=out.concat(fin);
   }
   const sommaire=blocs.filter(b=>(b.t==="h1"||b.t==="h2")&&b.toc).map(b=>({txt:String(b.txt).replace(/\s*:\s*$/,""),niveau:b.t==="h1"?1:2}));
-  return {...M,blocs,sommaire};
+  return {...M,blocs,sommaire,identite};
 }
 
 // ── rapport « chapitres » (moteur, pompe, ventilateur…) : modèle {chapitres:[{id,titre,blocs}]} ──────────────

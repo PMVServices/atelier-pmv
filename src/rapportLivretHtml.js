@@ -22,7 +22,11 @@ export function genRapportLivretHtml(M,images,dims,opts){
   images=images||{};dims=dims||{};
   var edition=!!(opts&&opts.edition);var kinds={};
   if(edition)(opts.ancres||[]).forEach(function(a){kinds[a.id]=a.kind||(a.niveau===1?"h1":"h2");});
-  function ed(frag,courant,b){return edition?"<div class='ed' data-ancre='"+esc(courant)+"' data-kind='"+esc(kinds[courant]||"")+"'"+(b&&b.ajout?" data-bloc='"+esc(b.ajout)+"'":"")+">"+frag+"</div>":frag;}
+  function ed(frag,courant,b){return edition?"<div class='ed' data-ancre='"+esc(courant)+"' data-kind='"+esc(kinds[courant]||"")+"'"+(b&&b.ajout?" data-bloc='"+esc(b.ajout)+"'":"")+(b&&b.textes&&b.textes.length?" data-textes='"+esc(b.textes.join(","))+"'":"")+">"+frag+"</div>":frag;}
+  // mode édition : repère un élément dont on peut modifier les textes (identifiants de la table des textes)
+  var edc=edition?" ed":"";
+  function tx(ids){return edition?" data-textes='"+esc(ids)+"'":"";}
+  var lib=M.libelles||{sommaire:"Sommaire :",legende:"Légende des couleurs :",descriptif:"Descriptif des travaux réalisés par PMV Services :"};
   var src=function(u){return esc(images[u]||adresseImage(u));};
   var fig=function(u,style,leg){return u?"<figure><img src='"+src(u)+"' style='"+style+"' crossorigin='anonymous'/>"+(leg?"<figcaption>"+esc(leg)+"</figcaption>":"")+"</figure>":"";};
   var accroche="PMV Services, "+M.societe.accroche.replace(/"/g,"'");
@@ -72,21 +76,25 @@ export function genRapportLivretHtml(M,images,dims,opts){
   var svg="<svg viewBox='0 0 "+BANDE.w+" "+BANDE.h+"' preserveAspectRatio='none'>"+BANDE.formes.map(function(f){return "<polygon points='"+f.pts.map(function(p){return p[0]+","+p[1];}).join(" ")+"' fill='"+f.fill+"'/>";}).join("")+"</svg>";
   var C=M.couverture;
   html+="<section class='cover'><img class='logo' src='"+LOGO_B64+"'/>"+svg+
-    "<div class='titre'>"+esc(C.titre)+"</div>"+
+    "<div class='titre"+edc+"'"+tx("couv_titre")+">"+esc(C.titre)+"</div>"+
     "<div class='dessin'><img src='"+src(M.imagesCouverture.cheminee)+"'/></div>"+
     "<div class='client'>"+(C.logoClient?"<img src='"+src(M.imagesCouverture.imateq)+"'/>":esc(C.client))+"</div>"+
-    "<div class='travaux'>"+esc(C.travaux)+"</div>"+
+    "<div class='travaux"+edc+"'"+tx("couv_travaux")+">"+esc(C.travaux)+"</div>"+
     (C.date?"<div class='date'>"+esc(C.date)+"</div>":"")+"</section>";
 
   // identification
-  html+="<section class='page'><div class='societe'><img class='logo' src='"+LOGO_B64+"'/>"+M.societe.lignes.map(function(l){return "<div>"+esc(l)+"</div>";}).join("")+"</div>";
-  M.identite.forEach(function(l){html+="<p class='idl'><b><u>"+esc(l.k.replace(/\s*:$/,""))+(l.k.slice(-1)===":"?" :":"")+"</u></b> "+esc(l.v)+"</p>";});
-  if(M.descriptif)html+="<div class='descr'><div class='t'>Descriptif des travaux réalisés par PMV Services :</div><div class='c'>"+esc(M.descriptif)+"</div></div>";
+  html+="<section class='page'><div class='societe"+edc+"'"+tx("soc_nom,soc_adr1,soc_adr2,soc_tel,soc_mail")+"><img class='logo' src='"+LOGO_B64+"'/>"+M.societe.lignes.map(function(l){return "<div>"+esc(l)+"</div>";}).join("")+"</div>";
+  M.identite.forEach(function(l){
+    var p="<p class='idl'><b><u>"+esc(l.k.replace(/\s*:$/,""))+(l.k.slice(-1)===":"?" :":"")+"</u></b> "+esc(l.v)+"</p>";
+    html+=edition?"<div class='ed' data-ancre='"+esc(l.id||"")+"' data-kind='ligne'"+(l.ajout?" data-bloc='"+esc(l.ajout)+"'":"")+(l.textes&&l.textes.length?" data-textes='"+esc(l.textes.join(","))+"'":"")+">"+p+"</div>":p;
+  });
+  if(M.descriptif)html+="<div class='descr'><div class='t"+edc+"'"+tx("descr_titre")+">"+esc(lib.descriptif)+"</div><div class='c'>"+esc(M.descriptif)+"</div></div>";
   html+="</section>";
 
   // sommaire + légende
-  html+="<section class='page'><div class='sommaire'>Sommaire :</div><ol class='som'>"+M.sommaire.map(function(s){return "<li class='n"+s.niveau+"'>"+esc(s.txt)+"</li>";}).join("")+"</ol>"+
-    "<div class='legende'><div class='t'>Légende des couleurs :</div><table class='leg'><tr>"+M.legende.map(function(l){return "<td><span class='"+l.v+"'>"+esc(l.txt)+"</span></td>";}).join("")+"</tr></table></div></section>";
+  var idsLegende={ok:"verdict_ok",res:"verdict_res",ko:"leg_ko"};
+  html+="<section class='page'><div class='sommaire"+edc+"'"+tx("som_titre")+">"+esc(lib.sommaire)+"</div><ol class='som'>"+M.sommaire.map(function(s){return "<li class='n"+s.niveau+"'>"+esc(s.txt)+"</li>";}).join("")+"</ol>"+
+    "<div class='legende'><div class='t"+edc+"'"+tx("leg_titre")+">"+esc(lib.legende)+"</div><table class='leg'><tr>"+M.legende.map(function(l){return "<td class='"+(edition?"ed":"")+"'"+tx(idsLegende[l.v]||"")+"><span class='"+l.v+"'>"+esc(l.txt)+"</span></td>";}).join("")+"</tr></table></div></section>";
 
   // corps : un seul flux continu
   var page="<section class='page flux'>";
@@ -121,7 +129,8 @@ export function genRapportLivretHtml(M,images,dims,opts){
     }
     if(edition)page=page.slice(0,debut)+ed(page.slice(debut),courant,b);
   });
-  html+=page+"</section>"+(edition?EDITION_SCRIPT:"")+"</body></html>";
+  // pied de page : n'existe qu'à l'impression ; en mode édition on le montre pour pouvoir le modifier
+  html+=page+(edition?"<div class='ed' data-textes='pied' style='margin:10px auto;max-width:210mm;font-size:9pt;color:#6B7280;border-top:1px dashed #D1D5DB;padding-top:4px;'>Pied de page : PMV Services, "+esc(M.societe.accroche)+"</div>":"")+"</section>"+(edition?EDITION_SCRIPT:"")+"</body></html>";
   return html;
 }
 

@@ -2894,6 +2894,7 @@ function PageRapportCheminee({ficheId,techs,onRetour}){
     <div style={S.card}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 10px"}}>Page de garde et identification</p>
       {champTexte("mois_annee","Mois/année (page de garde)","MM/AAAA",200)}
+      {champTexte("contact","Contact (nom, affiché sous « Dates d'entrée »)","Ex : Jean Dupont",320)}
       <div style={{marginBottom:0}}><label style={S.lbl}>Descriptif des travaux réalisés</label><textarea value={data.descriptif_travaux||""} onChange={e=>upd("descriptif_travaux",e.target.value)} style={{...S.inp,minHeight:56,resize:"vertical",fontFamily:"inherit"}}/></div>
     </div>
 

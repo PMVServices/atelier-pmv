@@ -14,41 +14,74 @@ import {RACK_NOMINAL, SERIE_NOMINAL, TOLERANCE, verdictResistance, verdictSerie,
 import {ISOLATEURS_SNCF_PAR_CHEMINEE} from "./railClients";
 import {listeEt} from "./rapportModele";
 import {configDuType} from "./configRapports";
-import {appliquerLivret} from "./rapportPerso";
+import {appliquerLivret, creerTextes} from "./rapportPerso";
 
 export const ANCRES_CHEMINEE=[
+  {id:"couv_titre",titre:"Couverture : titre",niveau:0,kind:"page",texte:"Livret de rapport d'intervention"},
+  {id:"couv_travaux",titre:"Couverture : « Travaux réalisés par… »",niveau:0,kind:"page",texte:"Travaux réalisés par la société PMV Rail"},
+  {id:"soc_nom",titre:"Coordonnées : société",niveau:0,kind:"page",texte:"SARL PMV Rail"},
+  {id:"soc_adr1",titre:"Coordonnées : adresse (ligne 1)",niveau:0,kind:"page",texte:"7 rue des entrepreneurs"},
+  {id:"soc_adr2",titre:"Coordonnées : adresse (ligne 2)",niveau:0,kind:"page",texte:"37390 La Membrolle sur Choisille"},
+  {id:"soc_tel",titre:"Coordonnées : téléphone",niveau:0,kind:"page",texte:"Tél : 09 67 37 27 24"},
+  {id:"soc_mail",titre:"Coordonnées : e-mail",niveau:0,kind:"page",texte:"agence@pmvservices.fr"},
+  {id:"pied",titre:"Pied de page (après « PMV Services, »)",niveau:0,kind:"page",texte:"votre spécialiste de l'entretien du moteur électrique et annexe"},
+  {id:"id.chantier",titre:"Ligne : Chantier",niveau:0,kind:"ligne",texte:"Chantier :"},
+  {id:"id.ref",titre:"Ligne : Ref cheminée",niveau:0,kind:"ligne",texte:"Ref cheminée :"},
+  {id:"id.engin",titre:"Ligne : N° d'engin (ou de loco)",niveau:0,kind:"ligne",texte:"N°d'engin :"},
+  {id:"id.symbole",titre:"Ligne : Symbole (SNCF)",niveau:0,kind:"ligne",texte:"Symbole :"},
+  {id:"id.bl",titre:"Ligne : Bon de livraison",niveau:0,kind:"ligne",texte:"Bon de livraison :"},
+  {id:"id.entree",titre:"Ligne : Dates d'entrée",niveau:0,kind:"ligne",texte:"Dates d'entrée :"},
+  {id:"id.contact",titre:"Ligne : Contact",niveau:0,kind:"ligne",texte:"Contact :"},
+  {id:"id.dispo",titre:"Ligne : Date de mise à disposition",niveau:0,kind:"ligne",texte:"Date de mise à disposition :"},
+  {id:"id.site",titre:"Ligne : Site de livraison",niveau:0,kind:"ligne",texte:"Site de livraison :"},
+  {id:"descr_titre",titre:"Page d'identification : titre du descriptif",niveau:0,kind:"page",texte:"Descriptif des travaux réalisés par PMV Services :"},
+  {id:"som_titre",titre:"Sommaire : titre",niveau:0,kind:"page",texte:"Sommaire :"},
+  {id:"leg_titre",titre:"Légende des couleurs : titre",niveau:0,kind:"page",texte:"Légende des couleurs :"},
   {id:"palettisation",titre:"Contrôle visuel de la palettisation à la réception",niveau:1,kind:"h1"},
-  {id:"deballage",titre:"Contrôle visuel du matériel après déballage dans nos ateliers",niveau:2,kind:"h2"},
-  {id:"defauts",titre:"Défauts constatés",niveau:2,kind:"h2"},
-  {id:"releve",titre:"Relevé des informations, identification et numéros de série",niveau:2,kind:"h2"},
-  {id:"demontage_elements",titre:"Démontage des éléments",niveau:2,kind:"h2"},
+  {id:"deballage",titre:"Contrôle visuel du matériel après déballage dans nos ateliers",niveau:2,kind:"h2",texte:"Contrôle visuel du matériel après déballage dans nos ateliers :"},
+  {id:"defauts",titre:"Défauts constatés",niveau:2,kind:"h2",texte:"Défauts constatés :"},
+  {id:"releve",titre:"Relevé des informations, identification et numéros de série",niveau:2,kind:"h2",texte:"Relevé des informations, identification et numéros de série :"},
+  {id:"demontage_elements",titre:"Démontage des éléments",niveau:2,kind:"h2",texte:"Démontage des éléments :"},
   {id:"txt_separation",titre:"Séparation du bloc de ventilation au bloc de résistance : ( avant nettoyage)",niveau:0,kind:"texte"},
   {id:"expertise",titre:"Démontage et expertise du moteur électrique",niveau:1,kind:"h1"},
   {id:"txt_expertise",titre:"Essai du moteur séparément avec prise des mesures vibratoires et spectrales puis mesure électrique et métrologique.",niveau:0,kind:"texte"},
-  {id:"statique",titre:"Mesure électrique statique",niveau:2,kind:"h2"},
-  {id:"champ_magnetique",titre:"Mesure de champ magnétique",niveau:2,kind:"h2"},
-  {id:"adx_pv",titre:"Mesure électrique statique en PV",niveau:2,kind:"h2"},
-  {id:"adx_gv",titre:"Mesure électrique statique en GV",niveau:2,kind:"h2"},
-  {id:"mecanique",titre:"Partie mécanique du moteur",niveau:1,kind:"h1"},
+  {id:"statique",titre:"Mesure électrique statique",niveau:2,kind:"h2",texte:"Mesure électrique statique :"},
+  {id:"champ_magnetique",titre:"Mesure de champ magnétique",niveau:2,kind:"h2",texte:"Mesure de champ magnétique :"},
+  {id:"adx_pv",titre:"Mesure électrique statique en PV",niveau:2,kind:"h2",texte:"Mesure électrique statique en PV :"},
+  {id:"adx_gv",titre:"Mesure électrique statique en GV",niveau:2,kind:"h2",texte:"Mesure électrique statique en GV :"},
+  {id:"mecanique",titre:"Partie mécanique du moteur",niveau:1,kind:"h1",texte:"Partie mécanique du moteur :"},
   {id:"txt_mecanique",titre:"Mesure électrique, vibratoire et spectral en rotation avant démontage :",niveau:0,kind:"texte"},
   {id:"apres_entretien",titre:"Mesure électrique et vibratoire en rotation après entretien",niveau:2,kind:"h2"},
-  {id:"conclusion_moteur",titre:"Conclusion moteur",niveau:2,kind:"h2"},
-  {id:"resistances",titre:"Mesure électrique d'isolement et de résistif sur les résistances",niveau:1,kind:"h1"},
-  {id:"iso_rack",titre:"Isolement des résistances par rack",niveau:2,kind:"h2"},
+  {id:"conclusion_moteur",titre:"Conclusion moteur",niveau:2,kind:"h2",texte:"Conclusion moteur :"},
+  {id:"resistances",titre:"Mesure électrique d'isolement et de résistif sur les résistances",niveau:1,kind:"h1",texte:"Mesure électrique d'isolement et de résistif sur les résistances :"},
+  {id:"iso_rack",titre:"Isolement des résistances par rack",niveau:2,kind:"h2",texte:"Isolement des résistances par rack :"},
   {id:"txt_iso_rack",titre:"Tableau de rapport de test haut tension à 5 et 10 kV pour chaque rack…",texte:"Tableau de rapport de test haut tension à 5 et 10 kV pour chaque rack entre l'isolateur et la résistance suivant la recommandation (fig. 6) après nettoyage et étuvage des résistances :",niveau:0,kind:"texte"},
-  {id:"deflecteur",titre:"Déflecteur d'air suivant préconisation",niveau:2,kind:"h2"},
-  {id:"iso_lot",titre:"Isolement des résistances par lot de 4 racks",niveau:2,kind:"h2"},
+  {id:"deflecteur",titre:"Déflecteur d'air suivant préconisation",niveau:2,kind:"h2",texte:"Déflecteur d'air suivant préconisation :"},
+  {id:"iso_lot",titre:"Isolement des résistances par lot de 4 racks",niveau:2,kind:"h2",texte:"Isolement des résistances par lot de 4 racks :"},
   {id:"txt_lots_1",titre:"Tableau de rapport d'isolement à haute tension de 5 à 10kV entre chaque lot de résistance et la masse :",niveau:0,kind:"texte"},
   {id:"txt_lots_2",titre:"Tableau de rapport d'isolement à haute tension de 5 à 10kV entre chaque lot de résistances partielles…",texte:"Tableau de rapport d'isolement à haute tension de 5 à 10kV entre chaque lot de résistances partielles (Rack 1 haut ) et (Rack 2 bas ) :",niveau:0,kind:"texte"},
-  {id:"partielles",titre:"Mesure des résistances et micro résistif partielles globale",niveau:2,kind:"h2"},
+  {id:"partielles",titre:"Mesure des résistances et micro résistif partielles globale",niveau:2,kind:"h2",texte:"Mesure des résistances et micro résistif partielles globale :"},
   {id:"txt_serie",titre:"Valeur de référence des résistances en série",niveau:0,kind:"texte"},
-  {id:"unitaire",titre:"Tableau de rapport de résistance ohmique de chaque rack (Unitaire)",niveau:2,kind:"h2"},
-  {id:"conclusion_resistances",titre:"Conclusion sur les résistances",niveau:2,kind:"h2"},
-  {id:"conclusion_generale",titre:"Conclusion générale",niveau:1,kind:"h1"},
+  {id:"unitaire",titre:"Tableau de rapport de résistance ohmique de chaque rack (Unitaire)",niveau:2,kind:"h2",texte:"Tableau de rapport de résistance ohmique de chaque rack (Unitaire) :"},
+  {id:"conclusion_resistances",titre:"Conclusion sur les résistances",niveau:2,kind:"h2",texte:"Conclusion sur les résistances :"},
+  {id:"conclusion_generale",titre:"Conclusion générale",niveau:1,kind:"h1",texte:"Conclusion générale :"},
   {id:"depart",titre:"Départ de nos ateliers (photos et transport)",texte:"Départ de nos ateliers :",niveau:0,kind:"texte"},
   {id:"signatures",titre:"Travaux et rapport réalisés par / Vérification de l'ensemble",niveau:0,kind:"bloc"},
   {id:"pour_rappel",titre:"Pour rappel : nous n'intervenons que sur le moteur électrique…",texte:"Pour rappel :\nNous n'intervenons que sur le moteur électrique de la boîte à bornes du ventilateur et uniquement sur les résistances internes.\nLes éléments périphériques à la cheminée ne sont ni contrôlés ni vérifiés (capteur de pression, prise Harting du capteur, colliers divers, etc.)\nAinsi que les pièces mécaniques périphériques.",niveau:0,kind:"texte"},
   {id:"materiel",titre:"Liste du matériel utilisé et date de validité",texte:"Liste du matériel utilisé et date de validité pour effectuer ce rapport :",niveau:0,kind:"texte"},
+];
+
+// Réponses du formulaire du rapport utilisables dans un texte : {{rapport:cle}} (menu « Formulaire du rapport » de l'éditeur)
+export const CHAMPS_FORMULAIRE_CHEMINEE=[
+  {id:"rapport:contact",label:"Contact (nom)"},
+  {id:"rapport:mois_annee",label:"Mois / année de la page de garde"},
+  {id:"rapport:descriptif_travaux",label:"Descriptif des travaux"},
+  {id:"rapport:res_type",label:"Résistance de freinage : type"},
+  {id:"rapport:res_numero",label:"Résistance de freinage : N°"},
+  {id:"rapport:vent_type",label:"Ventilateur MDEXX : type"},
+  {id:"rapport:vent_numero",label:"Ventilateur MDEXX : N° de fabrication"},
+  {id:"rapport:realise_par",label:"Travaux et rapport réalisés par"},
+  {id:"rapport:certifie_par",label:"Vérification de l'ensemble"},
 ];
 
 export const SOCIETE_RAIL={
@@ -123,7 +156,6 @@ function intensites(v,prefixe){
   if(unique(l).length===1)return l[0];
   return listeEt(l.join(","));
 }
-const ampere=(v,prefixe)=>{const t=intensites(v,prefixe);return t?t+" Ampères par phases sous 400V":"";};
 function verdictPortees(v){
   const etats=["etat_arbre_av","etat_arbre_ar","etat_flasque_av","etat_flasque_ar"].map(k=>v[k]).filter(Boolean);
   if(!etats.length)return "";
@@ -143,6 +175,7 @@ export function valeursDepartRapportCheminee(v){
   d.res_type=has(v.res_type)?String(v.res_type).trim():TYPE_RESISTANCE_DEFAUT;
   if(has(v.vent_type))d.vent_type=String(v.vent_type).trim();
   d.defauts_texte=has(v.deballage_obs)?String(v.deballage_obs).trim():"";
+  if(has(v.contact))d.contact=clean(v.contact);
   d.verdict_onde="Conforme";
   const vp=verdictPortees(v);if(vp)d.verdict_portees=vp;
   d.etat_rou_av=etatRoulement(v.etat_roulement_av);
@@ -186,21 +219,14 @@ export function resoudrePhotosCheminee(photosFiche,data){
   return out;
 }
 
-function partsVerdict(nom){
-  if(nom==="Conforme")return {v:"ok",txt:"Conforme"};
-  if(nom==="Conforme sous réserve")return {v:"res",txt:"Conforme sous réserve"};
-  if(nom==="Non conforme")return {v:"ko",txt:"Non conforme"};
-  return null;
-}
-const cellule=(texte,verdict)=>{
-  const p=partsVerdict(verdict);
-  return p?{txt:p.txt,v:p.v,taille:9}:{txt:texte,taille:9};
-};
-// verdict calculé {texte, ok} (Cheminee.js) -> cellule
-const celluleCalc=r=>r.ok===true?{txt:"Conforme",v:"ok",taille:9}:r.ok===false?{txt:"Non conforme",v:"ko",taille:9}:{txt:r.texte==="—"?"":"À compléter",taille:9};
-
 export function construireRapportCheminee(v,data,photos){
   v=v||{};data=data||{};photos=photos||{};
+  // photos._meta (ajouté par les pages de rapport, jamais enregistré) : voir rapportModele.js ; sans lui, aucune personnalisation
+  const meta=photos._meta||null;
+  const cfg=configDuType(meta&&meta.type,meta&&meta.config);
+  const ctxPerso={v,data,champs:(meta&&meta.champs)||{},fiche:(meta&&meta.fiche)||[]};
+  // table des textes : chaque morceau de texte du rapport passe par T(id, texte par défaut, variables) — la Maintenance peut tous les modifier
+  const {T,recus,prises}=creerTextes(meta&&meta.type?cfg.textes:{},ctxPerso);
   const sncf=v.cheminee_origine==="SNCF";
   const txt=id=>clean(v[id]);
   const d=id=>has(data[id])?String(data[id]).trim():"";
@@ -209,144 +235,171 @@ export function construireRapportCheminee(v,data,photos){
   const cols=colonnesResistances(v);
   const certifie=d("certifie_par"),realise=d("realise_par");
   const par=listeEt(certifie).split(/,| et /)[0].trim();
-  const parTxt=par?" (par "+par+")":"";
   const moisAnnee=d("mois_annee")||moisAnneeDe(v.date_mise_dispo);
   const noms=p=>p.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 
+  // mots des verdicts (les couleurs restent liées au sens : vert / jaune / rouge)
+  const estVerdict=nom=>nom==="Conforme"||nom==="Conforme sous réserve"||nom==="Non conforme";
+  const partsVerdict=nom=>nom==="Conforme"?{v:"ok",txt:T("verdict_ok","Conforme")}:nom==="Conforme sous réserve"?{v:"res",txt:T("verdict_res","Conforme sous réserve")}:nom==="Non conforme"?{v:"ko",txt:T("verdict_ko","Non conforme")}:null;
+  const celluleCalc=(r,taille)=>r.ok===true?{txt:T("verdict_ok","Conforme"),v:"ok",taille}:r.ok===false?{txt:T("verdict_ko","Non conforme"),v:"ko",taille}:{txt:r.texte==="—"?"":T("a_completer","À compléter"),taille};
+  const parGras=()=>({b:par?T("par"," (par {nom})",{nom:par}):""});   // « (par CD) » en gras
+  const parOpt=()=>par?{b:T("par"," (par {nom})",{nom:par})}:"";
+
+  // ── couverture, société, libellés des pages (textes modifiables) ──
+  const couverture={titre:T("couv_titre","Livret de rapport d'intervention"),client:txt("client"),logoClient:/imateq/i.test(txt("client")),travaux:T("couv_travaux","Travaux réalisés par la société PMV Rail"),date:moisAnnee};
+  const zoneCouverture=prises();
+  const societe={lignes:[T("soc_nom","SARL PMV Rail"),T("soc_adr1","7 rue des entrepreneurs"),T("soc_adr2","37390 La Membrolle sur Choisille"),T("soc_tel","Tél : 09 67 37 27 24"),T("soc_mail","agence@pmvservices.fr")],accroche:T("pied","votre spécialiste de l'entretien du moteur électrique et annexe")};
+  const zoneSociete=prises();
+  const libelles={sommaire:T("som_titre","Sommaire :"),legende:T("leg_titre","Légende des couleurs :"),descriptif:T("descr_titre","Descriptif des travaux réalisés par PMV Services :")};
+  prises(); // ces trois titres sont repérés dans l'aperçu par leur identifiant fixe
+  const legende=[{v:"ok",txt:T("verdict_ok","Conforme")},{v:"res",txt:T("verdict_res","Conforme sous réserve")},{v:"ko",txt:T("leg_ko","Non conforme (irréparables)")}];
+  prises();
+
+  // ── page d'identification : une ligne = un identifiant (masquable, ajoutable depuis la Maintenance) ──
   const noEngin=sncf?txt("n_engin"):txt("n_loco");
   const bl=has(v.bon_livraison)?txt("bon_livraison"):"";
-  const identite=[
-    ["Chantier :",txt("de")],
-    ["Ref cheminée :",txt("n_cheminee")],
-    ["N°d'engin :",noEngin],
-    ...(sncf?[["Symbole :",txt("symbole")]]:[]),
-    ["Bon de livraison :",bl],
-    ["Dates d'entrée :",v.date_entree?"le "+dateFr(v.date_entree):""],
-    ["Date de mise à disposition :",moisAnneeDe(v.date_mise_dispo)],
-    ["Site de livraison :",txt("site_livraison")],
-  ].filter(l=>has(l[1])).map(l=>({k:l[0],v:String(l[1]).trim()}));
+  const contact=d("contact")||(has(v.contact)?clean(v.contact):"");
+  const lignesIdentite=[
+    {id:"id.chantier",def:"Chantier :",brut:txt("de")},
+    {id:"id.ref",def:"Ref cheminée :",brut:txt("n_cheminee")},
+    {id:"id.engin",def:"N°d'engin :",brut:noEngin},
+    ...(sncf?[{id:"id.symbole",def:"Symbole :",brut:txt("symbole")}]:[]),
+    {id:"id.bl",def:"Bon de livraison :",brut:bl},
+    {id:"id.entree",def:"Dates d'entrée :",brut:v.date_entree?"x":"",fmt:()=>T("id_entree_valeur","le {date}",{date:dateFr(v.date_entree)})},
+    {id:"id.contact",def:"Contact :",brut:contact},
+    {id:"id.dispo",def:"Date de mise à disposition :",brut:moisAnneeDe(v.date_mise_dispo)},
+    {id:"id.site",def:"Site de livraison :",brut:txt("site_livraison")},
+  ];
+  const identite=lignesIdentite.filter(l=>has(l.brut)).map(l=>{
+    const valeur=String(l.fmt?l.fmt():l.brut).trim();
+    return {id:l.id,k:T(l.id,l.def),v:valeur,textes:prises()};
+  });
 
+  // ── blocs du rapport : chaque bloc retient les textes (T) qu'il utilise, pour l'aperçu modifiable ──
   const blocs=[];
-  const h1=(t,o)=>blocs.push({t:"h1",txt:t,toc:true,...o});
-  const h2=(t,o)=>blocs.push({t:"h2",txt:t,...o});
-  const para=(parts,o)=>blocs.push({t:"para",parts:Array.isArray(parts)?parts:[parts],...o});
-  const lignes=(l,o)=>blocs.push({t:"lignes",lignes:l.map(x=>Array.isArray(x)?x:[x]),...o});
-  const img=(url,w,h)=>{if(url)blocs.push({t:"img",url,w,h});};
-  const rang=(urls,h)=>{const items=urls.filter(Boolean).map(u=>({url:u}));if(items.length)blocs.push({t:"rang",items,h});};
+  const poser=b=>{const tx=prises();if(tx.length)b.textes=tx;blocs.push(b);};
+  const h1=(id,defaut,o)=>poser({t:"h1",txt:T(id,defaut),toc:true,id,...o});
+  const h2=(id,defaut,o)=>poser({t:"h2",txt:T(id,defaut),id,...o});
+  const para=(parts,o)=>poser({t:"para",parts:Array.isArray(parts)?parts:[parts],...o});
+  const lignes=(l,o)=>poser({t:"lignes",lignes:l.map(x=>Array.isArray(x)?x:[x]),...o});
+  const img=(url,w,h)=>{if(url)poser({t:"img",url,w,h});};
+  const rang=(urls,h)=>{const items=urls.filter(Boolean).map(u=>({url:u}));if(items.length)poser({t:"rang",items,h});};
+  const tab=o=>poser({t:"table",...o});
 
   // ── 1. palettisation, déballage, identification, démontage ────────
-  h1("Contrôle visuel de la palettisation à la réception",{saut:true,id:"palettisation"});
-  if(v.palettisation_conforme==="Oui"||v.palettisation_conforme==="Non")para(["Résultat palettisation : ",partsVerdict(v.palettisation_conforme==="Oui"?"Conforme":"Non conforme")]);
+  h1("palettisation","Contrôle visuel de la palettisation à la réception",{saut:true});
+  if(v.palettisation_conforme==="Oui"||v.palettisation_conforme==="Non")para([T("pal_resultat","Résultat palettisation : "),partsVerdict(v.palettisation_conforme==="Oui"?"Conforme":"Non conforme")]);
   img(photos.palette,9,12);
-  h2("Contrôle visuel du matériel après déballage dans nos ateliers :",{toc:true,leger:true,id:"deballage"});
-  h2("Défauts constatés :",{toc:true,leger:true,id:"defauts"});
+  h2("deballage","Contrôle visuel du matériel après déballage dans nos ateliers :",{toc:true,leger:true});
+  h2("defauts","Défauts constatés :",{toc:true,leger:true});
   const defautsTexte=noms(d("defauts_texte"));
-  if(defautsTexte.length)lignes(defautsTexte);else para("-Aucun défaut");
+  if(defautsTexte.length)lignes(defautsTexte);else para(T("aucun_defaut","-Aucun défaut"));
   rang(photos.defauts||[],7);
 
-  h2("Relevé des informations, identification et numéros de série :",{toc:true,id:"releve"});
+  h2("releve","Relevé des informations, identification et numéros de série :",{toc:true});
   const resType=d("res_type"),resNum=d("res_numero");
-  if(resType||resNum)lignes(["Résistance de freinage"+(resType?" "+resType:""),"Indication relevée sur la machine :",["Type"+(resType?" "+resType:"")+(resNum?"  N° "+resNum:"")]]);
+  if(resType||resNum)lignes([[T("res_freinage","Résistance de freinage {type}",{type:resType})],[T("res_indication","Indication relevée sur la machine :")],[T("res_type","Type {type}",{type:resType})+(resNum?T("res_num","  N° {numero}",{numero:resNum}):"")]]);
   img(photos.plaque_res,8,7);
-  if(has(v.n_cheminee))para("N°"+txt("n_cheminee"));
+  if(has(v.n_cheminee))para(T("res_numero_cheminee","N°{numero}",{numero:txt("n_cheminee")}));
   const ventType=d("vent_type"),ventNum=d("vent_numero");
   if(ventType||ventNum||photos.plaque_vent){
-    lignes(["MDEXX",...(ventType?["Type : "+ventType]:[]),...(ventNum?["N° de fabrication : "+ventNum]:[])]);
+    lignes([T("mdexx","MDEXX"),...(ventType?[T("mdexx_type","Type : {type}",{type:ventType})]:[]),...(ventNum?[T("mdexx_num","N° de fabrication : {numero}",{numero:ventNum})]:[])]);
     img(photos.plaque_vent,8,7);
   }
   {
     const deux=txt("vitesse").indexOf("/")>=0;
     const marque=txt("marque_moteur");
-    const l=[["Information moteur : Moteur"+(marque?" de marque "+marque.toUpperCase():"")+(deux?" de type Dahlender":"")]];
-    if(txt("type_moteur"))l.push(["Type : "+txt("type_moteur")]);
-    if(txt("numero_serie"))l.push(["N° : "+txt("numero_serie")]);
-    const carac=[deux?"Moteur deux vitesses":"Moteur",txt("vitesse")?txt("vitesse")+" tr/mn":"",txt("tension")?"moteur "+txt("tension"):"",txt("puissance")?txt("puissance")+" kW":""].filter(Boolean);
-    if(carac.length>1||(carac.length===1&&!deux))l.push([carac.join(" ")]);
+    const l=[[T("mot_info","Information moteur : Moteur {marque} {dahlender}",{marque:marque?"de marque "+marque.toUpperCase():"",dahlender:deux?"de type Dahlender":""})]];
+    if(txt("type_moteur"))l.push([T("mot_type","Type : {type}",{type:txt("type_moteur")})]);
+    if(txt("numero_serie"))l.push([T("mot_numero","N° : {numero}",{numero:txt("numero_serie")})]);
+    const vars={moteur:deux?"Moteur deux vitesses":"Moteur",vitesse:txt("vitesse")?txt("vitesse")+" tr/mn":"",tension:txt("tension")?"moteur "+txt("tension"):"",puissance:txt("puissance")?txt("puissance")+" kW":""};
+    const nbCarac=Object.keys(vars).filter(k=>vars[k]).length;
+    if(nbCarac>1||(nbCarac===1&&!deux))l.push([T("mot_carac","{moteur} {vitesse} {tension} {puissance}",vars)]);
     lignes(l);
     img(photos.plaque_moteur,8,7);
   }
-  h2("Démontage des éléments :",{toc:true,id:"demontage_elements"});
-  para("Séparation du bloc de ventilation au bloc de résistance : ( avant nettoyage)",{id:"txt_separation",fixe:true});
+  h2("demontage_elements","Démontage des éléments :",{toc:true});
+  para(T("txt_separation","Séparation du bloc de ventilation au bloc de résistance : ( avant nettoyage)"),{id:"txt_separation"});
   rang(photos.desaccouplage||[],5.6);
 
   // ── 2. moteur : expertise, mesures statiques ──────────────────────
-  h1("Démontage et expertise du moteur électrique",{id:"expertise"});
-  para("Essai du moteur séparément avec prise des mesures vibratoires et spectrales puis mesure électrique et métrologique.",{id:"txt_expertise",fixe:true});
+  h1("expertise","Démontage et expertise du moteur électrique");
+  para(T("txt_expertise","Essai du moteur séparément avec prise des mesures vibratoires et spectrales puis mesure électrique et métrologique."),{id:"txt_expertise"});
   if(photos.stator_av||photos.stator_ar){
-    const items=[photos.stator_av&&{url:photos.stator_av,legende:"Stator avant"},photos.stator_ar&&{url:photos.stator_ar,legende:"Stator arrière"}].filter(Boolean);
-    blocs.push({t:"rang",items,h:6.5,legendes:true});
+    const items=[photos.stator_av&&{url:photos.stator_av,legende:T("stator_av","Stator avant")},photos.stator_ar&&{url:photos.stator_ar,legende:T("stator_ar","Stator arrière")}].filter(Boolean);
+    poser({t:"rang",items,h:6.5,legendes:true});
   }
   {
     // isolement du moteur (fiche : « Isolement masse enroulement sous 1 kV (UVW) », à l'arrivée puis après étuvage)
     const avant=ohm("isol_masse"),apres=ohm("isol_masse_ap");
-    const dar=id=>has(v[id])?" ; DAR : "+String(v[id]).trim():"";
+    const dar=id=>has(v[id])?T("stat_dar"," ; DAR : {dar}",{dar:String(v[id]).trim()}):"";
     const l=[];
-    if(avant)l.push(["Mesure d'isolement moteur à l'arrivée : "+avant+"/1000V"+dar("isol_masse_dar")]);
-    if(apres)l.push(["Mesure d'isolement moteur après étuvage : "+apres+"/1000V"+dar("isol_masse_dar_ap")]);
-    if(l.length){h2("Mesure électrique statique :",{toc:true,id:"statique"});lignes(l,{id:"statique"});}
+    if(avant)l.push([T("stat_arrivee","Mesure d'isolement moteur à l'arrivée : {isolement}/1000V",{isolement:avant})+dar("isol_masse_dar")]);
+    if(apres)l.push([T("stat_apres","Mesure d'isolement moteur après étuvage : {isolement}/1000V",{isolement:apres})+dar("isol_masse_dar_ap")]);
+    if(l.length){h2("statique","Mesure électrique statique :",{toc:true});lignes(l,{id:"statique"});}
   }
-  if(has(v.champ_magnetique)){h2("Mesure de champ magnétique :",{toc:true,id:"champ_magnetique"});para(String(v.champ_magnetique).trim(),{id:"champ_magnetique"});}
-  if(photos.adx_pv){h2("Mesure électrique statique en PV :",{toc:true,id:"adx_pv"});blocs.push({t:"capture",url:photos.adx_pv,h:17});}
-  if(photos.adx_gv){h2("Mesure électrique statique en GV :",{toc:true,id:"adx_gv"});blocs.push({t:"capture",url:photos.adx_gv,h:17});}
-  if(partsVerdict(d("verdict_onde"))){
-    lignes([["Analyse et contrôle électrique par onde de choc moteur : ",partsVerdict(d("verdict_onde")),parTxt?{b:parTxt}:""],["Résultat onde de choc sur ADX6 : ",partsVerdict(d("verdict_onde")),parTxt?{b:parTxt}:""]]);
+  if(has(v.champ_magnetique)){h2("champ_magnetique","Mesure de champ magnétique :",{toc:true});para(String(v.champ_magnetique).trim(),{id:"champ_magnetique"});}
+  if(photos.adx_pv){h2("adx_pv","Mesure électrique statique en PV :",{toc:true});poser({t:"capture",url:photos.adx_pv,h:17});}
+  if(photos.adx_gv){h2("adx_gv","Mesure électrique statique en GV :",{toc:true});poser({t:"capture",url:photos.adx_gv,h:17});}
+  if(estVerdict(d("verdict_onde"))){
+    lignes([[T("onde_moteur","Analyse et contrôle électrique par onde de choc moteur : "),partsVerdict(d("verdict_onde")),parOpt()],[T("onde_adx","Résultat onde de choc sur ADX6 : "),partsVerdict(d("verdict_onde")),parOpt()]]);
   }
 
   // ── 3. partie mécanique ───────────────────────────────────────────
-  h1("Partie mécanique du moteur :",{id:"mecanique"});
-  para("Mesure électrique, vibratoire et spectral en rotation avant démontage :",{grand:true,id:"txt_mecanique",fixe:true});
+  h1("mecanique","Partie mécanique du moteur :");
+  para(T("txt_mecanique","Mesure électrique, vibratoire et spectral en rotation avant démontage :"),{grand:true,id:"txt_mecanique"});
+  const ampere=(prefixe)=>{const t=intensites(v,prefixe);return t?T("ampere_phases","{valeur} Ampères par phases sous 400V",{valeur:t}):"";};
   {
-    const pv=ampere(v,"tint_pv"),gv=ampere(v,"tint_gv");
-    if(pv||gv)lignes([["Premier essai en rotation avec l'hélice de ventilation :"],...(pv?[[{bu:"Petite vitesse :"},"   "+pv]]:[]),...(gv?[[{bu:"Grande vitesse :"},"  "+gv]]:[])],{apres:true});
+    const pv=ampere("tint_pv"),gv=ampere("tint_gv");
+    if(pv||gv)lignes([[T("essai_helice","Premier essai en rotation avec l'hélice de ventilation :")],...(pv?[[{bu:T("lbl_pv","Petite vitesse :")},"   "+pv]]:[]),...(gv?[[{bu:T("lbl_gv","Grande vitesse :")},"  "+gv]]:[])],{apres:true});
     const vpv=num("tvib_pv_mms","mm/s"),vgv=num("tvib_gv_mms","mm/s");
-    if(vpv||vgv)lignes([...(vpv?[[{bu:"Petite vitesse :"}],["Mesure de vibration : "+vpv+","]]:[]),...(vgv?[[{bu:"Grande vitesse :"}],["Mesure de vibration : "+vgv]]:[])],{apres:true});
+    if(vpv||vgv)lignes([...(vpv?[[{bu:T("lbl_pv","Petite vitesse :")}],[T("vib_pv_ligne","Mesure de vibration : {valeur},",{valeur:vpv})]]:[]),...(vgv?[[{bu:T("lbl_gv","Grande vitesse :")}],[T("vib_gv_ligne","Mesure de vibration : {valeur}",{valeur:vgv})]]:[])],{apres:true});
   }
   if(has(v.diam_arbre_av)||has(v.diam_arbre_ar)||has(v.diam_flasque_av)||has(v.diam_flasque_ar)){
-    lignes([[{bu:"Portées Moteurs :"}],
-      ["Etat des portées intérieures de roulement (portée d'arbre)"],
-      ["Côté commande : "+(num("diam_arbre_av","mm")||"—")],["Côté opposé commande : "+(num("diam_arbre_ar","mm")||"—")],
-      ["Etat des portées extérieures de roulement (portée de flasque)"],
-      ["Côté commande : "+(num("diam_flasque_av","mm")||"—")],["Côté opposé commande : "+(num("diam_flasque_ar","mm")||"—")]],{apres:true});
-    const vp=partsVerdict(d("verdict_portees"));
-    if(vp)para(["Les valeurs des mesures relevées sont ",{...vp,txt:vp.txt.toLowerCase()==="conforme"?"Conforme":vp.txt},{b:parTxt}]);
+    lignes([[{bu:T("portees_titre","Portées Moteurs :")}],
+      [T("portees_int","Etat des portées intérieures de roulement (portée d'arbre)")],
+      [T("cote_commande","Côté commande : ")+(num("diam_arbre_av","mm")||"—")],[T("cote_oppose","Côté opposé commande : ")+(num("diam_arbre_ar","mm")||"—")],
+      [T("portees_ext","Etat des portées extérieures de roulement (portée de flasque)")],
+      [T("cote_commande","Côté commande : ")+(num("diam_flasque_av","mm")||"—")],[T("cote_oppose","Côté opposé commande : ")+(num("diam_flasque_ar","mm")||"—")]],{apres:true});
+    if(estVerdict(d("verdict_portees"))){const vp=partsVerdict(d("verdict_portees"));para([T("portees_verdict","Les valeurs des mesures relevées sont "),vp,parGras()]);}
   }
   if(photos.roulements||has(v.type_roulement_av)||has(v.type_roulement_ar)){
-    para([{bu:"Types des roulements installés sur la machine :"}]);
+    para([{bu:T("roul_titre","Types des roulements installés sur la machine :")}]);
     img(photos.roulements,9,7);
-    lignes([...(has(v.type_roulement_av)?[["Côté commande : "+txt("type_roulement_av")]]:[]),...(has(v.type_roulement_ar)?[["Côté opposé commande : "+txt("type_roulement_ar")]]:[])],{apres:true});
+    lignes([...(has(v.type_roulement_av)?[[T("cote_commande","Côté commande : ")+txt("type_roulement_av")]]:[]),...(has(v.type_roulement_ar)?[[T("cote_oppose","Côté opposé commande : ")+txt("type_roulement_ar")]]:[])],{apres:true});
   }
   if(d("etat_rou_av")||d("etat_rou_ar")){
-    lignes([[{bu:"Etat des roulements déposés :"}],...(d("etat_rou_av")?[["Côté commande : "+d("etat_rou_av")+"."]]:[]),...(d("etat_rou_ar")?[["Côté opposé commande : "+d("etat_rou_ar")+"."]]:[])]);
+    lignes([[{bu:T("roul_etat_titre","Etat des roulements déposés :")}],...(d("etat_rou_av")?[[T("cote_commande","Côté commande : ")+d("etat_rou_av")+"."]]:[]),...(d("etat_rou_ar")?[[T("cote_oppose","Côté opposé commande : ")+d("etat_rou_ar")+"."]]:[])]);
   }
   {
-    const pv=num("tvib_pv_mms_ap","mm/s"),gv=num("tvib_gv_mms_ap","mm/s"),apv=ampere(v,"tint_pv_ap"),agv=ampere(v,"tint_gv_ap");
+    const pv=num("tvib_pv_mms_ap","mm/s"),gv=num("tvib_gv_mms_ap","mm/s"),apv=ampere("tint_pv_ap"),agv=ampere("tint_gv_ap");
     if(pv||gv||apv||agv){
       const change=v.roulement_av_change==="Oui"||v.roulement_ar_change==="Oui";
-      h2("Mesure électrique et vibratoire en rotation après entretien",{toc:true,id:"apres_entretien"});
-      para(change?"(Après fourniture et remplacement des roulements moteur avec hélice de ventilation)":"(Après entretien du moteur avec hélice de ventilation)");
-      if(pv)lignes([[{bu:"Petite vitesse :"}],["Mesure de vibration: "+pv]],{apres:true});
-      if(gv)lignes([[{bu:"Grande vitesse :"}],["Mesure de vibration : "+gv]],{apres:true});
-      if(apv||agv)lignes([...(apv?[[{bu:"Petite vitesse"}," :      "+apv]]:[]),...(agv?[[{bu:"Grande vitesse"}," :   "+agv]]:[])]);
+      h2("apres_entretien","Mesure électrique et vibratoire en rotation après entretien",{toc:true});
+      para(change?T("apres_change","(Après fourniture et remplacement des roulements moteur avec hélice de ventilation)"):T("apres_sans","(Après entretien du moteur avec hélice de ventilation)"));
+      if(pv)lignes([[{bu:T("lbl_pv","Petite vitesse :")}],[T("vib_pv_ap","Mesure de vibration: {valeur}",{valeur:pv})]],{apres:true});
+      if(gv)lignes([[{bu:T("lbl_gv","Grande vitesse :")}],[T("vib_gv_ap","Mesure de vibration : {valeur}",{valeur:gv})]],{apres:true});
+      if(apv||agv)lignes([...(apv?[[{bu:T("lbl_pv_sans","Petite vitesse")},T("amp_pv_ap"," :      {valeur}",{valeur:apv})]]:[]),...(agv?[[{bu:T("lbl_gv_sans","Grande vitesse")},T("amp_gv_ap"," :   {valeur}",{valeur:agv})]]:[])]);
     }
   }
-  if(d("conclusion_moteur")||partsVerdict(d("verdict_moteur"))){
-    h2("Conclusion moteur :",{toc:true,id:"conclusion_moteur"});
+  if(d("conclusion_moteur")||estVerdict(d("verdict_moteur"))){
+    h2("conclusion_moteur","Conclusion moteur :",{toc:true});
     if(d("conclusion_moteur"))lignes(noms(d("conclusion_moteur")));
-    const vm=partsVerdict(d("verdict_moteur"));
-    if(vm)para(["L'ensemble de la partie moteur / ventilateur est ",{...vm,txt:vm.v==="ok"?"Conforme.":vm.txt},{b:parTxt}]);
+    if(estVerdict(d("verdict_moteur"))){const vm=partsVerdict(d("verdict_moteur"));para([T("concl_moteur_phrase","L'ensemble de la partie moteur / ventilateur est "),{...vm,txt:vm.v==="ok"?vm.txt+".":vm.txt},parGras()]);}
   }
 
   // ── 4. résistances ────────────────────────────────────────────────
   const nums=[1,2,3,4,5,6,7,8];
-  const entete=()=>[{txt:"N°",b:true,taille:11},...cols.map(c=>({txt:c,b:true,taille:11,align:"center"}))];
-  h1("Mesure électrique d'isolement et de résistif sur les résistances :",{id:"resistances"});
-  blocs.push({t:"img",url:"/rail/rapport-rack-fleches.png",w:6.9,h:6.4,statique:true});
+  const entete=()=>[{txt:T("tbl_n","N°"),b:true,taille:11},...cols.map(c=>({txt:c,b:true,taille:11,align:"center"}))];
+  const etatRes=()=>T("tbl_etat_res","Etat résistances");
+  h1("resistances","Mesure électrique d'isolement et de résistif sur les résistances :");
+  poser({t:"img",url:"/rail/rapport-rack-fleches.png",w:6.9,h:6.4,statique:true});
   {
     const casseConnue=nums.some(i=>has(v["casse_"+i]));
-    blocs.push({t:"table",cols:[1.5,1,1,1,1,1,1,1,1],rows:[
+    tab({cols:[1.5,1,1,1,1,1,1,1,1],rows:[
       entete(),
-      [{txt:"Etat visuel",b:true,taille:8},...nums.map(i=>{const c=nombre(v["casse_"+i]);return !casseConnue?{txt:""}:(c||0)>0?{txt:"Conforme sous réserve",v:"res",taille:8,align:"center"}:{txt:"Conforme",v:"ok",taille:8,align:"center"};})],
-      [{txt:sncf?"Etat résistances après remplacement":"Etat résistances",b:true,taille:8},...nums.map(i=>({...celluleCalc(verdictResistance(v,i)),align:"center",taille:8}))],
+      [{txt:T("tbl_etat_visuel","Etat visuel"),b:true,taille:8},...nums.map(i=>{const c=nombre(v["casse_"+i]);return !casseConnue?{txt:""}:(c||0)>0?{txt:T("verdict_res","Conforme sous réserve"),v:"res",taille:8,align:"center"}:{txt:T("verdict_ok","Conforme"),v:"ok",taille:8,align:"center"};})],
+      [{txt:sncf?T("tbl_etat_res_remplacement","Etat résistances après remplacement"):etatRes(),b:true,taille:8},...nums.map(i=>({...celluleCalc(verdictResistance(v,i),8),align:"center"}))],
     ]});
   }
   {
@@ -354,101 +407,98 @@ export function construireRapportCheminee(v,data,photos){
     if(sncf){
       const lignesGrav=nums.filter(i=>has(v["gravure_"+i])).map(i=>"-"+String(v["gravure_"+i]).trim().replace(/^-+/,""));
       const l=[];
-      if(has(v.lot_isolateurs))l.push("Lot isolateur :   "+txt("lot_isolateurs"));
-      if(lignesGrav.length){l.push("Les 8 résistances sont gravées comme suit");lignesGrav.forEach(g=>l.push(g));}
+      if(has(v.lot_isolateurs))l.push(T("lot_isolateur","Lot isolateur :   {lot}",{lot:txt("lot_isolateurs")}));
+      if(lignesGrav.length){l.push(T("gravure_titre","Les 8 résistances sont gravées comme suit"));lignesGrav.forEach(g=>l.push(g));}
       if(l.length)lignes(l);
     }else{
       const ch=nombre(v.isolateurs_changes);
-      if(ch!==null)para(ch>0?"Il y a eu un changement de "+ch+" isolateur"+(ch>1?"s":"")+".":"Il n'y a pas eu de changement d'isolateur.");
-      else if(nCasse>0)para("Il y a eu un changement d'isolateurs.");
+      if(ch!==null)para(ch>0?T("iso_chg","Il y a eu un changement de {nombre} isolateur{pluriel}.",{nombre:ch,pluriel:ch>1?"s":""}):T("iso_aucun","Il n'y a pas eu de changement d'isolateur."));
+      else if(nCasse>0)para(T("iso_chg_indef","Il y a eu un changement d'isolateurs."));
     }
   }
-  h2("Isolement des résistances par rack :",{toc:true,id:"iso_rack"});
-  para("Tableau de rapport de test haut tension à 5 et 10 kV pour chaque rack entre l'isolateur et la résistance suivant la recommandation (fig. 6) après nettoyage et étuvage des résistances :",{id:"txt_iso_rack",fixe:true});
-  blocs.push({t:"img",url:"/rail/rapport-fig6.png",w:7.6,h:5.4,statique:true,centre:true});
-  blocs.push({t:"table",cols:[1.5,1,1,1,1,1,1,1,1],rows:[
+  h2("iso_rack","Isolement des résistances par rack :",{toc:true});
+  para(T("txt_iso_rack","Tableau de rapport de test haut tension à 5 et 10 kV pour chaque rack entre l'isolateur et la résistance suivant la recommandation (fig. 6) après nettoyage et étuvage des résistances :"),{id:"txt_iso_rack"});
+  poser({t:"img",url:"/rail/rapport-fig6.png",w:7.6,h:5.4,statique:true,centre:true});
+  tab({cols:[1.5,1,1,1,1,1,1,1,1],rows:[
     entete(),
-    [{txt:"Isolement 5kv",b:true,taille:8},...nums.map(i=>({txt:ohm("iso5_"+i),taille:10,align:"center"}))],
-    [{txt:"Etat résistances",b:true,taille:8},...nums.map(i=>({...celluleCalc(verdictIsolement(v,"iso5_"+i)),align:"center",taille:8}))],
+    [{txt:T("tbl_iso5","Isolement 5kv"),b:true,taille:8},...nums.map(i=>({txt:ohm("iso5_"+i),taille:10,align:"center"}))],
+    [{txt:etatRes(),b:true,taille:8},...nums.map(i=>({...celluleCalc(verdictIsolement(v,"iso5_"+i),8),align:"center"}))],
     entete(),
-    [{txt:"Isolement 10kv",b:true,taille:8},...nums.map(i=>({txt:ohm("iso10_"+i),taille:10,align:"center"}))],
-    [{txt:"Etat résistances",b:true,taille:8},...nums.map(i=>({...celluleCalc(verdictIsolement(v,"iso10_"+i)),align:"center",taille:8}))],
+    [{txt:T("tbl_iso10","Isolement 10kv"),b:true,taille:8},...nums.map(i=>({txt:ohm("iso10_"+i),taille:10,align:"center"}))],
+    [{txt:etatRes(),b:true,taille:8},...nums.map(i=>({...celluleCalc(verdictIsolement(v,"iso10_"+i),8),align:"center"}))],
   ]});
   if(v.deflecteur){
-    h2("Déflecteur d'air suivant préconisation :",{toc:true,id:"deflecteur"});
+    h2("deflecteur","Déflecteur d'air suivant préconisation :",{toc:true});
     if(v.deflecteur==="Remplacé"){
-      para("Remplacement des déflecteurs d'air par la nouvelle génération.");
+      para(T("defl_remplace","Remplacement des déflecteurs d'air par la nouvelle génération."));
       img(photos.deflecteur,9.5,7);
-    }else if(v.deflecteur==="Non remplacé")para("Les déflecteurs d'air n'ont pas été remplacés.");
-    else if(v.deflecteur==="Fourni par le client")para("Déflecteurs d'air fournis par le client.");
-    else para("Déflecteurs d'air manquants.");
+    }else if(v.deflecteur==="Non remplacé")para(T("defl_non","Les déflecteurs d'air n'ont pas été remplacés."));
+    else if(v.deflecteur==="Fourni par le client")para(T("defl_client","Déflecteurs d'air fournis par le client."));
+    else para(T("defl_manquant","Déflecteurs d'air manquants."));
   }
-  h2("Isolement des résistances par lot de 4 racks :",{toc:true,id:"iso_lot"});
-  para("Tableau de rapport d'isolement à haute tension de 5 à 10kV entre chaque lot de résistance et la masse :",{id:"txt_lots_1",fixe:true});
-  para("Tableau de rapport d'isolement à haute tension de 5 à 10kV entre chaque lot de résistances partielles (Rack 1 haut ) et (Rack 2 bas ) :",{id:"txt_lots_2",fixe:true});
-  blocs.push({t:"img",url:"/rail/rapport-fig5.png",w:9.5,h:6.4,statique:true});
-  para([{bu:"Test de rigidité diélectrique ( pendant 100s):"}]);
+  h2("iso_lot","Isolement des résistances par lot de 4 racks :",{toc:true});
+  para(T("txt_lots_1","Tableau de rapport d'isolement à haute tension de 5 à 10kV entre chaque lot de résistance et la masse :"),{id:"txt_lots_1"});
+  para(T("txt_lots_2","Tableau de rapport d'isolement à haute tension de 5 à 10kV entre chaque lot de résistances partielles (Rack 1 haut ) et (Rack 2 bas ) :"),{id:"txt_lots_2"});
+  poser({t:"img",url:"/rail/rapport-fig5.png",w:9.5,h:6.4,statique:true});
+  para([{bu:T("rigidite_titre","Test de rigidité diélectrique ( pendant 100s):")}]);
   {
     const l=[];
-    if(ohm("iso_global_5"))l.push("Isolement globale sous 5KV : "+ohm("iso_global_5"));
-    if(ohm("iso_global_10"))l.push("Isolement globale sous 10KV : "+ohm("iso_global_10"));
-    if(ohm("iso_partiel_5"))l.push("Isolement résistance partielle R1/R2 sous 5kV : "+ohm("iso_partiel_5"));
-    if(ohm("iso_partiel_10"))l.push("Isolement résistance partielle R1/R2 sous 10kV : "+ohm("iso_partiel_10"));
-    if(l.length)blocs.push({t:"table",cols:[1],largeur:0.68,rows:l.map(x=>[{txt:x,taille:11}])});
+    if(ohm("iso_global_5"))l.push(T("iso_glob5","Isolement globale sous 5KV : {valeur}",{valeur:ohm("iso_global_5")}));
+    if(ohm("iso_global_10"))l.push(T("iso_glob10","Isolement globale sous 10KV : {valeur}",{valeur:ohm("iso_global_10")}));
+    if(ohm("iso_partiel_5"))l.push(T("iso_part5","Isolement résistance partielle R1/R2 sous 5kV : {valeur}",{valeur:ohm("iso_partiel_5")}));
+    if(ohm("iso_partiel_10"))l.push(T("iso_part10","Isolement résistance partielle R1/R2 sous 10kV : {valeur}",{valeur:ohm("iso_partiel_10")}));
+    if(l.length)tab({cols:[1],largeur:0.68,rows:l.map(x=>[{txt:x,taille:11}])});
   }
-  h2("Mesure des résistances et micro résistif partielles globale :",{toc:true,id:"partielles"});
-  para("Valeur de référence des résistances en série",{id:"txt_serie",fixe:true});
+  h2("partielles","Mesure des résistances et micro résistif partielles globale :",{toc:true});
+  para(T("txt_serie","Valeur de référence des résistances en série"),{id:"txt_serie"});
   const bas=SERIE_NOMINAL*(1-TOLERANCE),haut=SERIE_NOMINAL*(1+TOLERANCE);
-  para("Norme : 3.21Ω +/- 5%     soit "+fr2(bas,2)+"Ω>…. <"+fr2(haut,2)+"Ω");
-  blocs.push({t:"table",cols:[1.4,1.2,1.2],rows:[
-    [{txt:"Résistance partielle\nN° ("+cols[0]+" à "+cols[3]+") :",align:"center",taille:11},{txt:num("res_partielle_r1","Ω"),align:"center",taille:11},{...celluleCalc(verdictSerie(v,"res_partielle_r1")),align:"center",taille:11}],
-    [{txt:"Résistance partielle\nN° ("+cols[4]+" à "+cols[7]+") :",align:"center",taille:11},{txt:num("res_partielle_r2","Ω"),align:"center",taille:11},{...celluleCalc(verdictSerie(v,"res_partielle_r2")),align:"center",taille:11}],
+  para(T("norme_serie","Norme : 3.21Ω +/- 5%     soit {bas}Ω>…. <{haut}Ω",{bas:fr2(bas,2),haut:fr2(haut,2)}));
+  tab({cols:[1.4,1.2,1.2],rows:[
+    [{txt:T("tbl_res_partielle","Résistance partielle\nN° ({debut} à {fin}) :",{debut:cols[0],fin:cols[3]}),align:"center",taille:11},{txt:num("res_partielle_r1","Ω"),align:"center",taille:11},{...celluleCalc(verdictSerie(v,"res_partielle_r1"),11),align:"center"}],
+    [{txt:T("tbl_res_partielle","Résistance partielle\nN° ({debut} à {fin}) :",{debut:cols[4],fin:cols[7]}),align:"center",taille:11},{txt:num("res_partielle_r2","Ω"),align:"center",taille:11},{...celluleCalc(verdictSerie(v,"res_partielle_r2"),11),align:"center"}],
   ]});
-  h2("Tableau de rapport de résistance ohmique de chaque rack (Unitaire) :",{toc:true,id:"unitaire"});
-  blocs.push({t:"img",url:"/rail/rapport-rack-unitaire.png",w:4.8,h:3.1,statique:true});
-  para("Norme : 0.8025Ω +/- 5%     soit "+fr2(RACK_NOMINAL*(1-TOLERANCE),3)+"Ω>…. <"+fr2(RACK_NOMINAL*(1+TOLERANCE),3)+"Ω");
-  blocs.push({t:"table",cols:[1.5,1,1,1,1,1,1,1,1],rows:[
-    [{txt:"N°",b:true,taille:11},...cols.map(c=>({txt:c,b:true,taille:11,align:"center"}))],
-    [{txt:"Résistance",b:true,taille:8},...nums.map(i=>({txt:num("res_"+i,"Ω"),taille:9,align:"center"}))],
-    [{txt:"Etat résistances",b:true,taille:8},...nums.map(i=>{const r=nombre(v["res_"+i]);return {...(r===null?{txt:""}:(r>=RACK_NOMINAL*(1-TOLERANCE)-1e-9&&r<=RACK_NOMINAL*(1+TOLERANCE)+1e-9)?{txt:"Conforme",v:"ok"}:{txt:"Non conforme",v:"ko"}),align:"center",taille:8};})],
+  h2("unitaire","Tableau de rapport de résistance ohmique de chaque rack (Unitaire) :",{toc:true});
+  poser({t:"img",url:"/rail/rapport-rack-unitaire.png",w:4.8,h:3.1,statique:true});
+  para(T("norme_rack","Norme : 0.8025Ω +/- 5%     soit {bas}Ω>…. <{haut}Ω",{bas:fr2(RACK_NOMINAL*(1-TOLERANCE),3),haut:fr2(RACK_NOMINAL*(1+TOLERANCE),3)}));
+  tab({cols:[1.5,1,1,1,1,1,1,1,1],rows:[
+    [{txt:T("tbl_n","N°"),b:true,taille:11},...cols.map(c=>({txt:c,b:true,taille:11,align:"center"}))],
+    [{txt:T("tbl_resistance","Résistance"),b:true,taille:8},...nums.map(i=>({txt:num("res_"+i,"Ω"),taille:9,align:"center"}))],
+    [{txt:etatRes(),b:true,taille:8},...nums.map(i=>{const r=nombre(v["res_"+i]);return {...(r===null?{txt:""}:(r>=RACK_NOMINAL*(1-TOLERANCE)-1e-9&&r<=RACK_NOMINAL*(1+TOLERANCE)+1e-9)?{txt:T("verdict_ok","Conforme"),v:"ok"}:{txt:T("verdict_ko","Non conforme"),v:"ko"}),align:"center",taille:8};})],
   ]});
   const concl=conclusionResistances(v);
-  h2("Conclusion sur les résistances :",{toc:true,id:"conclusion_resistances"});
+  h2("conclusion_resistances","Conclusion sur les résistances :",{toc:true});
   const nIso=sncf?ISOLATEURS_SNCF_PAR_CHEMINEE:(nombre(v.isolateurs_changes)||0);
   if(concl.ok===true){
-    para(sncf?"L'ensemble des résistances est conforme après changement des "+nIso+" isolateurs":"L'ensemble des résistances est conforme.");
-    if(sncf&&has(v.lot_isolateurs))para("Lot isolateur : "+txt("lot_isolateurs"));
-    para([sncf?"L'ensemble est : ":"",{v:"ok",txt:"Conforme"},par?{b:" par ("+par+")"}:""].filter(x=>x!==""));
+    para(sncf?T("concl_res_sncf","L'ensemble des résistances est conforme après changement des {nombre} isolateurs",{nombre:nIso}):T("concl_res","L'ensemble des résistances est conforme."));
+    if(sncf&&has(v.lot_isolateurs))para(T("lot_isolateur_ligne","Lot isolateur : {lot}",{lot:txt("lot_isolateurs")}));
+    para([sncf?T("ensemble_est","L'ensemble est : "):"",{v:"ok",txt:T("verdict_ok","Conforme")},par?{b:T("par_concl"," par ({nom})",{nom:par})}:""].filter(x=>x!==""));
   }else if(concl.ok===false){
-    para([{v:"ko",txt:"Non conforme"}," : une ou plusieurs mesures sont hors tolérance (voir les tableaux ci-dessus)."]);
-  }else para(concl.texte==="—"?"":"À compléter : mesures manquantes.");
+    para([{v:"ko",txt:T("verdict_ko","Non conforme")},T("concl_ko"," : une ou plusieurs mesures sont hors tolérance (voir les tableaux ci-dessus).")]);
+  }else para(concl.texte==="—"?"":T("a_completer_mesures","À compléter : mesures manquantes."));
 
   // ── 5. conclusion générale ────────────────────────────────────────
-  h1("Conclusion générale :",{id:"conclusion_generale"});
+  h1("conclusion_generale","Conclusion générale :");
   {
     const remplace=sncf||nIso>0;
-    if(concl.ok===true)para("Après entretien"+(remplace?" et remplacement des isolateurs":"")+", toutes les valeurs sont dans les tolérances.");
-    else if(concl.ok===false)para("Après entretien, certaines valeurs restent hors des tolérances (voir les tableaux de mesures).");
+    if(concl.ok===true)para(T("concl_gen","Après entretien {remplacement}, toutes les valeurs sont dans les tolérances.",{remplacement:remplace?"et remplacement des isolateurs":""}));
+    else if(concl.ok===false)para(T("concl_gen_ko","Après entretien, certaines valeurs restent hors des tolérances (voir les tableaux de mesures)."));
   }
-  if(v.deflecteur==="Fourni par le client"||v.deflecteur==="Manquant")para([{rouge:"Attention , Nous n'avons plus de déflecteur d'air ( fourni par vos soins )"}]);
+  if(v.deflecteur==="Fourni par le client"||v.deflecteur==="Manquant")para([{rouge:T("attention_defl","Attention , Nous n'avons plus de déflecteur d'air ( fourni par vos soins )")}]);
   if(d("attention_rouge"))noms(d("attention_rouge")).forEach(t=>para([{rouge:t}]));
   const depart=photos.depart||[];
   if(depart.length||d("transport_texte")||photos.transport){
     const debutDepart=blocs.length;
-    para("Départ de nos ateliers :",{fixe:true});
+    para(T("depart","Départ de nos ateliers :"));
     rang(depart,8);
     if(d("transport_texte")){para(d("transport_texte"));img(photos.transport,9,7);}
     for(let i=debutDepart;i<blocs.length;i++)blocs[i].id="depart";
   }
   if(realise||certifie){
-    lignes([...(realise?[["Travaux et rapport réalisés par "+listeEt(realise)]]:[]),...(certifie?[["Vérification de l'ensemble : "+listeEt(certifie)]]:[])],{espace:true,id:"signatures"});
+    lignes([...(realise?[[T("sign_realise","Travaux et rapport réalisés par {noms}",{noms:listeEt(realise)})]]:[]),...(certifie?[[T("sign_verif","Vérification de l'ensemble : {noms}",{noms:listeEt(certifie)})]]:[])],{espace:true,id:"signatures"});
   }
-  lignes([["Pour rappel :"],
-    ["Nous n'intervenons que sur le moteur électrique de la boîte à bornes du ventilateur et uniquement sur les résistances internes."],
-    ["Les éléments périphériques à la cheminée ne sont ni contrôlés ni vérifiés (capteur de pression, prise Harting du capteur, colliers divers, etc.)"],
-    ["Ainsi que les pièces mécaniques périphériques."]],{espace:true,id:"pour_rappel",fixe:true});
+  lignes(T("pour_rappel","Pour rappel :\nNous n'intervenons que sur le moteur électrique de la boîte à bornes du ventilateur et uniquement sur les résistances internes.\nLes éléments périphériques à la cheminée ne sont ni contrôlés ni vérifiés (capteur de pression, prise Harting du capteur, colliers divers, etc.)\nAinsi que les pièces mécaniques périphériques.").split(/\r?\n/).filter(l=>l.trim()).map(l=>[l]),{espace:true,id:"pour_rappel"});
   if(d("materiel_controle")){
-    para([{bu:"Liste du matériel utilisé et date de validité pour effectuer ce rapport :"}],{espace:true,id:"materiel",fixe:true});
+    para([{bu:T("materiel","Liste du matériel utilisé et date de validité pour effectuer ce rapport :")}],{espace:true,id:"materiel"});
     lignes(noms(d("materiel_controle")),{id:"materiel"});
   }
 
@@ -458,19 +508,22 @@ export function construireRapportCheminee(v,data,photos){
     de:txt("de"),
     client:txt("client"),
     sncf,
-    couverture:{titre:"Livret de rapport d'intervention",client:txt("client"),logoClient:/imateq/i.test(txt("client")),travaux:"Travaux réalisés par la société PMV Rail",date:moisAnnee},
-    societe:SOCIETE_RAIL,
+    couverture,
+    societe,
     identite,
     descriptif:d("descriptif_travaux"),
     sommaire,
-    legende:LEGENDE_COULEURS,
+    legende,
     blocs,
+    libelles,
+    // textes qui n'appartiennent pas à un bloc du corps du rapport (aperçu modifiable) : couverture, société
+    zones:{couverture:zoneCouverture,societe:zoneSociete},
+    textes:recus,
     // images fixes de la couverture, à charger comme les photos
     imagesCouverture:{cheminee:"/rail/rapport-cheminee.png",imateq:"/rail/rapport-imateq.png"},
   };
-  // personnalisation de la Maintenance (rubriques masquées, textes modifiés, blocs ajoutés) ; photos._meta : voir rapportModele.js
-  const meta=photos._meta;
-  return meta&&meta.type?appliquerLivret(modele,configDuType(meta.type,meta.config),{v,champs:meta.champs||{},fiche:meta.fiche||[]},ANCRES_CHEMINEE):modele;
+  // personnalisation de la Maintenance (rubriques et lignes masquées, blocs ajoutés)
+  return meta&&meta.type?appliquerLivret(modele,cfg,ctxPerso,ANCRES_CHEMINEE):modele;
 }
 
 // toutes les adresses d'images d'un rapport (pour les charger une seule fois)

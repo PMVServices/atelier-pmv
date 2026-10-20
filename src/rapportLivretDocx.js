@@ -178,15 +178,15 @@ export async function genRapportLivretDocx(v, data, photos) {
     children: [run(l.k, { bold: true, size: 28, underline: { type: UnderlineType.SINGLE } }), run(" " + l.v, { size: 28 })],
   })));
   if (M.descriptif) {
-    id.push(new Paragraph({ spacing: { before: 900, after: 140 }, children: [run("Descriptif des travaux réalisés par PMV Services :", { bold: true, size: 26, underline: { type: UnderlineType.SINGLE } })] }));
+    id.push(new Paragraph({ spacing: { before: 900, after: 140 }, children: [run((M.libelles && M.libelles.descriptif) || "Descriptif des travaux réalisés par PMV Services :", { bold: true, size: 26, underline: { type: UnderlineType.SINGLE } })] }));
     id.push(new Paragraph({ indent: { left: 700 }, spacing: { after: 0 }, children: [run(M.descriptif, { size: 23 })] }));
   }
 
   // ── 3. sommaire + légende des couleurs ──
   const som = [];
-  som.push(new Paragraph({ pageBreakBefore: true, spacing: { before: 800, after: 60 }, children: [new TextRun({ text: "Sommaire :", font: "Cambria", size: 28, bold: true, color: "365F91", shading: { type: ShadingType.CLEAR, fill: "D9D9D9", color: "auto" } })] }));
+  som.push(new Paragraph({ pageBreakBefore: true, spacing: { before: 800, after: 60 }, children: [new TextRun({ text: (M.libelles && M.libelles.sommaire) || "Sommaire :", font: "Cambria", size: 28, bold: true, color: "365F91", shading: { type: ShadingType.CLEAR, fill: "D9D9D9", color: "auto" } })] }));
   M.sommaire.forEach((s) => som.push(new Paragraph({ spacing: { after: 50 }, indent: { left: s.niveau === 2 ? 260 : 0 }, children: [run(s.txt, { size: 23 })] })));
-  som.push(new Paragraph({ keepNext: true, spacing: { before: 700, after: 160 }, children: [run("Légende des couleurs :", { size: 23 })] }));
+  som.push(new Paragraph({ keepNext: true, spacing: { before: 700, after: 160 }, children: [run((M.libelles && M.libelles.legende) || "Légende des couleurs :", { size: 23 })] }));
   const colTw = Math.floor(LARGEUR_TWIPS / 3);
   som.push(new Table({
     width: { size: colTw * 3, type: WidthType.DXA }, columnWidths: [colTw, colTw, colTw],

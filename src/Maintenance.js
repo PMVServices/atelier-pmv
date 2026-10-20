@@ -112,7 +112,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
 
   return(<div style={{maxWidth:1000,margin:"0 auto",padding:"20px 16px 90px"}}>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 6px"}}>🛠 Maintenance</h2>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>Vous ne remplissez aucune fiche ici : vous changez ce que les autres verront (champs, intitulés, colonnes du planning, rapports client). Préparez vos modifications puis cliquez sur <b>Publier</b> : elles sont définitives pour toutes les fiches, et vous pouvez revenir en arrière depuis l'historique.</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>Vous ne remplissez aucune fiche ici : vous changez ce que les autres verront (champs, intitulés, colonnes du planning, rapports client). Préparez vos modifications puis cliquez sur <b>Publier</b> (pour les rapports : <b>Enregistrer comme modèle de référence</b>) : elles valent alors pour toutes les fiches, et vous pouvez revenir en arrière depuis l'historique.</p>
 
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
       {[["atelier","📁 Fiches atelier"],["chantier","🏗 Fiches chantier"],["planning","📋 Planning"],["rapports","📄 Rapports"],["historique","🕘 Historique"]].map(([id,lib])=>
