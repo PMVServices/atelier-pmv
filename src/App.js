@@ -198,13 +198,18 @@ const CHAMPS_ROTATION_AVANT_2=suffixerChamps(CHAMPS_ROTATION_AVANT.filter(c=>c.i
 // Moteur neuf annoncé dès les infos électriques : un petit moteur qui ne marche plus est changé directement,
 // la fiche s'arrête après cette étape (rien à mesurer ni à démonter). Ne concerne que le moteur seul / "Autre matériel".
 const CHAMP_MOTEUR_NEUF_DEBUT={id:"moteur_neuf_debut",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,note:"« Oui » = moteur changé directement, la fiche s'arrête après cette étape"};
+// Fiche Moteur seulement (pas la pompe ni le ventilateur) : si le moteur neuf est essayé, la fiche continue avec « Information des essais après remontage » (mêmes champs que d'habitude)
+const CHAMPS_MOTEUR_NEUF_ESSAIS=[
+  {...CHAMP_MOTEUR_NEUF_DEBUT,note:"« Oui » = moteur changé directement ; la fiche s'arrête après cette étape, sauf si on essaie le moteur neuf (question suivante)"},
+  {id:"essais_moteur_neuf",label:"Essais du moteur neuf ?",type:"oui_non",required:true,condition:v=>v.moteur_neuf_debut==="Oui",note:"« Oui » : la fiche continue avec « Information des essais après remontage »"},
+];
 const masquerSiMoteurNeufDebut=c=>{
   if(c.id==="tech_elec")return c;
   const cond=c.condition;
   return {...c,condition:v=>v.moteur_neuf_debut!=="Oui"&&champVisible({condition:cond},v)};
 };
 function etapesMoteurPour(v){
-  if(v&&v.moteur_neuf_debut==="Oui")return [ETAPES[0],ETAPES[1]];
+  if(v&&v.moteur_neuf_debut==="Oui")return v.essais_moteur_neuf==="Oui"?[ETAPES[0],ETAPES[1],ETAPES[4]]:[ETAPES[0],ETAPES[1]];
   if(v&&v.essai_vide_avant==="Non"&&(v.moteur_neuf==="Non"||v.moteur_neuf===NE_SAIT_PAS)){
     return [ETAPES[0],ETAPES[1],ETAPES[2],ETAPE_ELEC_2,ETAPE_ROTATION_2,ETAPES[3],ETAPES[4]];
   }
@@ -240,7 +245,7 @@ const CHAMPS={
     {id:"demande_client",label:"Demande client",type:"text",required:true,dictee:true},
     {id:"conseil_petit_moteur",type:"conseil",condition:v=>{const p=puissanceKw(v);return p!==null&&p<=PETIT_MOTEUR_KW;},texte:v=>"Petit moteur ("+Math.round(puissanceKw(v)*100)/100+" kW, donc "+PETIT_MOTEUR_KW+" kW ou moins) : si le moteur est « basique » (standard, sans particularité), pensez à proposer au client un moteur neuf plutôt que l'entretien."},
   ],
-  "Infos électriques":[CHAMP_MOTEUR_NEUF_DEBUT,...CHAMPS_INFOS_ELECTRIQUES.map(masquerSiMoteurNeufDebut)],
+  "Infos électriques":[...CHAMPS_MOTEUR_NEUF_ESSAIS,...CHAMPS_INFOS_ELECTRIQUES.map(masquerSiMoteurNeufDebut)],
   "Information rotation avant démontage":CHAMPS_ROTATION_AVANT,
   [ETAPE_ELEC_2]:CHAMPS_INFOS_ELECTRIQUES_2,
   [ETAPE_ROTATION_2]:CHAMPS_ROTATION_AVANT_2,
