@@ -7,6 +7,7 @@ import {configRapportsActuelle, surChangementConfigRapports, publierConfigRappor
 import {TYPES_RAPPORT, TYPES_BLOC, STYLES, OPERATEURS, TAILLES_PHOTO, typeGenerique, blocsDepuisAjout, jetonsDe} from "./rapportPerso";
 import {ANCRES_MOTEUR, ANCRES_GENERIQUE} from "./rapportModele";
 import {ANCRES_CHEMINEE} from "./rapportCheminee";
+import {genererHtmlEdition} from "./apercuEdition";
 import {db} from "./supabase";
 import {TYPE_CHEMINEE} from "./railClients";
 
@@ -24,9 +25,10 @@ const INTERNE=/recommander|observation|^obs_|_obs$|commentaire|interne|justif|__
 export const ancresDuType=type=>(type===TYPE_CHEMINEE?ANCRES_CHEMINEE:typeGenerique(type)?ANCRES_GENERIQUE:ANCRES_MOTEUR).map(a=>({kind:a.niveau===1?"h1":"h2",...a}));
 const libType=t=>(TYPES_BLOC.find(x=>x[0]===t)||[t,t])[1];
 
-export default function EditeurRapports({nom,champsDe,categories,fiches,apercu}){
+export default function EditeurRapports({nom,champsDe,categories,fiches,apercu,preparer}){
   const [type,setType]=useState(TYPES_RAPPORT[0][0]);
   const [brouillon,setBrouillon]=useState(()=>copie(configRapportsActuelle()));
+  const [vue,setVue]=useState("plan");          // « plan » (liste des rubriques) ou « apercu » (rapport modifiable)
   const [form,setForm]=useState(null);          // bloc en cours de saisie : {id?, avant, type, texte, …}
   const [renom,setRenom]=useState(null);        // id de la rubrique dont on modifie le texte
   const [ficheId,setFicheId]=useState("");
@@ -92,6 +94,31 @@ export default function EditeurRapports({nom,champsDe,categories,fiches,apercu})
   });
   const nouveauBloc=avant=>({avant,type:"texte",texte:"",style:"normal",masquerSiVide:true,condition:null,photo:{categorie:"",taille:"moyenne"}});
 
+  // « après » une rubrique = juste avant la rubrique suivante du plan (ou à la fin)
+  const apresDe=id=>{const i=ancres.findIndex(a=>a.id===id);return i>=0&&i<ancres.length-1?ancres[i+1].id:"__fin";};
+  function agir(d){
+    if(d.act==="avant"){setForm(nouveauBloc(d.id));setRenom(null);}
+    else if(d.act==="apres"){setForm(nouveauBloc(apresDe(d.id)));setRenom(null);}
+    else if(d.act==="modifier-texte"){setRenom(d.id);setForm(null);}
+    else if(d.act==="masquer"){basculerMasque(d.id);setForm(null);setRenom(null);}
+    else if(d.act==="bloc-modifier"){const a=cfg.ajouts.find(x=>x.id===d.bloc);if(a){setForm({...copie(a),photo:a.photo||{categorie:"",taille:"moyenne"}});setRenom(null);}}
+    else if(d.act==="bloc-haut")deplacer(d.bloc,-1);
+    else if(d.act==="bloc-bas")deplacer(d.bloc,1);
+    else if(d.act==="bloc-retirer"){retirer(d.bloc);setForm(null);}
+  }
+  const panneau=(<div style={{flex:"1 1 340px",minWidth:0,position:"sticky",top:8,alignSelf:"flex-start",maxHeight:"88vh",overflowY:"auto"}}>
+    {form&&<FormulaireBloc key={form.id||"nouveau-"+form.avant} init={form} ancres={ancres} champs={champs} champsMap={champsMap} cats={cats} essai={essai} onValider={valider} onAnnuler={()=>setForm(null)}/>}
+    {renom&&(()=>{const a=ancres.find(x=>x.id===renom);return a?<FormulaireTexte key={a.id} a={a} courant={cfg.textes[a.id]} champs={champs} onOk={t=>{posTexte(a.id,t);setRenom(null);}} onAnnuler={()=>setRenom(null)}/>:null;})()}
+    {!form&&!renom&&<div style={CARTE}>
+      <b style={{fontSize:13}}>Modifier depuis l'aperçu</b>
+      <p style={{fontSize:12,color:"#6B7280",margin:"4px 0 0",lineHeight:1.5}}>Survolez (ou touchez) une rubrique du rapport : une barre apparaît pour la <b>renommer</b>, la <b>masquer</b> ou ajouter un bloc <b>avant</b> / <b>après</b>. Un bloc que vous avez ajouté (barre verte) se modifie, se déplace ou se retire. Le formulaire s'ouvre ici ; l'aperçu se met à jour à chaque modification, sans rien publier.</p>
+      {cfg.masques.length>0&&<div style={{marginTop:10}}>
+        <div style={{fontSize:11,fontWeight:700,color:"#6B7280",textTransform:"uppercase"}}>Rubriques masquées</div>
+        {cfg.masques.map(id=>{const a=ancres.find(x=>x.id===id);return <div key={id} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:4,fontSize:12}}><span style={{flex:"1 1 160px"}}>{a?a.titre:id}</span><button type="button" style={BTN_P} onClick={()=>basculerMasque(id)}>👁 Réafficher</button></div>;})}
+      </div>}
+    </div>}
+  </div>);
+
   const pastille=actif=>({padding:"6px 12px",borderRadius:18,border:"1.5px solid "+(actif?BLEU:"#D1D5DB"),background:actif?BLEU:"#fff",color:actif?"#fff":"#374151",fontSize:12,fontWeight:600,cursor:"pointer"});
   const titreAncre=a=>(cfg.textes[a.id]&&a.kind!=="texte"?cfg.textes[a.id]:a.titre)||a.titre;
 
@@ -129,11 +156,20 @@ export default function EditeurRapports({nom,champsDe,categories,fiches,apercu})
         </select>
         <button type="button" style={{...BTN_O,whiteSpace:"normal",textAlign:"left"}} disabled={!ficheId} onClick={()=>apercu(type,ficheId,brouillon).catch(e=>setMessage({ok:false,t:"Aperçu impossible : "+(e&&e.message?e.message:"réessayez")}))}>👁 Aperçu du rapport avec cette configuration</button>
       </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:12}}>
+        <button type="button" style={pastille(vue==="plan")} onClick={()=>{setVue("plan");setForm(null);setRenom(null);}}>🗂 Plan (liste des rubriques)</button>
+        <button type="button" style={pastille(vue==="apercu")} disabled={!ficheId||!preparer} onClick={()=>{setVue("apercu");setForm(null);setRenom(null);}}>👁 Aperçu modifiable</button>
+      </div>
     </div>
 
     {message&&<div style={{...CARTE,borderColor:message.ok?"#22863A":"#D73A49",background:message.ok?"#F0FFF4":"#FFF5F5",color:message.ok?"#22863A":"#D73A49",fontSize:13}}>{message.t}</div>}
 
-    <div style={CARTE}>
+    {vue==="apercu"&&ficheId&&preparer&&<div style={{display:"flex",gap:12,flexWrap:"wrap",alignItems:"flex-start"}}>
+      <ApercuModifiable type={type} ficheId={ficheId} config={brouillon} preparer={preparer} agir={agir}/>
+      {panneau}
+    </div>}
+
+    {vue==="plan"&&<div style={CARTE}>
       <b style={{fontSize:14}}>Plan du rapport</b>
       <p style={{fontSize:12,color:"#6B7280",margin:"4px 0 10px"}}>Les rubriques en gris sont celles du rapport actuel, dans l'ordre. « ＋ Ajouter un bloc ici » place le bloc juste avant la rubrique qui suit. Une rubrique masquée n'est plus imprimée (avec son contenu) ; les données de la fiche ne sont pas touchées.</p>
       {zoneAjout("__debut")}
@@ -158,7 +194,7 @@ export default function EditeurRapports({nom,champsDe,categories,fiches,apercu})
       })}
       {zoneAjout("__fin")}
       {ancres.length===0&&<p style={{fontSize:13,color:"#9CA3AF"}}>Aucune rubrique.</p>}
-    </div>
+    </div>}
 
     <div style={CARTE}>
       <button type="button" style={{...BTN_O,whiteSpace:"normal",textAlign:"left"}} onClick={()=>setVoirHisto(v=>!v)}>🕘 {voirHisto?"Masquer":"Voir"} les versions précédentes des rapports</button>
@@ -178,6 +214,51 @@ export default function EditeurRapports({nom,champsDe,categories,fiches,apercu})
       <button type="button" style={{...BTN_O,minHeight:42}} disabled={occupe} onClick={annuler}>Annuler les modifications</button>
     </div>}
   </>);
+}
+
+// Le rapport lui-même, en mode édition : on survole une rubrique pour la modifier (les clics reviennent ici par postMessage)
+function ApercuModifiable({type,ficheId,config,preparer,agir}){
+  const [prep,setPrep]=useState(null);
+  const [html,setHtml]=useState("");
+  const [etat,setEtat]=useState("");
+  const [erreur,setErreur]=useState("");
+  const cadre=useRef(null);const defil=useRef(0);const agirRef=useRef(agir);
+  agirRef.current=agir;
+  useEffect(()=>{
+    let vivant=true;
+    setPrep(null);setHtml("");setErreur("");setEtat("Chargement de la fiche…");
+    preparer(type,ficheId).then(p=>{if(vivant)setPrep(p);}).catch(e=>{if(vivant){setErreur("Chargement impossible : "+(e&&e.message?e.message:"réessayez"));setEtat("");}});
+    return()=>{vivant=false;};
+  },[type,ficheId]);
+  const cle=JSON.stringify(configDuType(type,config));
+  useEffect(()=>{
+    if(!prep)return;
+    let vivant=true;
+    const t=setTimeout(async()=>{
+      setEtat("Préparation de l'aperçu… (la première fois, les photos mettent un moment)");
+      try{
+        const h=await genererHtmlEdition(type,prep,config);
+        if(!vivant)return;
+        try{defil.current=cadre.current&&cadre.current.contentWindow?cadre.current.contentWindow.scrollY:0;}catch(e){defil.current=0;}
+        setHtml(h);setEtat("");setErreur("");
+      }catch(e){if(vivant){setErreur("Aperçu impossible : "+(e&&e.message?e.message:"réessayez"));setEtat("");}}
+    },250);
+    return()=>{vivant=false;clearTimeout(t);};
+  },[prep,cle,type]);
+  useEffect(()=>{
+    const f=ev=>{
+      const d=ev.data;
+      if(!d||d.pmv!=="ed"||!cadre.current||ev.source!==cadre.current.contentWindow)return;
+      agirRef.current(d);
+    };
+    window.addEventListener("message",f);
+    return()=>window.removeEventListener("message",f);
+  },[]);
+  return(<div style={{flex:"2 1 480px",minWidth:0}}>
+    {etat&&<div style={{fontSize:12,color:"#6B7280",marginBottom:6}}>⏳ {etat}</div>}
+    {erreur&&<div style={{background:"#FFF5F5",border:"1.5px solid #D73A49",borderRadius:6,padding:"8px 12px",fontSize:13,color:"#D73A49",marginBottom:8}}>⚠ {erreur}</div>}
+    {html&&<iframe ref={cadre} title="Aperçu modifiable" srcDoc={html} onLoad={()=>{try{cadre.current.contentWindow.scrollTo(0,defil.current);}catch(e){/* sans effet */}}} style={{width:"100%",height:"80vh",border:"1px solid #D1D5DB",borderRadius:8,background:"#fff",opacity:etat?0.6:1}}/>}
+  </div>);
 }
 
 // liste des champs de la fiche, par étape, pour insérer un {{champ}}

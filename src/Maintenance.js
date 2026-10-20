@@ -178,7 +178,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
       </div>
     </>}
 
-    {onglet==="rapports"&&rapports&&<EditeurRapports nom={nom} champsDe={rapports.champsDe} categories={rapports.categories} fiches={rapports.fiches} apercu={rapports.apercu}/>}
+    {onglet==="rapports"&&rapports&&<EditeurRapports nom={nom} champsDe={rapports.champsDe} categories={rapports.categories} fiches={rapports.fiches} apercu={rapports.apercu} preparer={rapports.preparer}/>}
 
     {onglet==="planning"&&<div style={CARTE}>
       <b style={{fontSize:14}}>Colonnes du planning (statuts des chantiers)</b>

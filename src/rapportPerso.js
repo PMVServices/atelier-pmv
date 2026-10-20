@@ -55,7 +55,8 @@ export function conditionOk(c,v){
 }
 
 // Un bloc ajouté -> 0, 1 ou plusieurs blocs « neutres » {k:…} (titre1, titre2, texte, lignes, photo)
-export function blocsDepuisAjout(a,ctx){
+export const blocsDepuisAjout=(a,ctx)=>blocsDepuisAjoutBrut(a,ctx).map(d=>({...d,ajout:a.id}));
+function blocsDepuisAjoutBrut(a,ctx){
   const v=ctx.v||{};
   if(!conditionOk(a.condition,v))return [];
   const style=t=>a.style==="gras"?[{b:t}]:a.style==="rouge"?[{rouge:t}]:[t];
@@ -75,7 +76,8 @@ export function blocsDepuisAjout(a,ctx){
 
 // ── rapport « livret » (cheminée) : modèle plat {blocs:[…]} ───────────────────────────────
 const DIM_LIVRET={petite:{w:6,h:5,r:4.2},moyenne:{w:9,h:7,r:5.6},grande:{w:14,h:10,r:7.5}};
-function blocsLivret(d){
+const blocsLivret=d=>blocsLivretBrut(d).map(b=>({...b,ajout:d.ajout}));
+function blocsLivretBrut(d){
   const dim=DIM_LIVRET[d.taille]||DIM_LIVRET.moyenne;
   switch(d.k){
     case "titre1":return [{t:"h1",txt:d.txt,toc:true,perso:true}];
@@ -143,7 +145,8 @@ export function appliquerLivret(M,cfg,ctx,ancres){
 }
 
 // ── rapport « chapitres » (moteur, pompe, ventilateur…) : modèle {chapitres:[{id,titre,blocs}]} ──────────────
-function blocsChapitre(d){
+const blocsChapitre=d=>blocsChapitreBrut(d).map(b=>({...b,ajout:d.ajout}));
+function blocsChapitreBrut(d){
   switch(d.k){
     case "titre2":return [{t:"sous",txt:d.txt}];
     case "texte":return [{t:"para",parts:d.parts}];
@@ -192,7 +195,7 @@ export function appliquerChapitres(M,cfg,ctx,ancres){
       if(ci>=0||cle==="__fin"){
         // niveau chapitre : un titre de rubrique ouvre un chapitre ; le reste se range à la fin du chapitre précédent
         if(d.k==="titre1"){
-          const nv={id:"perso:"+a.id+":"+n,titre:d.txt,blocs:[]};
+          const nv={id:"perso:"+a.id+":"+n,titre:d.txt,blocs:[],ajout:a.id};
           const i=cle==="__fin"?ch.length:ch.findIndex(c=>c.id===cle);
           ch.splice(i,0,nv);return;
         }
@@ -210,6 +213,6 @@ export function appliquerChapitres(M,cfg,ctx,ancres){
       ch[k].blocs.splice(j,0,...blocsChapitre(dd));
     });
   });
-  ch=ch.filter(c=>c.blocs.length>0);
+  ch=ch.filter(c=>c.blocs.length>0||c.ajout); // un titre ajouté par la Maintenance reste, même seul (on y ajoute ensuite son contenu)
   return {...M,chapitres:ch,sommaire:ch.map((c,i)=>(i+1)+". "+c.titre)};
 }

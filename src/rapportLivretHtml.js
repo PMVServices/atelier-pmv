@@ -2,6 +2,7 @@
 // Rapport client « cheminée de freinage » : aperçu et PDF (impression). Le contenu vient de rapportCheminee.js ; ce fichier ne fait que la mise en page.
 import {LOGO_B64, afficherApercu, lancerImpression, reduireImage} from "./pdfUtils";
 import {BANDE} from "./rapportModele";
+import {EDITION_CSS, EDITION_SCRIPT} from "./editionApercu";
 import {construireRapportCheminee, urlsRapportCheminee, adresseImage, dimensionsRang} from "./rapportCheminee";
 
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
@@ -16,8 +17,12 @@ function parts(list){
   }).join("");
 }
 
-export function genRapportLivretHtml(M,images,dims){
+// opts (aperçu modifiable de la Maintenance uniquement) : {edition : true, ancres : rubriques connues}
+export function genRapportLivretHtml(M,images,dims,opts){
   images=images||{};dims=dims||{};
+  var edition=!!(opts&&opts.edition);var kinds={};
+  if(edition)(opts.ancres||[]).forEach(function(a){kinds[a.id]=a.kind||(a.niveau===1?"h1":"h2");});
+  function ed(frag,courant,b){return edition?"<div class='ed' data-ancre='"+esc(courant)+"' data-kind='"+esc(kinds[courant]||"")+"'"+(b&&b.ajout?" data-bloc='"+esc(b.ajout)+"'":"")+">"+frag+"</div>":frag;}
   var src=function(u){return esc(images[u]||adresseImage(u));};
   var fig=function(u,style,leg){return u?"<figure><img src='"+src(u)+"' style='"+style+"' crossorigin='anonymous'/>"+(leg?"<figcaption>"+esc(leg)+"</figcaption>":"")+"</figure>":"";};
   var accroche="PMV Services, "+M.societe.accroche.replace(/"/g,"'");
@@ -61,7 +66,7 @@ export function genRapportLivretHtml(M,images,dims){
   "@media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}"+
     ".page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none;}.cover{margin:0;box-shadow:none;}}";
 
-  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Rapport "+esc(M.de)+"</title><style>"+css+"</style></head><body>";
+  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Rapport "+esc(M.de)+"</title><style>"+css+(edition?EDITION_CSS:"")+"</style></head><body>";
 
   // couverture
   var svg="<svg viewBox='0 0 "+BANDE.w+" "+BANDE.h+"' preserveAspectRatio='none'>"+BANDE.formes.map(function(f){return "<polygon points='"+f.pts.map(function(p){return p[0]+","+p[1];}).join(" ")+"' fill='"+f.fill+"'/>";}).join("")+"</svg>";
@@ -87,7 +92,10 @@ export function genRapportLivretHtml(M,images,dims){
   var page="<section class='page flux'>";
   var premier=true;
   var visuel=function(i){var n=M.blocs[i+1];return !!n&&["img","rang","capture","table"].indexOf(n.t)>=0;};
+  var courant="";
   M.blocs.forEach(function(b,bi){
+    if(b.id)courant=b.id;
+    var debut=page.length;
     var kn=visuel(bi)?" kn":"";
     if(b.t==="h1"){page+="<h1"+(premier?" class='prem'":"")+">"+esc(b.txt)+"</h1>";premier=false;}
     else if(b.t==="h2")page+="<h2"+(b.leger?" class='leger'":"")+">"+esc(b.txt)+"</h2>";
@@ -111,8 +119,9 @@ export function genRapportLivretHtml(M,images,dims){
           return "<td style='"+st+"'>"+(c.v?"<span class='"+c.v+"'>"+inner+"</span>":inner)+"</td>";
         }).join("")+"</tr>";}).join("")+"</table>";
     }
+    if(edition)page=page.slice(0,debut)+ed(page.slice(debut),courant,b);
   });
-  html+=page+"</section></body></html>";
+  html+=page+"</section>"+(edition?EDITION_SCRIPT:"")+"</body></html>";
   return html;
 }
 
