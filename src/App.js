@@ -6035,8 +6035,7 @@ const MODE_POSTE=typeof window!=="undefined"&&/^\/poste(\/|$)/.test(window.locat
 const PERSONNE_POSTE={id:"poste",nom:"Poste",prenom:"stock",initiales:"",profil:"tech"};
 const MODE_STOCK=MODE_POSTE||(typeof window!=="undefined"&&(/^\/stock(\/|$)/.test(window.location.pathname)||/[?&]app=stock(&|$)/.test(window.location.search)));
 
-// Les pages des fiches atelier ne sont jamais en lecture seule, même pour le profil Commercial : il les ouvre, les modifie et en crée comme un technicien.
-// Les fiches chantier et le planning gardent la lecture seule du Commercial.
+// Les pages des fiches atelier, des fiches chantier et du planning ne sont jamais en lecture seule, même pour le profil Commercial : il les ouvre, les modifie et en crée comme un technicien (décision du 20/10/2026).
 function EcritureAtelier({children}){return <LectureCtx.Provider value={false}>{children}</LectureCtx.Provider>;}
 
 export default function App(){
@@ -6233,13 +6232,13 @@ export default function App(){
     {page==="accueil"&&<EcritureAtelier><PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/></EcritureAtelier>}
     {page==="choix"&&<EcritureAtelier><PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"&&m!==TYPE_CHEMINEE){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");}}/></EcritureAtelier>}
     {page==="fiche"&&<EcritureAtelier><PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/></EcritureAtelier>}
-    {page==="planning"&&<PagePlanning fiches={fiches} clients={clients} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onNouvelleFiche={()=>askIdent(t=>{setSessionTech(t);setRetourFiche("planning");setPage("choix");})}/>}
+    {page==="planning"&&<EcritureAtelier><PagePlanning fiches={fiches} clients={clients} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onNouvelleFiche={()=>askIdent(t=>{setSessionTech(t);setRetourFiche("planning");setPage("choix");})}/></EcritureAtelier>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&((fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel===TYPE_CHEMINEE?<PageRapportCheminee ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>:<PageRapport ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>)}
     {page==="suivi"&&(admin
       ?<PageMateriel pieces={pieces} setPieces={setPieces} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>
       :<PageMesDemandes techs={techs} sessionTech={sessionTech} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>)}
-    {page==="chantier"&&<PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech} onOuvrirAtelier={ouvrirAtelierDepuisChantier} onMaterielMaj={demandesMat.recharger}/>}
+    {page==="chantier"&&<EcritureAtelier><PageChantier fiches={fiches} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} sessionTech={sessionTech} onOuvrirAtelier={ouvrirAtelierDepuisChantier} onMaterielMaj={demandesMat.recharger}/></EcritureAtelier>}
     {page==="stockage"&&<PageStockage fiches={fiches} onRetour={()=>setPage("accueil")}/>}
     {page==="commandes"&&SUIVI_COMMANDES&&<PageCommandes fiches={fiches} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onResume={setCommandesResume} demandesMat={demandesMat} vueInitiale={vueCommandesInit} onVueConsommee={()=>setVueCommandesInit(null)} onDemandeMateriel={()=>ouvrirDemande("commandes")}/>}
     {page==="demande"&&(demandesMat.disponible===false

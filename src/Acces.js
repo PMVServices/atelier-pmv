@@ -13,7 +13,7 @@ export const PROFILS={
 };
 export const LectureCtx=React.createContext(false);
 // Personne connectée + « demander qui utilise l'appli » (fenêtre de choix par-dessus l'écran en cours, sans le fermer) : sert aux fiches
-export const PersonneCtx=React.createContext(null); // vrai pour le profil Commercial : fiches et planning en lecture seule
+export const PersonneCtx=React.createContext(null); // la personne connectée (le profil Commercial a, comme un technicien, la main sur les fiches atelier et chantier et sur le planning)
 
 const CLE="acces_personnes";
 const CACHE="pmv_acces_cache";
@@ -202,7 +202,7 @@ export function PageAcces({personnes,techs,moi,onEnregistre,onRetour}){
       <h1 style={{fontSize:22,fontWeight:800,margin:0}}>🔑 Accès</h1>
       <button type="button" onClick={onRetour} style={BTN2}>← Retour</button>
     </div>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>À chaque ouverture, l'appli demande qui ouvre. Le profil de la personne décide de ce qu'elle voit : <b>Administrateur</b> (tout), <b>Technicien</b> (fiches, planning, matériel, stock…), <b>Commercial</b> (calendrier, fiches et planning en lecture, rapports). Les initiales servent à préremplir « qui a fait la fiche » pour un technicien.</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>À chaque ouverture, l'appli demande qui ouvre. Le profil de la personne décide de ce qu'elle voit : <b>Administrateur</b> (tout), <b>Technicien</b> (fiches, planning, matériel, stock…), <b>Commercial</b> (suivi clients, calendrier, rapports, et fiches atelier, fiches chantier et planning comme un technicien). Les initiales servent à préremplir « qui a fait la fiche » pour un technicien.</p>
 
     <div style={carte}>
       {tri.map(p=>(<div key={p.id} style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",padding:"8px 0",borderBottom:"1px solid #F3F4F6"}}>

@@ -2,7 +2,7 @@
 // Rapport client « cheminée de freinage » : aperçu et PDF (impression). Le contenu vient de rapportCheminee.js ; ce fichier ne fait que la mise en page.
 import {LOGO_B64, afficherApercu, lancerImpression, reduireImage} from "./pdfUtils";
 import {BANDE} from "./rapportModele";
-import {construireRapportCheminee, urlsRapportCheminee, adresseImage} from "./rapportCheminee";
+import {construireRapportCheminee, urlsRapportCheminee, adresseImage, dimensionsRang} from "./rapportCheminee";
 
 function esc(s){return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 function parts(list){
@@ -16,8 +16,8 @@ function parts(list){
   }).join("");
 }
 
-export function genRapportLivretHtml(M,images){
-  images=images||{};
+export function genRapportLivretHtml(M,images,dims){
+  images=images||{};dims=dims||{};
   var src=function(u){return esc(images[u]||adresseImage(u));};
   var fig=function(u,style,leg){return u?"<figure><img src='"+src(u)+"' style='"+style+"' crossorigin='anonymous'/>"+(leg?"<figcaption>"+esc(leg)+"</figcaption>":"")+"</figure>":"";};
   var accroche="PMV Services, "+M.societe.accroche.replace(/"/g,"'");
@@ -53,7 +53,7 @@ export function genRapportLivretHtml(M,images){
   "p{margin-bottom:6px;}p.grand{font-size:13pt;}.l{margin-bottom:2px;}.lignes{margin-bottom:8px;page-break-inside:avoid;break-inside:avoid;}.lignes.apres{margin-bottom:12px;}.espace{margin-top:16px;}"+
   "figure{margin:6px 0 10px;text-align:left;page-break-inside:avoid;break-inside:avoid;}figure.centre{text-align:center;}"+
   "figure img{max-width:100%;display:inline-block;}figcaption{font-size:11pt;margin-top:3px;text-align:center;}"+
-  ".rang{display:flex;gap:3mm;margin:6px 0 10px;page-break-inside:avoid;break-inside:avoid;}.rang figure{flex:1 1 0;min-width:0;margin:0;}.rang figure img{width:100%;object-fit:contain;object-position:left top;}"+
+  ".rang{display:flex;gap:3mm;margin:6px 0 10px;page-break-inside:avoid;break-inside:avoid;}.rang figure{flex:1 1 0;min-width:0;margin:0;}.rang figure img{width:100%;object-fit:contain;object-position:left top;}.rang.fixe{gap:0.3cm;}.rang.fixe figure{flex:none;}.rang.fixe figure img{height:auto;}"+
   "table.t{border-collapse:collapse;width:100%;margin:6px 0 12px;page-break-inside:avoid;break-inside:avoid;}"+
   "table.t td{border:1px solid #000;padding:2px 4px;vertical-align:top;}"+
   ".kn{break-after:avoid;page-break-after:avoid;}"+
@@ -96,8 +96,10 @@ export function genRapportLivretHtml(M,images){
     else if(b.t==="img")page+=fig(b.url,"max-width:"+b.w+"cm;max-height:"+b.h+"cm;");
     else if(b.t==="capture")page+="<figure><img src='"+src(b.url)+"' style='max-height:"+b.h+"cm;' crossorigin='anonymous'/></figure>";
     else if(b.t==="rang"){
-      var n=b.items.length;
-      page+="<div class='rang' style='max-width:"+(n===1?"8":n===2?"13":"16.6")+"cm'>"+b.items.map(function(it){return "<figure><img src='"+src(it.url)+"' style='max-height:"+b.h+"cm' crossorigin='anonymous'/>"+(b.legendes&&it.legende?"<figcaption>"+esc(it.legende)+"</figcaption>":"")+"</figure>";}).join("")+"</div>";
+      // même hauteur pour toutes les photos de la ligne, largeurs proportionnelles, sur une seule ligne (dimensionsRang) ; sans les dimensions des images : répartition souple
+      var connues=b.items.every(function(it){return dims[it.url]&&dims[it.url].w&&dims[it.url].h;});
+      var calc=connues?dimensionsRang(b.items.map(function(it){return dims[it.url].w/dims[it.url].h;}),b.h,16.6,0.3):null;
+      page+="<div class='rang"+(calc?" fixe":"")+"'>"+b.items.map(function(it,i){return "<figure"+(calc?" style='width:"+calc.largeurs[i].toFixed(3)+"cm'":"")+"><img src='"+src(it.url)+"'"+(calc?"":" style='max-height:"+b.h+"cm'")+" crossorigin='anonymous'/>"+(b.legendes&&it.legende?"<figcaption>"+esc(it.legende)+"</figcaption>":"")+"</figure>";}).join("")+"</div>";
     }
     else if(b.t==="table"){
       var tot=b.cols.reduce(function(a,c){return a+c;},0);
@@ -118,7 +120,10 @@ export async function genRapportLivretHtmlLeger(v,data,photos){
   var M=construireRapportCheminee(v,data,photos);
   var map={};
   await Promise.all(urlsRapportCheminee(M).map(function(u){return reduireImage(adresseImage(u),1600,0.8).then(function(d){if(d)map[u]=d;});}));
-  return genRapportLivretHtml(M,map);
+  // dimensions réelles des images (pour mettre les photos côte à côte à la même hauteur)
+  var dims={};
+  await Promise.all(Object.keys(map).map(function(u){return new Promise(function(res){var im=new Image();im.onload=function(){dims[u]={w:im.naturalWidth,h:im.naturalHeight};res();};im.onerror=function(){res();};im.src=map[u];});}));
+  return genRapportLivretHtml(M,map,dims);
 }
 export async function apercuRapportCheminee(v,data,photos){
   afficherApercu(await genRapportLivretHtmlLeger(v,data,photos),"rapport-"+(v&&v.de||"cheminee"));

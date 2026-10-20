@@ -57,6 +57,15 @@ const dateFr=s=>{const m=String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})/);return 
 const moisAnneeDe=s=>{const m=String(s||"").match(/^(\d{4})-(\d{2})/);return m?m[2]+"/"+m[1]:"";};
 const fr2=(x,d)=>String(Math.round(x*Math.pow(10,d))/Math.pow(10,d));
 
+// Photos côte à côte : même hauteur, largeurs proportionnelles, sur une seule ligne. La hauteur commune est celle demandée (hMax),
+// réduite si la somme des largeurs dépasse la place disponible (largeurCm, espaces entre photos compris).
+export function dimensionsRang(ratios,hMax,largeurCm,espaceCm){
+  if(!ratios.length)return {h:0,largeurs:[]};
+  const somme=ratios.reduce((a,r)=>a+r,0);
+  const h=Math.min(hMax,(largeurCm-espaceCm*(ratios.length-1))/somme);
+  return {h,largeurs:ratios.map(r=>h*r)};
+}
+
 // numéro lu sur la gravure d'une plaque SNCF : « 2026-08-307 » -> 307 ; « 2024-07-037/2026-08 » -> 037
 export function numeroGravure(texte){
   const t=String(texte||"").trim().replace(/^-+/,"").split("/")[0].trim();
@@ -229,6 +238,15 @@ export function construireRapportCheminee(v,data,photos){
   if(photos.stator_av||photos.stator_ar){
     const items=[photos.stator_av&&{url:photos.stator_av,legende:"Stator avant"},photos.stator_ar&&{url:photos.stator_ar,legende:"Stator arrière"}].filter(Boolean);
     blocs.push({t:"rang",items,h:6.5,legendes:true});
+  }
+  {
+    // isolement du moteur (fiche : « Isolement masse enroulement sous 1 kV (UVW) », à l'arrivée puis après étuvage)
+    const avant=ohm("isol_masse"),apres=ohm("isol_masse_ap");
+    const dar=id=>has(v[id])?" ; DAR : "+String(v[id]).trim():"";
+    const l=[];
+    if(avant)l.push(["Mesure d'isolement moteur à l'arrivée : "+avant+"/1000V"+dar("isol_masse_dar")]);
+    if(apres)l.push(["Mesure d'isolement moteur après étuvage : "+apres+"/1000V"+dar("isol_masse_dar_ap")]);
+    if(l.length){h2("Mesure électrique statique :",{toc:true});lignes(l);}
   }
   if(has(v.champ_magnetique)){h2("Mesure de champ magnétique :",{toc:true});para(String(v.champ_magnetique).trim());}
   if(photos.adx_pv){h2("Mesure électrique statique en PV :",{toc:true});blocs.push({t:"capture",url:photos.adx_pv,h:17});}

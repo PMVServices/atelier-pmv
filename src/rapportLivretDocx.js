@@ -9,7 +9,7 @@ import {
 import { LOGO_B64 } from "./pdfUtils";
 import { BANDE } from "./rapportModele";
 import { chargerImage, fitBox, dessinerBande, cm, MARGE_LR, LARGEUR_TWIPS } from "./rapportDocx";
-import { construireRapportCheminee, urlsRapportCheminee, adresseImage, valeursDepartRapportCheminee, resoudrePhotosCheminee } from "./rapportCheminee";
+import { construireRapportCheminee, urlsRapportCheminee, adresseImage, valeursDepartRapportCheminee, resoudrePhotosCheminee, dimensionsRang } from "./rapportCheminee";
 
 const FONT = "Calibri";
 const NOIR = "000000", GRIS = "404040";
@@ -57,20 +57,28 @@ function imageLigne(img, wCm, hCm, o) {
 const legende = (txt) => new Paragraph({ alignment: AlignmentType.CENTER, keepLines: true, spacing: { before: 40, after: 120 }, children: [run(txt, { size: 22 })] });
 
 function rangImages(b, img) {
-  const n = b.items.length;
-  const totalCm = n === 1 ? 8 : n === 2 ? 13 : 16.6;
-  const totalTw = Math.round(LARGEUR_TWIPS * totalCm / 16.6);
-  const colTw = Math.floor(totalTw / n);
-  const colCm = totalCm / n - 0.35;
-  const cells = b.items.map((it) => {
-    const im = img(it.url);
+  // même hauteur pour toutes les photos de la ligne, largeurs proportionnelles, jamais de retour à la ligne (voir dimensionsRang)
+  const items = b.items.map((it) => ({ it, im: img(it.url) })).filter((x) => x.im);
+  const n = items.length;
+  const MARGE_CM = 0.2; // marges gauche et droite d'une cellule (40 + 60 twips)
+  const { h, largeurs } = dimensionsRang(items.map((x) => x.im.w / x.im.h), b.h, 16.6 - MARGE_CM * n, 0);
+  const tw = (c) => Math.round((c + MARGE_CM) * 567);
+  const cells = items.map((x, i) => {
+    const legendeTexte = b.legendes && x.it.legende;
     return new TableCell({
-      width: { size: colTw, type: WidthType.DXA }, borders: noBorders, verticalAlign: VerticalAlign.TOP, margins: { left: 40, right: 60, top: 20, bottom: 20 },
-      children: im ? [imageLigne(im, colCm, b.h, { keepNext: !!(b.legendes && it.legende), legende: b.legendes && it.legende }), ...(b.legendes && it.legende ? [legende(it.legende)] : [])] : [new Paragraph("")],
+      width: { size: tw(largeurs[i]), type: WidthType.DXA }, borders: noBorders, verticalAlign: VerticalAlign.TOP, margins: { left: 40, right: 60, top: 20, bottom: 20 },
+      children: [
+        new Paragraph({
+          alignment: AlignmentType.LEFT, keepNext: !!legendeTexte, keepLines: true, spacing: { before: 60, after: legendeTexte ? 0 : 140 },
+          children: [new ImageRun({ type: x.im.type, data: x.im.data, transformation: { width: Math.max(1, cm(largeurs[i])), height: Math.max(1, cm(h)) } })],
+        }),
+        ...(legendeTexte ? [legende(legendeTexte)] : []),
+      ],
     });
   });
+  const colonnes = largeurs.map(tw);
   return new Table({
-    width: { size: colTw * n, type: WidthType.DXA }, columnWidths: Array(n).fill(colTw),
+    width: { size: colonnes.reduce((s, c) => s + c, 0), type: WidthType.DXA }, columnWidths: colonnes,
     borders: { ...noBorders, insideHorizontal: noBorder, insideVertical: noBorder },
     rows: [new TableRow({ cantSplit: true, children: cells })],
   });
