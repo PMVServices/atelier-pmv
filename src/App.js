@@ -399,8 +399,6 @@ const CHAMPS_POMPE={
     {id:"pression_pompe",label:"Pression de pompe",type:"mesure",unite:"bar",required:true,groupe:"delta_p"},
     {id:"delta_p_result",label:"Delta P (calculé auto)",type:"calcul",required:false,calcul:"pression_pompe-pression_ville",unite:"bar",groupe:"delta_p_pair"},
     {id:"delta_p_etat",label:"Delta P — état",type:"select",options:["OK","HS"],required:true,groupe:"delta_p_pair"},
-    {id:"diametre_nez_roue",label:"Diamètre nez de roue",type:"mesure",unite:"mm",required:true,groupe:"dim_roue"},
-    {id:"diametre_volute",label:"Diamètre volute intérieur",type:"mesure",unite:"mm",required:true,groupe:"dim_roue"},
     {id:"tech_mesure_avant_p",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Matériel au démontage moteur":[
@@ -439,6 +437,8 @@ const CHAMPS_POMPE={
   ],
   "Mécanique pompe au démontage":[
     {id:"pompe_neuve",label:"Pompe neuve",type:"oui_non",required:true},
+    {id:"diametre_nez_roue",label:"Diamètre nez de roue",type:"mesure",unite:"mm",required:true,groupe:"dim_roue"},
+    {id:"diametre_volute",label:"Diamètre volute intérieur",type:"mesure",unite:"mm",required:true,groupe:"dim_roue"},
     {id:"etat_jc",label:"État du joint de corps",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:siPompeAncienne},
     {id:"matiere_taille_jc",label:"Matière et taille du joint de corps",type:"text",required:true,condition:siPompeAncienne},
     {id:"remplacement_jc",label:"Remplacement du joint de corps",type:"oui_non",required:true,condition:siPompeAncienne},
@@ -3241,6 +3241,13 @@ function champsPourType(type){return appliquerConfig(champsPourTypeBase(type),cl
 function etapesPourType(type,v){
   if(type===TYPE_CHEMINEE)return ETAPES_CHEMINEE;
   return type==="Pompe"?ETAPES_POMPE:type==="Moto-réducteur"?ETAPES_REDUCTEUR:type==="Ventilateur"?etapesVentilateurPour(v):etapesMoteurPour(v);
+}
+// listes d'étapes possibles selon les réponses (moteur neuf, ventilateur seul…) : la Maintenance s'en sert pour avertir qu'une étape d'arrivée n'apparaît pas toujours
+function variantesEtapesPourType(type){
+  const vs=type==="Ventilateur"?[{},{recu_ventilateur:"Ventilateur seul"},{moteur_neuf_debut:"Oui"}]
+    :(type==="Moteur"||type==="Autre")?[{},{moteur_neuf_debut:"Oui"},{moteur_neuf_debut:"Oui",essais_moteur_neuf:"Oui"},{essai_vide_avant:"Non",moteur_neuf:"Non"}]
+    :[{}];
+  return vs.map(v=>etapesPourType(type,v));
 }
 function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed}){
   const lecture=React.useContext(LectureCtx);
@@ -6286,7 +6293,7 @@ export default function App(){
     {demandeIdent&&<ModalIdent techs={techs} onConfirm={confirmIdent}/>}
     {page==="maintenance"&&role==="maintenance"&&<PageMaintenance nom={nomComplet(moi)} statutsBase={STATUTS_BASE}
       catalogue={{
-        atelier:[["Moteur","Moteur électrique"],["Pompe","Pompe"],["Moto-réducteur","Moto-réducteur"],["Ventilateur","Ventilateur"],[TYPE_CHEMINEE,"Cheminée de freinage"],["Autre","Autre matériel"]].map(([t,l])=>({cle:t,libelle:l,base:()=>champsPourTypeBase(t)})),
+        atelier:[["Moteur","Moteur électrique"],["Pompe","Pompe"],["Moto-réducteur","Moto-réducteur"],["Ventilateur","Ventilateur"],[TYPE_CHEMINEE,"Cheminée de freinage"],["Autre","Autre matériel"]].map(([t,l])=>({cle:t,libelle:l,base:()=>champsPourTypeBase(t),variantesEtapes:()=>variantesEtapesPourType(t)})),
         chantier:TYPES_CHANTIER.map(t=>({cle:"ch:"+t,libelle:t,base:()=>champsChantierPourTypeBase(t)}))
       }}
       rapports={{champsDe:champsRapportListe,categories:(categories||[]).map(c=>c.nom).filter(Boolean),fiches:fiches,apercu:apercuRapportMaintenance,preparer:(type,ficheId)=>preparerRapport(ficheId,type,null)}}

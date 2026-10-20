@@ -35,7 +35,7 @@ async function lire(cle){
       if(o.note!==undefined)modifs.push("note : "+(String(o.note).trim()||"(effacée)"));
       console.log("  champ du code "+id+" → "+modifs.join(" ; "));
     });
-    Object.keys(f.deplace||{}).forEach(id=>console.log("  déplacé : "+id+" après "+f.deplace[id].apres));
+    Object.keys(f.deplace||{}).forEach(id=>console.log("  déplacé : "+id+(f.deplace[id].etape?" vers l'étape « "+f.deplace[id].etape+" »":"")+" après "+f.deplace[id].apres));
     (f.ajouts||[]).forEach(a=>{
       const d=a.def||{};
       console.log("  AJOUT (id "+a.id+") dans « "+a.etape+" » après "+a.apres+" : "+(d.label||"?")+" ["+d.type+(d.unite?", "+d.unite:"")+(d.options?", choix : "+d.options.join(" / ")+(d.autre?" + Autre":""):"")+(d.required?", obligatoire":"")+"]");

@@ -28,6 +28,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
   const [etape,setEtape]=useState("");
   const [edition,setEdition]=useState(null);     // id du champ en cours de modification
   const [ajoutApres,setAjoutApres]=useState(null); // "__debut" ou id du champ après lequel on ajoute
+  const [deplaceId,setDeplaceId]=useState(null); // id du champ dont on choisit la nouvelle étape
   const [apercu,setApercu]=useState(false);
   const [occupe,setOccupe]=useState(false);const [message,setMessage]=useState(null);
   const [histo,setHisto]=useState(null);
@@ -52,9 +53,18 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
     precedente.current=nouvelle;
   }),[]);
   useEffect(()=>{if(onglet==="historique"&&histo===null)lireHistorique().then(setHisto);},[onglet,histo]);
-  useEffect(()=>{setEdition(null);setAjoutApres(null);},[etapeCourante,typeCourant&&typeCourant.cle,onglet]);
+  useEffect(()=>{setEdition(null);setAjoutApres(null);setDeplaceId(null);},[etapeCourante,typeCourant&&typeCourant.cle,onglet]);
 
-  const baseDe=id=>{const e=(base[etapeCourante]||[]).find(c=>c.id===id);return e||null;};
+  // définition du code d'un champ (toutes étapes : il a pu être envoyé dans une autre étape) et étape où le code le place
+  const baseDe=id=>{for(const e of etapes){const c=(base[e]||[]).find(x=>x.id===id);if(c)return c;}return null;};
+  const etapeNative=id=>etapes.find(e=>(base[e]||[]).some(c=>c.id===id))||null;
+  const premiere=etapes[0]; // l'étape d'entrée de la fiche (la création de la fiche en dépend) ne reçoit ni ne perd de champ
+  const variantesEtapes=typeCourant&&typeCourant.variantesEtapes?typeCourant.variantesEtapes():null;
+  const partenaires=c=>c&&c.groupe?liste.filter(x=>x.id!==c.id&&x.groupe===c.groupe&&!x.ajoute):[];
+  // champs du code envoyés par la configuration dans une autre étape : on le dit dans l'étape d'origine
+  const cfgDeplace=((brouillon.fiches||{})[typeCourant&&typeCourant.cle]||{}).deplace||{};
+  const sortis=Object.keys(cfgDeplace).filter(id=>{const t=cfgDeplace[id]&&cfgDeplace[id].etape;return t&&t!==etapeCourante&&etapes.includes(t)&&etapeNative(id)===etapeCourante;})
+    .map(id=>{const t=cfgDeplace[id].etape;const f=(vue[t]||[]).find(x=>x.id===id);return {id,label:f?(f.label||id):id,vers:t};});
   function majChamp(id,patch){
     maj(n=>{
       const c=c0(n);
@@ -89,12 +99,37 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
       const c=c0(n);
       const a=(c.ajouts||[]).find(x=>x.id===id);
       if(a){a.apres=apres;a.etape=etapeCourante;return;}
-      c.deplace=c.deplace||{};c.deplace[id]={apres};
+      c.deplace=c.deplace||{};c.deplace[id]={...(c.deplace[id]||{}),apres}; // l'étape d'arrivée éventuelle est conservée
     });
   }
   function ajouter(def){
     maj(n=>{const c=c0(n);c.ajouts=c.ajouts||[];c.ajouts.push({id:nouvelId(),etape:etapeCourante,apres:ajoutApres,def});});
     setAjoutApres(null);
+  }
+  // envoie un champ (et ceux affichés sur la même ligne, si demandé) dans une autre étape, après le champ « apres » (ou « __debut »)
+  function deplacerVers(c,dest,apres,avec){
+    const ids=[c.id].concat(avec?partenaires(c).map(x=>x.id):[]);
+    maj(n=>{
+      const cf=c0(n);
+      let prec=apres;
+      ids.forEach(id=>{
+        const a=(cf.ajouts||[]).find(x=>x.id===id);
+        if(a){a.etape=dest;a.apres=prec;}
+        else{
+          cf.deplace=cf.deplace||{};
+          cf.deplace[id]=dest===etapeNative(id)?{apres:prec}:{apres:prec,etape:dest};
+        }
+        prec=id;
+      });
+    });
+    setDeplaceId(null);setEdition(null);setAjoutApres(null);setEtape(dest);
+  }
+  // remet un champ envoyé dans une autre étape à sa place d'origine (avec ceux qui l'avaient suivi)
+  function retablir(c){
+    const depuis=c._depuis;
+    const ids=[c.id].concat(partenaires(c).filter(x=>x._depuis===depuis).map(x=>x.id));
+    maj(n=>{const cf=c0(n);ids.forEach(id=>{if(cf.deplace)delete cf.deplace[id];});});
+    setEtape(depuis);
   }
   async function publier(){
     setOccupe(true);setMessage(null);
@@ -131,7 +166,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
         <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
           {etapes.map(e=><button key={e} type="button" onClick={()=>setEtape(e)} style={pastille(e===etapeCourante)}>{e}</button>)}
         </div>
-        <p style={{fontSize:11,color:"#9CA3AF",margin:"10px 0 0"}}>Les étapes elles-mêmes (ajout, ordre, suppression) ne se modifient pas ici : les fiches en cours en dépendent. « Masquer » cache un champ sans effacer les données déjà saisies.</p>
+        <p style={{fontSize:11,color:"#9CA3AF",margin:"10px 0 0"}}>Les étapes elles-mêmes (ajout, ordre, suppression) ne se modifient pas ici : les fiches en cours en dépendent. Un champ peut en revanche changer d'étape (« ↪ Autre étape »). « Masquer » cache un champ sans effacer les données déjà saisies.</p>
       </div>
 
       <div style={CARTE}>
@@ -143,15 +178,20 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
           </div>
         </div>
 
+        {sortis.length>0&&<div style={{background:"#F3F4F6",borderRadius:6,padding:"6px 10px",marginBottom:8,fontSize:12,color:"#6B7280"}}>
+          ↪ Envoyé{sortis.length>1?"s":""} dans une autre étape : {sortis.map((s,k)=><span key={s.id}>{k>0?" · ":""}<b>{s.label}</b> → <button type="button" onClick={()=>setEtape(s.vers)} style={{background:"none",border:"none",padding:0,color:BLEU,fontWeight:700,fontSize:12,cursor:"pointer",textDecoration:"underline",textAlign:"left"}}>{s.vers}</button></span>)}
+        </div>}
+
         {ajoutApres==="__debut"&&<FormulaireAjout onAjouter={ajouter} onAnnuler={()=>setAjoutApres(null)}/>}
 
         {liste.map((c,i)=>{
           const modeEdition=edition===c.id;
           const masque=!!c._masque;
+          const peutChangerEtape=etapeCourante!==premiere&&etapes.some(e=>e!==premiere&&e!==etapeCourante);
           return(<div key={c.id}>
             <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",padding:"8px 8px",borderTop:i?"1px solid #EEF1F5":"none",background:masque?"#F3F4F6":(c.ajoute?"#F0FFF4":"transparent"),opacity:masque?0.65:1,borderRadius:6}}>
               <div style={{flex:"1 1 260px",minWidth:0}}>
-                <div style={{fontSize:11,color:"#9CA3AF"}}>{LIBELLE_TYPE[c.type]||c.type}{c.ajoute&&<span style={{color:"#22863A",fontWeight:700}}> · ajouté</span>}{masque&&<span style={{color:"#6B7280",fontWeight:700}}> · masqué</span>}</div>
+                <div style={{fontSize:11,color:"#9CA3AF"}}>{LIBELLE_TYPE[c.type]||c.type}{c.ajoute&&<span style={{color:"#22863A",fontWeight:700}}> · ajouté</span>}{masque&&<span style={{color:"#6B7280",fontWeight:700}}> · masqué</span>}{c._depuis&&<span style={{color:BLEU,fontWeight:700}}> · ↪ vient de « {c._depuis} »</span>}</div>
                 <div style={{fontSize:14,fontWeight:c.type==="titre"?700:500,color:c.type==="titre"?BLEU:"#1A1A2E",overflowWrap:"anywhere"}}>{resume(c)}{c.required===true&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&<span style={{color:"#9CA3AF"}}> ({c.unite})</span>}</div>
                 {Array.isArray(c.options)&&<div style={{fontSize:11,color:"#6B7280"}}>Choix : {c.options.join(" · ")}</div>}
               </div>
@@ -162,9 +202,12 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
                   :<button type="button" style={BTN_P} onClick={()=>majChamp(c.id,{masque:!masque})}>{masque?"👁 Réafficher":"🚫 Masquer"}</button>}
                 <button type="button" style={BTN_P} onClick={()=>deplacer(c.id,-1)} disabled={i===0} aria-label="Monter">▲</button>
                 <button type="button" style={BTN_P} onClick={()=>deplacer(c.id,1)} disabled={i===liste.length-1} aria-label="Descendre">▼</button>
-                <button type="button" style={BTN_P} onClick={()=>{setAjoutApres(c.id);setEdition(null);}}>＋ Ajouter dessous</button>
+                <button type="button" style={BTN_P} onClick={()=>{setAjoutApres(c.id);setEdition(null);setDeplaceId(null);}}>＋ Ajouter dessous</button>
+                {peutChangerEtape&&<button type="button" style={BTN_P} onClick={()=>{setDeplaceId(deplaceId===c.id?null:c.id);setEdition(null);setAjoutApres(null);}}>↪ Autre étape</button>}
+                {c._depuis&&<button type="button" style={BTN_P} onClick={()=>retablir(c)}>↩ Remettre dans « {c._depuis} »</button>}
               </div>
             </div>
+            {deplaceId===c.id&&<FormulaireDeplacement c={c} etapes={etapes.filter(e=>e!==premiere&&e!==etapeCourante)} vue={vue} variantes={variantesEtapes} etapeCourante={etapeCourante} partenaires={partenaires(c)} onOk={(dest,apres,avec)=>deplacerVers(c,dest,apres,avec)} onAnnuler={()=>setDeplaceId(null)}/>}
             {modeEdition&&<FormulaireModif c={c} onChange={patch=>majChamp(c.id,c.ajoute?{def:patch.def||patch}:patch)} onFermer={()=>setEdition(null)} ajoute={!!c.ajoute} base={baseDe(c.id)}/>}
             {ajoutApres===c.id&&<FormulaireAjout onAjouter={ajouter} onAnnuler={()=>setAjoutApres(null)}/>}
           </div>);
@@ -208,6 +251,37 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
       <button type="button" style={{...BTN,minHeight:42}} disabled={occupe} onClick={publier}>{occupe?"⏳ Publication…":"✔ Publier"}</button>
       <button type="button" style={{...BTN_O,minHeight:42}} disabled={occupe} onClick={annuler}>Annuler les modifications</button>
     </div>}
+  </div>);
+}
+
+// choix de la nouvelle étape d'un champ (et de sa place dans cette étape)
+function FormulaireDeplacement({c,etapes,vue,variantes,etapeCourante,partenaires,onOk,onAnnuler}){
+  const [dest,setDest]=useState(etapes[0]||"");
+  const [pos,setPos]=useState("fin");
+  const [avec,setAvec]=useState(true);
+  const cible=vue[dest]||[];
+  // l'étape d'arrivée n'apparaît pas dans tous les cas où l'étape actuelle apparaît (moteur neuf, ventilateur seul, suivi devis…)
+  const absente=e=>!!variantes&&variantes.some(l=>l.includes(etapeCourante)&&!l.includes(e));
+  const apres=pos==="debut"?"__debut":pos==="fin"?(cible.length?cible[cible.length-1].id:"__debut"):pos;
+  return(<div style={{background:"#F8F9FA",border:"1px solid #D1D5DB",borderRadius:8,padding:"10px 12px",margin:"4px 0 8px"}}>
+    <div style={{fontSize:13,fontWeight:700}}>↪ Mettre « {c.label||c.id} » dans une autre étape</div>
+    <label style={LBL}>Étape de destination</label>
+    <select value={dest} onChange={e=>{setDest(e.target.value);setPos("fin");}} style={INP}>
+      {etapes.map(e=><option key={e} value={e}>{e}{absente(e)?"  ⚠ pas toujours présente":""}</option>)}
+    </select>
+    <label style={LBL}>Place dans cette étape</label>
+    <select value={pos} onChange={e=>setPos(e.target.value)} style={INP}>
+      <option value="debut">En tête de l'étape</option>
+      {cible.map(x=><option key={x.id} value={x.id}>Après : {resume(x).slice(0,70)}</option>)}
+      <option value="fin">À la fin de l'étape</option>
+    </select>
+    {partenaires.length>0&&<label style={{display:"flex",gap:6,alignItems:"flex-start",fontSize:13,marginTop:8}}><input type="checkbox" checked={avec} onChange={e=>setAvec(e.target.checked)} style={{marginTop:2}}/><span>Déplacer aussi {partenaires.length>1?"les champs affichés":"le champ affiché"} sur la même ligne : <b>{partenaires.map(x=>x.label||x.id).join(", ")}</b></span></label>}
+    {absente(dest)&&<p style={{fontSize:12,color:"#8A4B00",background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:6,padding:"6px 10px",margin:"8px 0 0"}}>⚠ Cette étape n'apparaît pas dans tous les cas où « {etapeCourante} » apparaît (ex. moteur neuf, ventilateur seul, suivi devis) : dans ces cas le champ ne serait plus demandé.</p>}
+    <p style={{fontSize:11,color:"#9CA3AF",margin:"8px 0 0"}}>Les valeurs déjà saisies sur les fiches sont conservées. Sur une fiche qui a déjà passé l'étape de destination, le champ n'est plus demandé. L'étape « Entrée » ne reçoit ni ne perd de champ (la création de la fiche en dépend).</p>
+    <div style={{display:"flex",gap:8,marginTop:10}}>
+      <button type="button" style={{...BTN,opacity:dest?1:0.5}} disabled={!dest} onClick={()=>onOk(dest,apres,avec)}>Déplacer</button>
+      <button type="button" style={BTN_O} onClick={onAnnuler}>Annuler</button>
+    </div>
   </div>);
 }
 

@@ -86,18 +86,25 @@ function construire(map,cle,cfgGlobale,garderMasques){
   if(!cfg)return map;
   const champs=cfg.champs||{};const deplace=cfg.deplace||{};const ajouts=cfg.ajouts||[];
   const out={};
+  const transforme=c=>{
+    const o=champs[c.id];
+    if(!o)return c;
+    const n={...c};
+    if(o.label)n.label=o.label;
+    if(o.required!==undefined&&o.required!==null)n.required=!!o.required;
+    if(Array.isArray(o.options)&&o.options.length&&Array.isArray(c.options))n.options=o.options;
+    if(o.note!==undefined)n.note=(String(o.note).trim())||undefined;
+    if(o.masque)n._masque=true;
+    return n;
+  };
+  // champs du code envoyés dans une autre étape (deplace[id].etape) : id → étape d'arrivée ; ils quittent leur étape du code
+  const origine={},nb={};Object.keys(map).forEach(e=>map[e].forEach(c=>{origine[c.id]=e;nb[c.id]=(nb[c.id]||0)+1;}));
+  const vers={};
+  Object.keys(deplace).forEach(id=>{const t=deplace[id]&&deplace[id].etape;if(t&&origine[id]&&nb[id]===1&&origine[id]!==t&&map[t])vers[id]=t;});
+  const arrivees={};
+  Object.keys(map).forEach(e=>map[e].forEach(c=>{if(vers[c.id])arrivees[c.id]={...transforme(c),_depuis:e};}));
   Object.keys(map).forEach(etape=>{
-    let liste=map[etape].map(c=>{
-      const o=champs[c.id];
-      if(!o)return c;
-      const n={...c};
-      if(o.label)n.label=o.label;
-      if(o.required!==undefined&&o.required!==null)n.required=!!o.required;
-      if(Array.isArray(o.options)&&o.options.length&&Array.isArray(c.options))n.options=o.options;
-      if(o.note!==undefined)n.note=(String(o.note).trim())||undefined;
-      if(o.masque)n._masque=true;
-      return n;
-    });
+    let liste=map[etape].filter(c=>!vers[c.id]).map(transforme);
     const poser=a=>{
       const c=champDepuisAjout(a);
       const j=a.apres==="__debut"?-1:liste.findIndex(x=>x.id===a.apres);
@@ -111,14 +118,23 @@ function construire(map,cle,cfgGlobale,garderMasques){
       reste.filter(a=>!attente.includes(a)).forEach(poser);
       reste=attente;
     }
-    // déplacements de champs du code
-    Object.keys(deplace).forEach(id=>{
-      const i=liste.findIndex(c=>c.id===id);if(i<0||liste[i].ajoute)return;
-      const [c]=liste.splice(i,1);
+    // déplacements de champs du code : dans l'étape, ou arrivée d'un champ venu d'une autre étape (posé après le champ voulu, sinon à la fin)
+    // (un champ posé après un autre champ lui-même déplacé attend que celui-ci soit en place)
+    const placer=id=>{
+      let i,c;
+      if(vers[id]===etape){c=arrivees[id];i=liste.length;}
+      else{i=liste.findIndex(x=>x.id===id);if(i<0||liste[i].ajoute)return;[c]=liste.splice(i,1);}
       const ap=deplace[id].apres;
       const j=ap==="__debut"?-1:liste.findIndex(x=>x.id===ap);
       if(ap==="__debut")liste.unshift(c);else if(j>=0)liste.splice(j+1,0,c);else liste.splice(i,0,c);
-    });
+    };
+    let attente=Object.keys(deplace).filter(id=>vers[id]===etape||liste.some(x=>x.id===id&&!x.ajoute));
+    for(let passe=0;attente.length&&passe<50;passe++){
+      let prets=attente.filter(id=>{const ap=deplace[id].apres;return ap==="__debut"||ap===id||!attente.includes(ap);});
+      if(!prets.length)prets=attente.slice();
+      prets.forEach(placer);
+      attente=attente.filter(id=>!prets.includes(id));
+    }
     out[etape]=garderMasques?liste:liste.filter(c=>!c._masque);
   });
   return out;
