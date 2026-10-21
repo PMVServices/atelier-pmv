@@ -4,6 +4,7 @@ import {SUPA_URL, H, db} from "./supabase";
 import {NoticeActivation} from "./Activation";
 import {lancerImpression, telechargerHtml} from "./pdfUtils";
 import {reunirStocks, qteEff, miniEff, maxiEff, estPrincipal, libelleGroupe} from "./stockGroupes";
+import {normEnt, analyserFeuille, profilFamille} from "./stockImport";
 
 // ─── GESTION DE STOCK (démarrage : roulements 6XXX) ──────────────────────────────────────────────
 // Principe : Excel garde le catalogue (références, dimensions, emplacements, mini/maxi, prix…), l'appli
@@ -84,22 +85,37 @@ const MONO="ui-monospace,'SF Mono','Cascadia Mono',Menlo,Consolas,monospace";
 const cle=s=>String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/×/g,"X").replace(/\s+/g," ").trim().toUpperCase();
 const serieDe=ref=>{
   const t=String(ref||"").trim();
+  { const f=familleDe(ref); if(f!=="Roulements"&&f!=="Garniture")return "Autre"; } // familles GV2, circlips, boîtes à bornes… : pas de séries
   const m=/^(\d{2})/.exec(t);
   if(m)return m[1]+"XX";
   const l=/^([A-Za-zÀ-ÿ]+)/.exec(t);
   return l?l[1].toUpperCase():"Autre";
 };
-const familleDe=ref=>/^\d/.test(String(ref||"").trim())?"Roulements":"Garniture";
+// Famille d'une référence : roulements et garnitures se reconnaissent à la référence (chiffre en tête = roulement) ; les autres familles (GV2, circlips, boîtes à bornes,
+// plaques à bornes, presse-étoupes, condensateurs, divers) sont rangées à l'import dans parametres_app (clé « stock_familles » : {référence: famille}), lue avec les articles.
+let MAP_FAMILLES={};
+const familleDe=ref=>MAP_FAMILLES[ref]||(/^\d/.test(String(ref||"").trim())?"Roulements":"Garniture");
 // Libellé utilisé dans Matériel à commander (même style que l'assistant : "GM CNK 12")
-const designationDemande=a=>a.groupe?libelleGroupe(a," ou "):familleDe(a.reference)==="Garniture"?"GM "+a.reference:a.reference;
+// « GM CNK 12 » pour la garniture ; « Circlips E45 », « Plaque à bornes PABO.2011 »… pour les autres familles (une référence nue comme « E45 » ne dirait rien)
+const PREFIXE_DEMANDE={Circlips:"Circlips ",PAB:"Plaque à bornes ",BAB:"Boîte à bornes ",PE:"Presse-étoupe "};
+const designationDemande=a=>{
+  if(a.groupe)return libelleGroupe(a," ou ");
+  const f=familleDe(a.reference);
+  if(f==="Garniture")return "GM "+a.reference;
+  const p=PREFIXE_DEMANDE[f];
+  if(!p||(f==="PE"&&/^PE\b/i.test(a.reference))||cle(a.reference).startsWith(cle(p).split(" ")[0]))return a.reference;
+  return p+a.reference;
+};
+// catégorie de « Matériel à commander » qui correspond à la famille du stock
+const categorieDemande=f=>f==="Roulements"?"Roulements":f==="Garniture"?"Garniture":f==="Condos"?"Condensateur":"Autre";
 // Seuils lisibles : "stock voulu 4" quand mini = maxi (garniture), sinon "mini 2 · maxi 4"
 const libSeuils=a=>{
   const mi=miniEff(a),ma=maxiEff(a);
   const t=mi==null?(ma!=null?"maxi "+ma:""):(mi===ma?"stock voulu "+mi:"mini "+mi+(ma!=null?" · maxi "+ma:""));
   return a.groupe&&t?t+" (les 2 réunis)":t;
 };
-const FAMILLES=["Roulements","Garniture"];
-const LIB_FAMILLE={Roulements:"Roulements",Garniture:"Garniture mécanique"};
+const FAMILLES=["Roulements","Garniture","GV2","Circlips","BAB","PAB","PE","Condos","Divers"];
+const LIB_FAMILLE={Roulements:"Roulements",Garniture:"Garniture mécanique",GV2:"GV2",Circlips:"Circlips",BAB:"Boîtes à bornes",PAB:"Plaques à bornes (PAB)",PE:"Presse-étoupes (PE)",Condos:"Condensateurs",Divers:"Divers"};
 // [[famille, articles], …] dans l'ordre des familles, sans les familles vides
 const grouperParFamille=liste=>FAMILLES.map(f=>[f,liste.filter(a=>familleDe(a.reference)===f)]).filter(([,l])=>l.length);
 function triRef(a,b){
@@ -150,7 +166,11 @@ function useStock(){
       // fetch direct (et non db.get) : db.get renvoie [] en cas de coupure réseau, ce qui viderait la liste à tort.
       const r=await fetch(SUPA_URL+"/rest/v1/stock_articles?select=*&order=reference&limit=5000",{headers:H});
       const rows=await r.json();
-      if(Array.isArray(rows)){setEtat({articles:reunirStocks(rows.slice().sort(triRef)),disponible:true});return true;}
+      if(Array.isArray(rows)){
+        // familles des références hors roulements / garnitures (si la lecture échoue, on garde la table déjà connue)
+        try{const rf=await fetch(SUPA_URL+"/rest/v1/parametres_app?select=valeur&cle=eq.stock_familles",{headers:H});const lf=await rf.json();if(rf.ok&&Array.isArray(lf)){let m={};if(lf[0]&&lf[0].valeur){try{m=JSON.parse(lf[0].valeur)||{};}catch(e){m={};}}MAP_FAMILLES=m;}}catch(e){/* table des familles conservée */}
+        setEtat({articles:reunirStocks(rows.slice().sort(triRef)),disponible:true});return true;
+      }
       if(rows&&rows.code==="PGRST205"){setEtat({articles:[],disponible:false});return false;}
     }catch(e){/* hors ligne : on garde l'état précédent */}
     return null;
@@ -466,15 +486,37 @@ const PRESETS=[
 ];
 
 // lenMax : longueur de la plus longue référence de la planche, pour une taille de police identique partout.
+// Taille de police (pt) d'un nom long qui passe à la ligne dans un cadre largeur × hauteur (mm) : la plus grande qui tient, entre 11 et 5,5 pt
+const taillePourTexte=(n,largeur,hauteur)=>{
+  for(let f=11;f>=5.5;f-=0.5){
+    const parLigne=Math.max(1,Math.floor(largeur/(0.58*f*0.3528)));
+    if(Math.ceil(n/parLigne)*1.12*f*0.3528<=hauteur)return f;
+  }
+  return 5.5;
+};
 function etiquetteInterieur(a,svg,w,h,type,lenMax){
   const ref=esc(a.reference),dim=esc(a.dimensions||""),emp=a.emplacement?esc("Empl. "+a.emplacement):"";
-  const len=Math.max(8,lenMax||String(a.reference).length);
+  const n=String(a.reference).length;
+  // planche de désignations longues (plus de 18 caractères) : chaque étiquette adapte sa taille et passe à la ligne ; sinon taille identique partout
+  const longue=(lenMax||n)>18;
+  const len=Math.max(8,lenMax||n);
   if(type==="qr"){
     const q=Math.min(h-3,w*0.46);
     const tw=Math.max(8,w-q-5);
+    if(longue){
+      const fsL=taillePourTexte(n,tw,h-3-(dim?3.2:0)-(emp?3.2:0));
+      return '<div class="code" style="width:'+q.toFixed(1)+'mm;height:'+q.toFixed(1)+'mm">'+svg+'</div>'
+        +'<div class="txt" style="width:'+tw.toFixed(1)+'mm"><b style="font-size:'+fsL.toFixed(1)+'pt;white-space:normal;overflow-wrap:anywhere">'+ref+'</b><span>'+dim+'</span><span>'+emp+'</span></div>';
+    }
     const fs=Math.max(6,Math.min(15,(tw/(len*0.6))/0.3528));
     return '<div class="code" style="width:'+q.toFixed(1)+'mm;height:'+q.toFixed(1)+'mm">'+svg+'</div>'
       +'<div class="txt" style="width:'+tw.toFixed(1)+'mm"><b style="font-size:'+fs.toFixed(1)+'pt">'+ref+'</b><span>'+dim+'</span><span>'+emp+'</span></div>';
+  }
+  if(longue){
+    const fsL=taillePourTexte(n,w-6,h-3-5-3.2);
+    return '<div class="l1"><b style="font-size:'+fsL.toFixed(1)+'pt;white-space:normal;overflow-wrap:anywhere">'+ref+'</b></div>'
+      +'<div class="barres">'+svg+'</div>'
+      +'<div class="l3">'+dim+(dim&&emp?" · ":"")+emp+'</div>';
   }
   const fs=Math.max(7,Math.min(14,((w-6)/(len*0.62))/0.3528));
   return '<div class="l1"><b style="font-size:'+fs.toFixed(1)+'pt">'+ref+'</b></div>'
@@ -605,59 +647,20 @@ function Etiquettes({articles,idsInitiaux,onFermer}){
 }
 
 // ─── Import du catalogue depuis Excel ────────────────────────────────────────────────────────────
-const normEnt=s=>String(s==null?"":s).normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase().replace(/\s+/g," ").replace(/\s*\?$/,"").trim();
-const txt=v=>v==null?"":String(v).replace(/\s+/g," ").trim();
-const nombre=v=>{
-  if(v==null||v==="")return null;
-  const n=typeof v==="number"?v:parseFloat(String(v).replace(/\s/g,"").replace(",",".").replace(/[^\d.\-]/g,""));
-  return isNaN(n)?null:n;
-};
-const entier=v=>{const n=nombre(v);return n==null?null:Math.round(n);};
-const dimNorm=s=>txt(s).replace(/\s*[xX×]\s*/g,"×");
-
-// Lit une feuille "catalogue" : la ligne d'en-tête est celle qui contient "Référence" ; les lignes de titre
-// (ex. "62XX", sans autre valeur) et les lignes de total sont ignorées.
-function analyserFeuille(XLSX,wb,nom){
-  const ws=wb.Sheets[nom];
-  if(!ws)return {erreur:"Feuille introuvable."};
-  const r0=ws["!ref"]?XLSX.utils.decode_range(ws["!ref"]).s.r:0; // pour retrouver le vrai numéro de ligne Excel
-  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:null,blankrows:true});
-  let hi=-1;
-  for(let i=0;i<Math.min(rows.length,15);i++){
-    if((rows[i]||[]).some(c=>normEnt(c)==="reference")){hi=i;break;}
-  }
-  if(hi<0)return {erreur:"Colonne « Référence » introuvable dans les 15 premières lignes de cette feuille."};
-  const ent=rows[hi].map(normEnt);
-  const col=p=>ent.findIndex(p);
-  const C={ref:col(h=>h==="reference"),mini:col(h=>h.startsWith("stock min")||h.startsWith("stock voulu boite")),maxi:col(h=>h.startsWith("stock max")),voulE:col(h=>h.startsWith("stock voulu etag")),reelB:col(h=>h.startsWith("stock boite")),reelE:col(h=>h.startsWith("stock reel")),empl:col(h=>h.startsWith("emplacement")),dim:col(h=>h.startsWith("dimension")||h.startsWith("diametre")),stock:col(h=>h==="stock"),prix:col(h=>h==="prix unitaire"),f1:col(h=>h==="fournisseur 1"),f2:col(h=>h==="fournisseur 2"),f3:col(h=>h==="fournisseur 3")};
-  const cell=(r,i)=>i>=0?r[i]:null;
-  // Feuille à deux stocks (garniture mécanique) : stock = boîte + étagère ; pas de mini : le "stock voulu" (boîte + étagère) est
-  // le stock à avoir, donc mini = maxi = voulu (la référence est "à renouveler" dès qu'elle passe en dessous).
-  const deuxStocks=C.voulE>=0||C.reelB>=0||C.reelE>=0;
-  const lignes=[];let ignorees=0,arretLigne=null;
-  for(let i=hi+1;i<rows.length;i++){
-    const r=rows[i]||[];
-    const reference=txt(cell(r,C.ref));
-    if(!reference)continue;
-    const numLigne=r0+i+1;
-    if(arretLigne==null&&cle(reference)==="SPECIALE")arretLigne=numLigne;
-    let mini=entier(cell(r,C.mini)),maxi=entier(cell(r,C.maxi)),stock=entier(cell(r,C.stock));
-    if(deuxStocks){
-      const rb=entier(cell(r,C.reelB)),re=entier(cell(r,C.reelE)),ve=entier(cell(r,C.voulE));
-      stock=(rb==null&&re==null)?null:(rb||0)+(re||0);
-      const voulu=(mini==null&&ve==null)?null:(mini||0)+(ve||0);
-      mini=voulu;maxi=voulu;
-    }
-    const l={ligne:numLigne,reference,dimensions:dimNorm(cell(r,C.dim))||null,emplacement:txt(cell(r,C.empl))||null,stock_mini:mini,stock_maxi:maxi,prix_unitaire:nombre(cell(r,C.prix)),fournisseur1:txt(cell(r,C.f1))||null,fournisseur2:txt(cell(r,C.f2))||null,fournisseur3:txt(cell(r,C.f3))||null,stock};
-    const autres=[l.dimensions,l.emplacement,l.stock_mini,l.stock_maxi,l.prix_unitaire,l.stock].some(v=>v!=null&&v!=="");
-    if(!autres){ignorees++;continue;}
-    lignes.push(l);
-  }
-  return {lignes,ignorees,colonnes:C,arretLigne,deuxStocks};
-}
-
 async function executerImport({lignes,existants,majQte,partirMax,onEtat}){
   const parRef={};lignes.forEach(l=>{parRef[cle(l.reference)]=l;});
+  // familles (GV2, circlips, boîtes à bornes, PAB, PE, condensateurs, divers) : rangées d'abord, pour qu'aucun article ne reste sans famille
+  const avecFamille=lignes.filter(l=>l.famille);
+  if(avecFamille.length){
+    onEtat("Familles…");
+    const r0=await appel("GET","parametres_app?select=valeur&cle=eq.stock_familles");
+    if(!r0.ok||!Array.isArray(r0.data))throw new Error("La table des familles n'a pas pu être lue.");
+    let carte={};
+    if(r0.data[0]&&r0.data[0].valeur){try{carte=JSON.parse(r0.data[0].valeur)||{};}catch(e){carte={};}}
+    avecFamille.forEach(l=>{carte[l.reference]=l.famille;});
+    const r1=await appel("POST","parametres_app?on_conflict=cle",[{cle:"stock_familles",valeur:JSON.stringify(carte)}],"resolution=merge-duplicates,return=minimal");
+    if(!r1.ok)throw new Error("Les familles n'ont pas pu être enregistrées.");
+  }
   const catalogue=lignes.map(l=>({reference:l.reference,dimensions:l.dimensions,emplacement:l.emplacement,stock_mini:l.stock_mini,stock_maxi:l.stock_maxi,prix_unitaire:l.prix_unitaire,fournisseur1:l.fournisseur1,fournisseur2:l.fournisseur2,fournisseur3:l.fournisseur3}));
   let rows=[];
   for(let i=0;i<catalogue.length;i+=200){
@@ -704,10 +707,12 @@ function ImportExcel({articles,onFermer,onTermine}){
   const [prefixe,setPrefixe]=useState("6");
   const [ligneMax,setLigneMax]=useState("");
   // Roulements : références en 6XXX seulement ; autres feuilles (ex. GM) : tout. Si "SPÉCIALE" est repérée, on s'arrête juste avant.
+  // Feuilles des familles (GV2, circlips, boîtes à bornes, PAB, PE, condos, divers) : toutes les lignes complètes, stock de départ = stock d'Excel.
   const reglagesPour=(nom,lect)=>{
-    setPrefixe(/^rlmt$|roulement/.test(normEnt(nom))?"6":"");
+    const fam=profilFamille(nom);
+    setPrefixe(fam?"":(/^rlmt$|roulement/.test(normEnt(nom))?"6":""));
     setLigneMax(lect&&lect.arretLigne?String(lect.arretLigne-1):"");
-    setPartirMax(!/^rlmt$|roulement/.test(normEnt(nom))); // hors roulements : on démarre au stock maximum
+    setPartirMax(fam?false:!/^rlmt$|roulement/.test(normEnt(nom))); // hors roulements et familles : on démarre au stock maximum
   };
   const [majQte,setMajQte]=useState(false);
   const [partirMax,setPartirMax]=useState(false);
@@ -768,7 +773,7 @@ function ImportExcel({articles,onFermer,onTermine}){
     {etape==="apercu"&&fichier&&<>
       <div className="stk-info">Fichier : <strong>{fichier.nom}</strong></div>
       <div className="stk-champs">
-        <label><span>Feuille à importer</span><select value={feuille} onChange={e=>changerFeuille(e.target.value)} disabled={occupe}>{fichier.feuilles.map(n=><option key={n} value={n}>{n}</option>)}</select></label>
+        <label><span>Feuille à importer (✓ = prise en charge)</span><select value={feuille} onChange={e=>changerFeuille(e.target.value)} disabled={occupe}>{fichier.feuilles.map(n=><option key={n} value={n}>{n}{(profilFamille(n)||/^(rlmt|gm)$/.test(normEnt(n)))?"  ✓":""}</option>)}</select></label>
         <label><span>Références commençant par</span><input type="text" value={prefixe} onChange={e=>setPrefixe(e.target.value)} placeholder="vide = toutes (6 = roulements 6XXX)"/></label>
         <label><span>S'arrêter à la ligne n°</span><input type="text" inputMode="numeric" value={ligneMax} onChange={e=>setLigneMax(e.target.value.replace(/\D/g,""))} placeholder="vide = jusqu'au bout"/></label>
       </div>
@@ -776,6 +781,8 @@ function ImportExcel({articles,onFermer,onTermine}){
       {lecture&&lecture.erreur&&<div className="stk-alerte">{lecture.erreur}</div>}
       {lecture&&!lecture.erreur&&<>
         <div className="stk-info"><strong>{lignes.length}</strong> référence{lignes.length>1?"s":""} à importer : <strong>{nbNouveaux}</strong> nouvelle{nbNouveaux>1?"s":""}, <strong>{lignes.length-nbNouveaux}</strong> déjà dans l'appli (catalogue mis à jour, quantités conservées).{lecture.ignorees>0&&<> {lecture.ignorees} ligne{lecture.ignorees>1?"s":""} de titre ignorée{lecture.ignorees>1?"s":""}.</>}{nbDoublons>0&&<> {nbDoublons} doublon{nbDoublons>1?"s":""} ignoré{nbDoublons>1?"s":""}.</>}</div>
+        {lecture.vides&&lecture.vides.length>0&&<div className="stk-alerte" style={{marginBottom:8}}><strong>{lecture.vides.length} ligne{lecture.vides.length>1?"s":""} non importée{lecture.vides.length>1?"s":""}</strong> : stock, stock mini ou stock maxi vide dans Excel. {lecture.vides.slice(0,8).map(x=>"ligne "+x.ligne+" « "+x.reference+" » ("+x.manque.join(", ")+")").join(" ; ")}{lecture.vides.length>8?" … et "+(lecture.vides.length-8)+" autre"+(lecture.vides.length-8>1?"s":"")+".":"."}</div>}
+        {lecture.famille&&<div className="stk-info">Famille : <strong>{LIB_FAMILLE[lecture.famille]}</strong> (rangée avec le catalogue, visible dans la page Stock et sur les planches d'étiquettes).</div>}
         {lignes.length>0&&<div style={{overflowX:"auto"}}><table className="stk-table"><thead><tr><th>Référence</th><th>Dimensions</th><th>Empl.</th><th>Mini</th><th>Maxi</th><th>Stock Excel</th><th>Prix</th></tr></thead><tbody>
           {lignes.slice(0,6).map(l=><tr key={l.reference}><td>{l.reference}</td><td>{l.dimensions||""}</td><td>{l.emplacement||""}</td><td>{l.stock_mini==null?"":l.stock_mini}</td><td>{l.stock_maxi==null?"":l.stock_maxi}</td><td>{l.stock==null?"":l.stock}</td><td>{fmtEuro(l.prix_unitaire)}</td></tr>)}
         </tbody></table>{lignes.length>6&&<p className="stk-aide" style={{marginTop:6}}>… et {lignes.length-6} autre{lignes.length-6>1?"s":""}.</p>}</div>}
@@ -1674,7 +1681,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
     setCmdEnCours(true);
     const id="stock-"+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     const base=Date.now();
-    const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:familleDe(a.reference),designation:designationDemande(a),quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+qteEff(a)+" / "+(libSeuils(a)||"seuil ?")+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
+    const rows=arts.map((a,i)=>({demande_id:id,type:"renouveler",categorie:categorieDemande(familleDe(a.reference)),designation:designationDemande(a),quantite:Math.max(1,qteARecommander(a)),demandeur:qui,chantier:null,commentaire:"Stock bas ("+qteEff(a)+" / "+(libSeuils(a)||"seuil ?")+")",statut:"a_commander",created_at:new Date(base+i).toISOString()}));
     const r=await appel("POST","demandes_materiel",rows,"return=minimal");
     setCmdEnCours(false);
     if(!r.ok){afficherToast("La demande n'a pas abouti (connexion, ou « Matériel à commander » pas encore activé)");return;}
