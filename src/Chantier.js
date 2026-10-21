@@ -245,7 +245,7 @@ export function ListeChantier({fiches,setFiches,loading,categories,champsPour,et
   const clientList=Object.keys(parClient).sort((a,b)=>a.localeCompare(b,"fr"));
   const maj=(id,champs)=>setFiches(prev=>prev.map(f=>f.id===id?{...f,...champs}:f));
   const supprimee=id=>setFiches(prev=>prev.filter(f=>f.id!==id));
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
       <div>
         <h1 style={{fontSize:22,fontWeight:800,margin:0,color:COULEUR_CHANTIER}}>Fiches chantier</h1>
@@ -261,6 +261,6 @@ export function ListeChantier({fiches,setFiches,loading,categories,champsPour,et
     </div>
     {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>Chargement…</div>}
     {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{fiches.length===0?"Aucune fiche chantier : créez la première !":"Aucun résultat."}</div>}
-    {clientList.map(c=><ChDossierClient key={c} client={c} fiches={parClient[c]} categories={categories} champsPour={champsPour} etapes={etapes} onOuvrir={onOuvrir} onDupliquer={onDupliquer} onMaj={maj} onSupprimee={supprimee}/>)}
+    <div className="grille-large">{clientList.map(c=><ChDossierClient key={c} client={c} fiches={parClient[c]} categories={categories} champsPour={champsPour} etapes={etapes} onOuvrir={onOuvrir} onDupliquer={onDupliquer} onMaj={maj} onSupprimee={supprimee}/>)}</div>
   </div>);
 }

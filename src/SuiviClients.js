@@ -1237,7 +1237,7 @@ export function PageSuiviClients({suivi,fiches,champClient,clients,par,onOuvrirF
   const pastille=(id,label,n)=><button type="button" onClick={()=>setOnglet(id)} style={{padding:"9px 16px",minHeight:44,borderRadius:22,border:"1.5px solid "+(onglet===id?"#1B4F8A":"#D1D5DB"),background:onglet===id?"#1B4F8A":"#fff",color:onglet===id?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:8}}>{label}{n>0&&<span style={{background:"#D73A49",color:"#fff",borderRadius:10,padding:"1px 7px",fontSize:11}}>{n}</span>}</button>;
   const ouvrirClient=onOuvrirClient||(()=>{});
   const ouvrirFiche=fi=>{ongletDemande=onglet;if(onOuvrirFiche)onOuvrirFiche(fi);}; // au retour de la fiche, on retombe sur le même sous-onglet
-  return(<div style={{maxWidth:1100,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,1100px)",margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 10px"}}>📞 Suivi clients</h1>
     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:16}}>
       {pastille("devis","📄 Relance devis",suivi.aRelancer.length)}
@@ -1259,7 +1259,7 @@ export function DashboardCommercial({suivi,items,onNaviguer}){
   const nbDemarcher=suivi.prospects.filter(p=>p.statut==="a_demarcher").length;
   const rdvProches=suivi.rdv.filter(r=>["passe","aujourdhui","demain"].includes(etatRdv(r))).sort((a,b)=>String(a.date_rdv).slice(0,10).localeCompare(String(b.date_rdv).slice(0,10))||String(a.heure||"99").localeCompare(String(b.heure||"99")));
   const ligneBloc={display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",background:"#fff",border:"1px solid #F5C2C7",borderRadius:8,padding:"8px 10px",marginBottom:6};
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 16px"}}>🏠 Tableau de bord</h2>
 
     {(suivi.dispo===true||suivi.dispoProspects===true)&&(totalRel>0

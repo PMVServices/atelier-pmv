@@ -49,6 +49,13 @@
       body { font-family: system-ui, -apple-system, sans-serif; background: #F5F6F8; }
       input, select, button { font-family: inherit; }
 
+      /* Pages pleine largeur sur ordinateur : les conteneurs de page déclarent max-width: var(--lp, <largeur d'origine>) ; à partir de 1000 px, plus de limite */
+      @media (min-width: 1000px) {
+        :root { --lp: none; }
+        /* liste de cartes (clients, dossiers…) : plusieurs colonnes sur ordinateur, une seule en dessous */
+        .grille-large { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); column-gap: 14px; align-items: start; }
+      }
+
       /* Cibles tactiles agrandies : uniquement sur écran tactile (tablette/mobile), jamais sur PC/souris */
       @media (pointer: coarse) {
         button, input, select, textarea { min-height: 44px; font-size: 16px !important; }

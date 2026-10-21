@@ -222,7 +222,7 @@ export default function PageClients({clients,fiches,suivi,onOuvrirFiche}){
 
   const courant=choisi?(index.get(choisi)||{cle:choisi,nom:nomDemande||choisi,devis:[],atelier:[],chantier:[],cal:[],prospects:[],rdv:[],derniere:"",prospect:false}):null;
 
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>👥 Clients</h1>
     {!courant&&<>
       <div style={{fontSize:13,color:"#6B7280",marginBottom:14}}>La fiche d'un client rassemble tout ce que l'appli sait de lui : contacts, devis, fiches, calendriers remis, rendez-vous. Elle se remplit toute seule au fur et à mesure.</div>
@@ -234,6 +234,7 @@ export default function PageClients({clients,fiches,suivi,onOuvrirFiche}){
         </div>
         <div style={{marginTop:8,fontSize:13,color:"#374151"}}>{!donnees.charge?"Chargement des fiches…":filtrees.length+" client"+(filtrees.length>1?"s":"")}</div>
       </div>
+      <div className="grille-large">
       {filtrees.slice(0,nb).map(c=><div key={c.cle} role="button" tabIndex={0} onClick={()=>setChoisi(c.cle)} onKeyDown={e=>{if(e.key==="Enter")setChoisi(c.cle);}} style={{...CARTE,cursor:"pointer",marginBottom:8}}>
         <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}><strong style={{fontSize:15,overflowWrap:"anywhere"}}>{c.nom}</strong><Etiquette prospect={c.prospect}/></div>
         <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:6}}>
@@ -245,6 +246,7 @@ export default function PageClients({clients,fiches,suivi,onOuvrirFiche}){
           {c.derniere&&<span style={{fontSize:12,color:"#6B7280",alignSelf:"center"}}>dernière activité {frDate(c.derniere)}</span>}
         </div>
       </div>)}
+      </div>
       {filtrees.length>nb&&<button type="button" onClick={()=>setNb(n=>n+PAS)} style={{...BTN2,width:"100%"}}>Afficher {Math.min(PAS,filtrees.length-nb)} clients de plus ({filtrees.length-nb} restants)</button>}
     </>}
     {courant&&<FicheClient c={courant} carnet={carnet} fichesParDe={fichesParDe} onOuvrirFiche={fi=>{clientDemande=courant.nom;onOuvrirFiche(fi);}} onRetour={()=>setChoisi(null)}/>}

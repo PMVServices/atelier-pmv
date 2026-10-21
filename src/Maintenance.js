@@ -145,7 +145,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
 
   const pastille=(actif)=>({padding:"6px 12px",borderRadius:18,border:"1.5px solid "+(actif?BLEU:"#D1D5DB"),background:actif?BLEU:"#fff",color:actif?"#fff":"#374151",fontSize:12,fontWeight:600,cursor:"pointer"});
 
-  return(<div style={{maxWidth:1000,margin:"0 auto",padding:"20px 16px 90px"}}>
+  return(<div style={{maxWidth:"var(--lp,1000px)",margin:"0 auto",padding:"20px 16px 90px"}}>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 6px"}}>🛠 Maintenance</h2>
     <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>Vous ne remplissez aucune fiche ici : vous changez ce que les autres verront (champs, intitulés, colonnes du planning, rapports client). Préparez vos modifications puis cliquez sur <b>Publier</b> (pour les rapports : <b>Enregistrer comme modèle de référence</b>) : elles valent alors pour toutes les fiches, et vous pouvez revenir en arrière depuis l'historique.</p>
 

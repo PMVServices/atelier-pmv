@@ -1237,11 +1237,17 @@ function CasesLibres({etape,v,onChange}){
 function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,onPhotoRemoved,champsSource}){
   const width=useWidth();const champs=(champsSource||CHAMPS)[nom]||[];const rendus=[];const vus=new Set();
   const un=cc=><UnChamp key={cc.id} c={cc} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} etape={nom}/>;
-  for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>);}else{vus.add(c.id);rendus.push(un(c));}}
-  rendus.push(<CasesLibres key="libres" etape={nom} v={v} onChange={onChange}/>);
+  // Ordinateur (≥ 1000 px) : les champs se rangent en plusieurs colonnes ; les champs larges (textes longs, photos, joints, intertitres, messages…) prennent toute la ligne
+  const large=width>=1000;
+  const pleine=cc=>["titre","conseil","illustration","verdict","fait","photo_requise","photo_skf","joints","materiel_liste","technicien","contact"].includes(cc.type)||(cc.type==="text"&&!!cc.dictee);
+  // plafond de largeur des champs qui prennent toute la ligne (une zone de texte de 1700 px de large ne se lit pas) ; les intertitres et les photos gardent toute la largeur
+  const cellule=(cle,element,colonne,plafond)=>large?<div key={cle} style={{gridColumn:colonne,minWidth:0,...(plafond?{maxWidth:plafond}:{})}}>{element}</div>:React.cloneElement(element,{key:cle});
+  for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(cellule(c.groupe,<div style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>,grp.length===3?"1 / -1":"span 2"));}else{vus.add(c.id);rendus.push(cellule(c.id,un(c),pleine(c)?"1 / -1":"auto",pleine(c)&&c.type!=="titre"?1000:0));}}
+  rendus.push(cellule("libres",<CasesLibres etape={nom} v={v} onChange={onChange}/>,"1 / -1"));
   // les photos obligatoires (champs « photo_requise ») s'affichent dans leur champ : on ne les répète pas dans « Photos — étape »
   const catsRequises=new Set(champs.filter(c=>c.type==="photo_requise").flatMap(c=>[c.categorie,...(c.anciennesCategories||[])]));
-  rendus.push(<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom&&!catsRequises.has(p.categorie_nom))} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>);
+  rendus.push(cellule("photos",<SectionPhotos etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom&&!catsRequises.has(p.categorie_nom))} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>,"1 / -1"));
+  if(large)return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",columnGap:24,alignItems:"start"}}>{rendus}</div>;
   return <>{rendus}</>;
 }
 
@@ -1564,7 +1570,7 @@ function PageStockage({fiches,onRetour}){
     return{label:"",color:"",bg:""};
   }
 
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
       <div>
         <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🗂 Gestion du stockage</h2>
@@ -1700,7 +1706,7 @@ function PageStats({fiches,pieces}){
     </div>
   );
 
-  return(<div style={{maxWidth:1000,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,1000px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
       <h2 style={{fontSize:20,fontWeight:700,margin:0}}>📊 Statistiques atelier</h2>
       <div style={{display:"flex",gap:6}}>
@@ -1753,7 +1759,7 @@ function PageStats({fiches,pieces}){
       </div>
     </div>
 
-    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(260px,100%),1fr))",gap:16,marginBottom:20}}>
       {/* Par technicien */}
       <div>
         <div style={{fontSize:13,fontWeight:700,color:"#1B4F8A",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #EEF4FF"}}>Par technicien</div>
@@ -1779,7 +1785,7 @@ function PageStats({fiches,pieces}){
           {clientList.map(([c,n],i)=>(
             <div key={c} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
               <span style={{fontSize:10,color:"#9CA3AF",width:16,textAlign:"center"}}>{i+1}</span>
-              <span style={{fontSize:12,flex:1,fontWeight:500,color:"#1A1A2E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c}</span>
+              <span style={{fontSize:12,flex:1,minWidth:0,fontWeight:500,color:"#1A1A2E",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={c}>{c}</span>
               <span style={{fontSize:12,fontWeight:700,color:"#1B4F8A",background:"#EEF4FF",padding:"2px 8px",borderRadius:10}}>{n}</span>
             </div>
           ))}
@@ -1813,7 +1819,9 @@ function PageStats({fiches,pieces}){
 
 // ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
 function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemandeMateriel,onVoirMateriel,onOuvrirFiche,onNaviguer}){
-  const telephone=useWidth()<600; // sur téléphone : raccourcis seulement, les notifications restent sur tablette et ordinateur
+  const largeurD=useWidth();
+  const telephone=largeurD<600; // sur téléphone : raccourcis seulement, les notifications restent sur tablette et ordinateur
+  const largeD=largeurD>=1100; // ordinateur : les blocs de notifications se rangent sur deux colonnes
   const [delaisMap,setDelaisMap]=useState({});
   const [exportBusy,setExportBusy]=useState(null);
   useEffect(()=>{
@@ -1889,7 +1897,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
     </div>
   );
 
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 16px"}}>🏠 Tableau de bord</h2>
 
     {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{width:"100%",display:"flex",alignItems:"center",gap:16,background:"#E8720C",color:"#fff",border:"none",borderRadius:14,padding:"18px 22px",minHeight:96,marginBottom:14,cursor:"pointer",boxShadow:"0 3px 10px rgba(232,114,12,0.35)",textAlign:"left"}}>
@@ -1910,8 +1918,8 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
       })}
     </div>
 
-    {!telephone&&<>
-    {rienASignaler&&<div style={{textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
+    {!telephone&&<div style={largeD?{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(520px,1fr))",columnGap:20,alignItems:"start"}:undefined}>
+    {rienASignaler&&<div style={{gridColumn:"1 / -1",textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
 
     {(nbMat>0||listeDEReco.length>0)&&section("🔧 Matériel ("+(nbMat+piecesAReco.length)+")","#1B4F8A","#EEF4FF",<>
       <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>{nbMat-nbMatRenouveler} à commander · {nbMatRenouveler+piecesAReco.length} à renouveler</div>
@@ -1963,7 +1971,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
         </div>
       ))}
     </>)}
-    </>}
+    </div>}
   </div>);
 }
 
@@ -2051,7 +2059,7 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
     setDragId(null);setDragOver(null);
   }
 
-  return(<div style={{maxWidth:1200,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,1200px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:8}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <h2 style={{fontSize:20,fontWeight:700,margin:0}}>Planning atelier</h2>
@@ -2433,8 +2441,11 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
   const versDossier=fi=>{setCible({client:fi.client||"Sans client",de:fi.de||"Sans DE"});setSousEtat("dossiers");try{localStorage.setItem("pmv_atelier_sous","dossiers");}catch(e){/* facultatif */}};
   const nbDossiers=new Set(filtrees.map(fi=>(fi.client||"Sans client")+"|"+(fi.de||"Sans DE"))).size;
   const grille=largeur>=700;
+  // ordinateur (≥ 1100 px) : la liste montre aussi le type de matériel, le statut et la date d’entrée
+  const large=largeur>=1100;
+  const colonnes=large?"120px minmax(0,1.2fr) minmax(0,1.6fr) 120px 140px 100px 110px":"120px minmax(0,1fr) minmax(0,1.3fr) 110px";
   const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20,flexWrap:"wrap",gap:10}}>
       <div style={{display:"flex",alignItems:"center",gap:12}}>
         <div>
@@ -2458,23 +2469,23 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
     {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>Chargement…</div>}
     {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{fiches.length===0?"Aucune fiche — créez la première !":"Aucun résultat."}</div>}
     {sous==="fiches"&&!loading&&filtrees.length>0&&<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",overflow:"hidden"}}>
-      {grille&&<div style={{display:"grid",gridTemplateColumns:"120px minmax(0,1fr) minmax(0,1.3fr) 110px",gap:12,padding:"9px 16px",background:"#F3F6FA",fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".04em"}}><span>N° DE</span><span>Client</span><span>Matériel</span><span/></div>}
+      {grille&&<div style={{display:"grid",gridTemplateColumns:colonnes,gap:12,padding:"9px 16px",background:"#F3F6FA",fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".04em"}}><span>N° DE</span><span>Client</span><span>Matériel</span>{large&&<><span>Type</span><span>Statut</span><span>Entrée</span></>}<span/></div>}
       {filtrees.map(fi=><div key={fi.id} role="button" tabIndex={0} onClick={()=>onOpen(fi)} onKeyDown={e=>{if(e.key==="Enter")onOpen(fi);}} style={grille
-        ?{display:"grid",gridTemplateColumns:"120px minmax(0,1fr) minmax(0,1.3fr) 110px",gap:12,alignItems:"center",padding:"10px 16px",borderTop:"1px solid #EEF1F5",cursor:"pointer"}
+        ?{display:"grid",gridTemplateColumns:colonnes,gap:12,alignItems:"center",padding:"10px 16px",borderTop:"1px solid #EEF1F5",cursor:"pointer"}
         :{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:"1px solid #EEF1F5",cursor:"pointer"}}>
         {grille
-          ?<><span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{fi.de||"Sans DE"}</span><span style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.client||""}>{fi.client||"—"}</span><span style={{fontSize:13,color:"#4B5563",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.materiel||""}><BadgeVerrou id={fi.id}/>{fi.materiel||"—"}</span></>
+          ?<><span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{fi.de||"Sans DE"}</span><span style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.client||""}>{fi.client||"—"}</span><span style={{fontSize:13,color:"#4B5563",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.materiel||""}><BadgeVerrou id={fi.id}/>{fi.materiel||"—"}</span>{large&&(()=>{const stF=statutInfo(fi.statut_chantier);return <><span style={{fontSize:13,color:"#4B5563"}}>{fi.type_materiel||"Moteur"}</span><span><span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:12,whiteSpace:"nowrap",background:stF.bg,color:stF.color}}>{stF.label}</span></span><span style={{fontSize:12,color:"#6B7280"}}>{fi.created_at?new Date(fi.created_at).toLocaleDateString("fr-FR"):"—"}</span></>;})()}</>
           :<div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#1B4F8A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><BadgeVerrou id={fi.id}/>{fi.de||"Sans DE"} <span style={{color:"#1A1A2E",fontWeight:600}}>· {fi.client||"—"}</span></div><div style={{fontSize:12,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fi.materiel||"—"}</div></div>}
         <button type="button" onClick={e=>{e.stopPropagation();versDossier(fi);}} title="Voir ce dossier (client > N° DE)" style={{...S.p2,fontSize:12,padding:"5px 10px",minHeight:36,whiteSpace:"nowrap"}}>📁 Dossier</button>
       </div>)}
     </div>}
-    {sous==="dossiers"&&clientList.map(c=><DossierClient key={c} client={c} cible={cible} fiches={parClient[c]} onOpen={onOpen} onApercu={onApercu} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories} onDupliquer={onDupliquer}/>)}
+    {sous==="dossiers"&&<div className="grille-large">{clientList.map(c=><DossierClient key={c} client={c} cible={cible} fiches={parClient[c]} onOpen={onOpen} onApercu={onApercu} onDelete={onDelete} onStatutChange={onStatutChange} categories={categories} onDupliquer={onDupliquer}/>)}</div>}
   </div>);
 }
 
 function PageChoix({onChoisir,onRetour}){
   const mats=[{id:"Moteur",emoji:"⚙️",desc:"Moteur électrique seul"},{id:"Pompe",emoji:"💧",desc:"Corps de pompe + moteur"},{id:"Moto-réducteur",emoji:"🔧",desc:"Moto-réducteur complet"},{id:"Ventilateur",emoji:"🌀",desc:"Ventilateur seul ou avec son moteur (centrifuge, hélicoïde, VMC…)"},{id:TYPE_CHEMINEE,emoji:"🚆",desc:"PMV Rail : cheminée de freinage de train (SNCF / IMATEQ)"},{id:"Autre",titre:"Autre matériel",emoji:"🧰",desc:"Treuil, compresseur… même fiche que le moteur, le type est saisi à la main"}];
-  return(<div style={{maxWidth:700,margin:"0 auto",padding:"20px 16px"}}><button style={{...S.p2,marginBottom:20}} onClick={onRetour}>← Retour</button><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>Nouvelle fiche — quel matériel ?</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>{mats.map(m=><div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}><div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div><p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.titre||m.id}</p><p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>{m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}</div>)}</div></div>);
+  return(<div style={{maxWidth:"var(--lp,700px)",margin:"0 auto",padding:"20px 16px"}}><button style={{...S.p2,marginBottom:20}} onClick={onRetour}>← Retour</button><h2 style={{fontSize:20,fontWeight:800,margin:"0 0 6px"}}>Nouvelle fiche — quel matériel ?</h2><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:14}}>{mats.map(m=><div key={m.id} onClick={()=>onChoisir(m.id)} style={{...S.card,textAlign:"center",cursor:m.soon?"default":"pointer",opacity:m.soon?0.6:1}}><div style={{fontSize:32,marginBottom:8}}>{m.emoji}</div><p style={{fontWeight:700,fontSize:15,margin:"0 0 4px"}}>{m.titre||m.id}</p><p style={{fontSize:12,color:"#9CA3AF",margin:0}}>{m.desc}</p>{m.soon&&<p style={{fontSize:11,color:"#E8720C",margin:"6px 0 0"}}>Bientôt disponible</p>}</div>)}</div></div>);
 }
 
 // ─── RAPPORT CLIENT (moteur) ────────────────────────────────────────────
@@ -2693,7 +2704,7 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel}){
 
   if(loading)return <div style={{textAlign:"center",padding:60,color:"#9CA3AF"}}>Chargement…</div>;
 
-  return(<div style={{maxWidth:820,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,820px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
       <h2 style={{fontSize:20,fontWeight:700,margin:0}}>📧 Rapport client — {v.client||"—"} / {v.de||"—"}</h2>
       <button style={S.p2} onClick={onRetour}>← Retour</button>
@@ -2908,7 +2919,7 @@ function PageRapportCheminee({ficheId,techs,onRetour}){
 
   if(loading)return <div style={{textAlign:"center",padding:60,color:"#9CA3AF"}}>Chargement…</div>;
 
-  return(<div style={{maxWidth:820,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,820px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:16,flexWrap:"wrap",gap:10}}>
       <h2 style={{fontSize:20,fontWeight:700,margin:0}}>📧 Rapport client cheminée — {v.client||"—"} / {v.de||"—"}</h2>
       <button style={S.p2} onClick={onRetour}>← Retour</button>
@@ -3004,13 +3015,14 @@ function PageRapportsListe({fiches,onOpen}){
   });
   const parClient={};filtrees.forEach(f=>{const c=f.client||"Sans client";if(!parClient[c])parClient[c]=[];parClient[c].push(f);});
   const clientList=Object.keys(parClient).sort();
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>📧 Rapports client</h1>
     <p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>{moteurFiches.length} fiche{moteurFiches.length>1?"s":""} · sélectionnez-en une pour créer ou modifier son rapport.</p>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16}}>
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={S.inp}/>
     </div>
     {clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>Aucune fiche.</div>}
+    <div className="grille-large">
     {clientList.map(c=>(
       <div key={c} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,padding:"12px 16px"}}>
         <p style={{fontWeight:700,fontSize:14,margin:"0 0 8px"}}>{c}</p>
@@ -3022,6 +3034,7 @@ function PageRapportsListe({fiches,onOpen}){
         );})}
       </div>
     ))}
+    </div>
   </div>);
 }
 
@@ -3533,7 +3546,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
   const prog=Math.round((validees.length/etapesActives.length)*100);const chem=cheminFiche(v);const st=statutInfo(statutChantier);
 
   // Fiche tenue par quelqu'un d'autre : lecture seule (on peut regarder l'aperçu, pas modifier)
-  if(verrou)return(<div style={{maxWidth:800,margin:"0 auto",padding:"28px 16px",textAlign:"center"}}>
+  if(verrou)return(<div style={{maxWidth:"var(--lp,800px)",margin:"0 auto",padding:"28px 16px",textAlign:"center"}}>
     <div role="status" style={{background:"#FFF8E1",border:"1.5px solid #E8720C",borderRadius:12,padding:"18px 16px",color:"#8A4B00"}}>
       <p style={{fontSize:30,margin:"0 0 6px"}}>🔒</p>
       <p style={{fontSize:16,fontWeight:700,margin:"0 0 6px"}}>{verrou.appareil?"Fiche déjà ouverte sur un autre appareil":"Fiche en cours de modification par "+verrou.par}</p>
@@ -3548,13 +3561,13 @@ const onChange=useCallback((id,val)=>setV(p=>{
     {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";}}/>}
   </div>);
 
-  if(lecture)return(<div style={{maxWidth:800,margin:"0 auto",padding:"40px 16px",textAlign:"center",color:"#6B7280"}}>
+  if(lecture)return(<div style={{maxWidth:"var(--lp,800px)",margin:"0 auto",padding:"40px 16px",textAlign:"center",color:"#6B7280"}}>
     {!apercu&&(chargeFini?<button type="button" style={S.p1} onClick={()=>setApercu(true)}>👁 Voir l'aperçu</button>:"Chargement de l'aperçu…")}
     {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";onRetour();}}/>}
     <div style={{marginTop:16}}><button style={S.p2} onClick={onRetour}>← Retour à la liste</button></div>
   </div>);
 
-  return(<div style={{maxWidth:800,margin:"0 auto",paddingBottom:40}}>
+  return(<div style={{maxWidth:"var(--lp,800px)",margin:"0 auto",paddingBottom:40}}>
     {confirmQuitter&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget&&!saving)setConfirmQuitter(false);}}><div role="dialog" aria-label="Enregistrer avant de quitter" style={{background:"#fff",borderRadius:14,padding:"24px 22px",maxWidth:400,width:"100%",boxShadow:"0 8px 40px rgba(0,0,0,0.25)"}}><p style={{fontSize:17,fontWeight:700,margin:"0 0 6px"}}>Enregistrer avant de quitter ?</p><p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>Des modifications de cette fiche n'ont pas été enregistrées.</p>{erreur&&<div style={{...S.alert,marginBottom:10}}>{erreur}</div>}<button disabled={saving} onClick={enregistrerEtQuitter} style={{...S.p1,width:"100%",justifyContent:"center",marginBottom:8,opacity:saving?0.6:1}}>{saving?"💾 Enregistrement…":"💾 Enregistrer et quitter"}</button><button disabled={saving} onClick={()=>{setConfirmQuitter(false);quitter();}} style={{...S.pDanger,width:"100%",marginBottom:8,opacity:saving?0.6:1}}>Quitter sans enregistrer</button><button disabled={saving} onClick={()=>setConfirmQuitter(false)} style={{...S.p2,width:"100%",justifyContent:"center"}}>Annuler, rester sur la fiche</button></div></div>}
     {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";}}/>}
     {/* En-tête de la fiche : épinglé en haut (juste sous la barre de l'appli) sur PC, tablette et téléphone */}
@@ -3976,14 +3989,19 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   }
   function rendreChamps(champs){
     var rendus=[];var vus={};
+    // ordinateur (≥ 1000 px) : les champs se rangent en plusieurs colonnes ; les champs larges prennent toute la ligne (plafonnée à 1000 px)
+    var large=largeur>=1000;
+    var pleineC=function(c){return ["technicien","techniciens_multi","contact","materiel_liste","case_atelier","tags","textarea"].indexOf(c.type)>=0;};
+    var cell=function(cle,el,col,plafond){return large?<div key={cle} style={{gridColumn:col,minWidth:0,maxWidth:plafond||undefined}}>{el}</div>:el;};
     champs.forEach(function(c){
       if(vus[c.id])return;
       if(c.groupe){
         var grp=champs.filter(function(cc){return cc.groupe===c.groupe;});
         grp.forEach(function(cc){vus[cc.id]=true;});
-        rendus.push(<div key={"g_"+c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+grilleCols(grp.length,largeur)+",1fr)",gap:8}}>{grp.map(rendreChamp)}</div>);
-      }else{vus[c.id]=true;rendus.push(rendreChamp(c));}
+        rendus.push(cell("g_"+c.groupe,<div key={"g_"+c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+grilleCols(grp.length,largeur)+",1fr)",gap:8}}>{grp.map(rendreChamp)}</div>,grp.length>=3?"1 / -1":"span 2"));
+      }else{vus[c.id]=true;rendus.push(cell(c.id,rendreChamp(c),pleineC(c)?"1 / -1":"auto",pleineC(c)?1000:0));}
     });
+    if(large)return [<div key="grille-large" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",columnGap:24,alignItems:"start"}}>{rendus}</div>];
     return rendus;
   }
 
@@ -5371,7 +5389,7 @@ function useDemandesMateriel(){
 
 // Alertes par mail (EmailJS) : voir Alertes.js
 const CSS_MATERIEL=`
-.mat{max-width:820px;margin:0 auto;padding:18px 16px 48px;color:#1A1A2E;font-size:15px;line-height:1.45}
+.mat{max-width:var(--lp,820px);margin:0 auto;padding:18px 16px 48px;color:#1A1A2E;font-size:15px;line-height:1.45}
 .mat *{box-sizing:border-box}
 .mat-ecran{display:flex;flex-direction:column;gap:16px}
 .mat-h2{font-size:19px;line-height:1.25;margin:0;display:flex;align-items:center;gap:10px}
@@ -5901,7 +5919,7 @@ function NoticeTablesMateriel({onVerifier}){
 }
 
 function PageActivationMateriel({onRetour,onVerifier}){
-  return(<div style={{maxWidth:820,margin:"0 auto",padding:"18px 16px 48px"}}>
+  return(<div style={{maxWidth:"var(--lp,820px)",margin:"0 auto",padding:"18px 16px 48px"}}>
     <button onClick={onRetour} style={{...S.p2,marginBottom:14}}>‹ Retour</button>
     <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 14px"}}>🛒 Matériel à commander</h2>
     <NoticeTablesMateriel onVerifier={onVerifier}/>
@@ -5983,7 +6001,7 @@ function PageMesDemandes({techs,sessionTech,onDemandeMateriel}){
   },[charger]);
   const groupes=rows?regrouperDemandes(ordonnerDemandes(rows)):[];
   const nbAttente=rows?rows.filter(l=>l.statut==="a_commander").length:0;
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:10}}>
       <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🔧 Mes demandes de matériel</h2>
       {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{...S.p1,fontSize:12,padding:"7px 14px",background:"#E8720C"}}>🛒 Faire une demande</button>}
@@ -6031,7 +6049,7 @@ function PageMateriel({pieces,setPieces,demandesMat,onDemandeMateriel}){
       return r.ok;
     }catch(e){return false;}
   }
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14,flexWrap:"wrap",gap:10}}>
       <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🔧 Matériel</h2>
       {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{...S.p1,fontSize:12,padding:"7px 14px",background:"#E8720C"}}>🛒 Faire une demande</button>}

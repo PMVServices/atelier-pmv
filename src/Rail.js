@@ -200,7 +200,7 @@ export function PageRail({admin,clients,sessionTech}){
     return {t,ch};
   },[etat.lignes]);
   const historique=etat.lignes.slice(0,40);
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>🚆 RAIL — isolateurs des cheminées</h1>
     <div style={{fontSize:13,color:"#6B7280",marginBottom:14}}>Deux stocks séparés, sans étiquette ni scan : les cheminées décomptent toutes seules, vous ajoutez les arrivées et corrigez après comptage.</div>
     {etat.dispo===false?(admin
@@ -231,7 +231,7 @@ export default function PageStockRail({techs,sessionTech,admin,clients,modePoste
   if(!admin)return <PageStock techs={techs} sessionTech={sessionTech} admin={admin} modePoste={modePoste}/>;
   const pastille=(id,label)=><button type="button" onClick={()=>setVue(id)} style={{padding:"8px 18px",minHeight:44,borderRadius:22,border:"1.5px solid "+(vue===id?"#1B4F8A":"#D1D5DB"),background:vue===id?"#1B4F8A":"#fff",color:vue===id?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer"}}>{label}</button>;
   return(<div>
-    <div style={{display:"flex",gap:8,flexWrap:"wrap",maxWidth:900,margin:"0 auto",padding:"14px 16px 0"}}>
+    <div style={{display:"flex",gap:8,flexWrap:"wrap",maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"14px 16px 0"}}>
       {pastille("stock","🗃 Stock")}{pastille("rail","🚆 RAIL")}
     </div>
     {vue==="stock"?<PageStock techs={techs} sessionTech={sessionTech} admin={admin} modePoste={modePoste}/>:<PageRail admin={admin} clients={clients} sessionTech={sessionTech}/>}

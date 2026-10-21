@@ -197,7 +197,7 @@ export function PageAcces({personnes,techs,moi,onEnregistre,onRetour}){
   }
   const tri=[...liste].sort((a,b)=>(String(a.nom)+" "+String(a.prenom)).localeCompare(String(b.nom)+" "+String(b.prenom),"fr"));
   const carte={background:"#fff",border:"1px solid #E2E6EA",borderRadius:12,padding:"14px 16px",marginBottom:12};
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:6}}>
       <h1 style={{fontSize:22,fontWeight:800,margin:0}}>🔑 Accès</h1>
       <button type="button" onClick={onRetour} style={BTN2}>← Retour</button>

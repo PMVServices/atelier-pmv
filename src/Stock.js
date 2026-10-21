@@ -167,7 +167,7 @@ function useStock(){
 }
 
 const CSS_STOCK=`
-.stk{max-width:900px;margin:0 auto;padding:18px 16px 70px;color:#1A1A2E;font-size:15px;line-height:1.4}
+.stk{max-width:var(--lp,900px);margin:0 auto;padding:18px 16px 70px;color:#1A1A2E;font-size:15px;line-height:1.4}
 .stk *{box-sizing:border-box}
 .stk-tete h2{font-size:20px;margin:0}
 .stk-sous{font-size:12.5px;color:#9CA3AF;margin:3px 0 0}
@@ -299,6 +299,7 @@ const CSS_STOCK=`
 .stk-liste-sel{border:1px solid #E2E6EA;border-radius:12px;max-height:260px;overflow-y:auto;padding:6px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 12px}
 .stk-liste-sel label{display:flex;align-items:center;gap:8px;min-height:40px;font-size:14px;font-family:${MONO}}
 .stk-liste-titre{grid-column:1/-1;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#667085;padding:8px 0 2px}
+.stk-fams{grid-template-columns:repeat(var(--nb,3),1fr)}
 .stk-fams button{font-size:14px;min-height:46px}
 .stk-mode button.on.fam{border-color:#1B4F8A;background:#EEF4FF;color:#1B4F8A}
 .stk-liste-sel input{width:22px;height:22px;min-height:0 !important;padding:0 !important}
@@ -311,6 +312,13 @@ const CSS_STOCK=`
 .stk-table td:first-child{font-family:${MONO};font-weight:600}
 .stk-apercu{border:1px solid #E2E6EA;border-radius:10px;background:#E5E7EB;overflow:hidden;position:relative}
 .stk-apercu iframe{border:0;background:#fff;position:absolute;left:0;top:0;transform-origin:0 0}
+/* Ordinateur (≥ 1000 px) : la page prend toute la largeur ; listes sur plusieurs colonnes, gros boutons plafonnés */
+@media (min-width:1000px){
+  .stk-liste{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px;align-items:start}
+  .stk-duo{grid-template-columns:repeat(2,minmax(0,440px))}
+  .stk-grand--i{width:min(100%,560px)}
+  .stk-mode.stk-fams{grid-template-columns:repeat(var(--nb,3),minmax(0,220px));justify-content:start}
+}
 `;
 
 // ─── Fenêtre (feuille) ───────────────────────────────────────────────────────────────────────────
@@ -1742,7 +1750,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
       <button type="button" className="stk-btn stk-btn--p" onClick={()=>setImportOuvert(true)}>⬆ Importer depuis Excel</button>
     </div>}
     {admin&&articles.length>0&&<>
-      {fams.length>1&&<div className="stk-mode stk-fams" style={{gridTemplateColumns:"repeat("+(fams.length+1)+",1fr)",marginBottom:10}} role="group" aria-label="Famille">
+      {fams.length>1&&<div className="stk-mode stk-fams" style={{"--nb":fams.length+1,marginBottom:10}} role="group" aria-label="Famille">
         {[["toutes","Tout ("+articles.length+")"]].concat(fams.map(([f,l])=>[f,LIB_FAMILLE[f]+" ("+l.length+")"])).map(([f,l])=><button type="button" key={f} className={famille===f?"on fam":""} aria-pressed={famille===f} onClick={()=>setFamille(f)}>{l}</button>)}
       </div>}
       <input className="stk-champ" value={recherche} onChange={e=>setRecherche(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){const a=articles.find(x=>cle(x.reference)===cle(recherche))||(trouves.length===1?trouves[0]:null);if(a){setRecherche("");setFicheId(a.id);}}}} placeholder="🔍 Chercher une référence, des dimensions…" autoComplete="off"/>

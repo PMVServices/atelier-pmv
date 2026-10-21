@@ -316,12 +316,12 @@ export default function PageCalendrier({sessionTech,champClient,admin}){
     }catch(e){setErreur("La suppression n'a pas abouti (connexion ?).");}
   }
 
-  if(donnees.dispo===false)return(<div style={{maxWidth:760,margin:"0 auto",padding:"20px 16px"}}>
+  if(donnees.dispo===false)return(<div style={{maxWidth:"var(--lp,760px)",margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 12px"}}>🗓 Calendriers</h1>
     <NoticeActivation titre="Activer le suivi des calendriers" intro="La base de données doit recevoir une petite table pour noter les calendriers donnés. C'est à faire une seule fois, par le responsable (compte Supabase)." sql={SQL_CALENDRIER} onVerifier={recharger}/>
   </div>);
 
-  return(<div style={{maxWidth:900,margin:"0 auto",padding:"20px 16px"}}>
+  return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:12}}>
       <div style={{minWidth:0}}>
         <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 2px"}}>🗓 Calendriers</h1>
