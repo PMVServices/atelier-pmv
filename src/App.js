@@ -3255,6 +3255,18 @@ function variantesEtapesPourType(type){
 }
 function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed}){
   const lecture=React.useContext(LectureCtx);
+  const largeurEcran=useWidth();
+  const etroit=largeurEcran<600; // téléphone : en-tête de la fiche plus compact
+  const [hautApp,setHautApp]=useState(56); // hauteur réelle de la barre du haut de l'appli (52 px sous 1400 px de large, 56 au-delà) : l'en-tête de la fiche s'épingle juste dessous
+  useEffect(()=>{
+    const mesurer=()=>{const e=document.getElementById("entete-app");const h=e?Math.round(e.getBoundingClientRect().height):0;if(h>0)setHautApp(h);};
+    mesurer();
+    window.addEventListener("resize",mesurer);
+    window.addEventListener("scroll",mesurer,{passive:true}); // filet de sécurité : la barre du haut peut changer de hauteur sans redimensionnement de la fenêtre
+    const e=document.getElementById("entete-app");let ro=null;
+    if(e&&typeof ResizeObserver!=="undefined"){ro=new ResizeObserver(mesurer);ro.observe(e);}
+    return()=>{window.removeEventListener("resize",mesurer);window.removeEventListener("scroll",mesurer);if(ro)ro.disconnect();};
+  },[]);
   const isPompe=typeMateriel==="Pompe";
   const champsActifs=champsPourType(typeMateriel);
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
@@ -3417,6 +3429,12 @@ const onChange=useCallback((id,val)=>setV(p=>{
   // Sortie de la fiche : si des modifications ne sont pas enregistrées, on demande d'abord
   function quitter(){clearDraft();onRetour();}
   function demanderSortie(){if(modifie)setConfirmQuitter(true);else quitter();}
+  // Bouton « 💾 » de l'en-tête épinglé : enregistre la fiche (valeurs, commentaires) sans valider d'étape et sans quitter
+  async function enregistrerFiche(){
+    if(saving)return;
+    if(ficheId&&baseRef.current&&commentaires!==baseRef.current.c)await sauvegarderComm();
+    await enregistrerModifs(null);
+  }
   async function enregistrerEtQuitter(){
     if(ficheId&&baseRef.current&&commentaires!==baseRef.current.c)await sauvegarderComm();
     const ok=await enregistrerModifs(null);
@@ -3458,14 +3476,15 @@ const onChange=useCallback((id,val)=>setV(p=>{
   return(<div style={{maxWidth:800,margin:"0 auto",paddingBottom:40}}>
     {confirmQuitter&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:400,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={e=>{if(e.target===e.currentTarget&&!saving)setConfirmQuitter(false);}}><div role="dialog" aria-label="Enregistrer avant de quitter" style={{background:"#fff",borderRadius:14,padding:"24px 22px",maxWidth:400,width:"100%",boxShadow:"0 8px 40px rgba(0,0,0,0.25)"}}><p style={{fontSize:17,fontWeight:700,margin:"0 0 6px"}}>Enregistrer avant de quitter ?</p><p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>Des modifications de cette fiche n'ont pas été enregistrées.</p>{erreur&&<div style={{...S.alert,marginBottom:10}}>{erreur}</div>}<button disabled={saving} onClick={enregistrerEtQuitter} style={{...S.p1,width:"100%",justifyContent:"center",marginBottom:8,opacity:saving?0.6:1}}>{saving?"💾 Enregistrement…":"💾 Enregistrer et quitter"}</button><button disabled={saving} onClick={()=>{setConfirmQuitter(false);quitter();}} style={{...S.pDanger,width:"100%",marginBottom:8,opacity:saving?0.6:1}}>Quitter sans enregistrer</button><button disabled={saving} onClick={()=>setConfirmQuitter(false)} style={{...S.p2,width:"100%",justifyContent:"center"}}>Annuler, rester sur la fiche</button></div></div>}
     {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";}}/>}
-    <div style={{background:"#1B4F8A",color:"#fff",padding:"10px 16px",position:"sticky",top:56,zIndex:90}}>
-      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
-        <div><p style={{margin:0,fontSize:12,fontWeight:700}}>{v.de} · {v.client||"Client"} · {[v.type_materiel_libre,v.materiel_lieu].filter(Boolean).join(" — ")||typeMateriel||"Moteur"}</p><p style={{margin:0,fontSize:10,opacity:0.7}}>📁 {chem.client}/{chem.de}/{chem.mat} · {typeMateriel||"Moteur"}</p></div>
-        <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+    {/* En-tête de la fiche : épinglé en haut (juste sous la barre de l'appli) sur PC, tablette et téléphone */}
+    <div className="entete-fiche" style={{background:"#1B4F8A",color:"#fff",padding:etroit?"6px 12px":"10px 16px",position:"sticky",top:hautApp,zIndex:90,boxShadow:"0 2px 6px rgba(0,0,0,0.25)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:etroit?6:8}}>
+        <div style={{minWidth:0,flex:"1 1 220px"}}><p style={{margin:0,fontSize:12,fontWeight:700,overflowWrap:"anywhere"}}>{v.de} · {v.client||"Client"} · {[v.type_materiel_libre,v.materiel_lieu].filter(Boolean).join(" — ")||typeMateriel||"Moteur"}</p>{!etroit&&<p style={{margin:0,fontSize:10,opacity:0.7,overflowWrap:"anywhere"}}>📁 {chem.client}/{chem.de}/{chem.mat} · {typeMateriel||"Moteur"}</p>}</div>
+        <div style={{display:"flex",alignItems:"center",gap:etroit?6:8,flexWrap:"wrap"}}>
           <select value={statutChantier} onChange={e=>changerStatut(e.target.value)} style={{padding:"3px 8px",borderRadius:20,border:"1.5px solid "+st.color,fontSize:11,fontWeight:600,color:st.color,background:st.bg,cursor:"pointer"}}>{STATUTS_CHANTIER.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</select>
-          <div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:prog+"%",transition:"width .4s"}}/></div>
-          <span style={{fontSize:11,opacity:0.85}}>{prog}%</span>
-          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>telechargerHtml(genHtml(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives),"Fiche_"+(v.de||"sans_de")+"_"+(v.client||""))}>⬇</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={demanderSortie}>← Retour</button>
+          {!etroit&&<div style={{background:"rgba(255,255,255,0.2)",borderRadius:20,height:6,width:80}}><div style={{background:"#E8720C",height:6,borderRadius:20,width:prog+"%",transition:"width .4s"}}/></div>}
+          {largeurEcran>=360&&<span style={{fontSize:11,opacity:0.85}}>{prog}%</span>}
+          <button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={()=>{setApercu(true);document.body.style.overflow="hidden";}}>👁</button><button type="button" disabled={saving} onClick={enregistrerFiche} title="Enregistrer la fiche" aria-label="Enregistrer la fiche" style={{...S.p2,fontSize:11,padding:"4px 10px",...(saving?{opacity:0.6}:flash==="saved_partiel"?{background:"#22863A",color:"#fff",border:"none"}:erreur?{background:"#D73A49",color:"#fff",border:"none"}:(!ficheId||modifie)?{background:"#E8720C",color:"#fff",border:"none"}:{})}}>{saving?"⏳":flash==="saved_partiel"?"✅"+(etroit?"":" Enregistré"):erreur?"⚠"+(etroit?"":" Réessayer"):"💾"+(etroit?"":" Enregistrer")}</button><button style={{...S.p2,fontSize:11,padding:"4px 10px",background:"#22863A",color:"#fff",border:"none"}} onClick={()=>imprimerFiche(v,photos,statutChantier,commentaires,piecesCommande,{},champsActifs,etapesActives)}>📄</button><button style={{...S.p2,fontSize:11,padding:"4px 10px"}} onClick={demanderSortie} aria-label="Retour" title="Retour à la liste">{etroit?"←":"← Retour"}</button>
         </div>
       </div>
     </div>
@@ -6247,7 +6266,7 @@ export default function App(){
 
   return(<PersonneCtx.Provider value={ctxPersonne}><LectureCtx.Provider value={commercial}><div style={S.app}>
     {/* ── HEADER ── */}
-    <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
+    <div id="entete-app" style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
       {/* Logo */}
       <img src={LOGO_B64} alt="PMV" style={{height:isMobile?30:40,objectFit:"contain",borderRadius:4,cursor:"pointer",flexShrink:0}} onClick={()=>{setPage("dashboard");setMenuOuvert(false);}}/>
 
