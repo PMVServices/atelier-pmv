@@ -42,8 +42,9 @@ const supprimerSi=(cle,valeur)=>appel(REST+"?cle=eq."+enc(cle)+"&valeur=eq."+enc
 const lire=ligne=>{try{const o=JSON.parse(ligne.valeur);return o&&typeof o==="object"?o:null;}catch(e){return null;}};
 const abandonne=o=>!o||!(Date.now()-Number(o.t||0)<EXPIRATION_MS);
 
-// ctrl = creerVerrou(id de la fiche, nom de la personne) ; chaque méthode renvoie {ok:true} ou {ok:false, par, depuis, appareil}
-export function creerVerrou(ficheId,qui){
+// ctrl = creerVerrou(id de la fiche, nom de la personne, forcer) ; chaque méthode renvoie {ok:true} ou {ok:false, par, depuis, appareil}
+// forcer (administrateur) : la prise réussit même si quelqu'un d'autre tient la fiche ; celui-ci le découvre à son prochain signe de vie
+export function creerVerrou(ficheId,qui,forcer){
   const cle=PREFIXE+ficheId;
   const session=Math.random().toString(36).slice(2)+Date.now().toString(36);
   const debut=Date.now();
@@ -63,7 +64,7 @@ export function creerVerrou(ficheId,qui){
         const o=lire(ligne);
         if(o&&o.s===session){actuelle=ligne.valeur;return {ok:true};}
         // verrou abandonné, ou laissé par cet appareil lui-même (rechargement de la page, ancienne ouverture) : on le reprend
-        if(abandonne(o)||o.d===idAppareil()){
+        if(forcer||abandonne(o)||o.d===idAppareil()){
           v=fabriquer();
           if((await remplacerSi(cle,ligne.valeur,v)).length){actuelle=v;return {ok:true};}
           continue; // quelqu'un est passé avant nous : on relit

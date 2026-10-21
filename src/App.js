@@ -1237,17 +1237,18 @@ function CasesLibres({etape,v,onChange}){
 function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,onPhotoRemoved,champsSource}){
   const width=useWidth();const champs=(champsSource||CHAMPS)[nom]||[];const rendus=[];const vus=new Set();
   const un=cc=><UnChamp key={cc.id} c={cc} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} etape={nom}/>;
-  // Ordinateur (≥ 1000 px) : les champs se rangent en plusieurs colonnes ; les champs larges (textes longs, photos, joints, intertitres, messages…) prennent toute la ligne
-  const large=width>=1000;
+  // Ordinateur (≥ 1000 px) : grille régulière de 2 colonnes (3 à partir de 1300 px), lue de gauche à droite puis de haut en bas dans l'ordre de la fiche ;
+  // les couples de champs (même groupe) occupent deux colonnes, les champs larges (textes longs, photos, joints, intertitres, messages…) toute la ligne
+  const large=width>=1000;const colsGrille=width>=1300?3:2;
   const pleine=cc=>["titre","conseil","illustration","verdict","fait","photo_requise","photo_skf","joints","materiel_liste","technicien","contact"].includes(cc.type)||(cc.type==="text"&&!!cc.dictee);
   // plafond de largeur des champs qui prennent toute la ligne (une zone de texte de 1700 px de large ne se lit pas) ; les intertitres et les photos gardent toute la largeur
   const cellule=(cle,element,colonne,plafond)=>large?<div key={cle} style={{gridColumn:colonne,minWidth:0,...(plafond?{maxWidth:plafond}:{})}}>{element}</div>:React.cloneElement(element,{key:cle});
-  for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(cellule(c.groupe,<div style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>,grp.length===3?"1 / -1":"span 2"));}else{vus.add(c.id);rendus.push(cellule(c.id,un(c),pleine(c)?"1 / -1":"auto",pleine(c)&&c.type!=="titre"?1000:0));}}
+  for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));if(large&&grp.length===1){rendus.push(cellule(grp[0].id,un(grp[0]),pleine(grp[0])?"1 / -1":"auto",pleine(grp[0])&&grp[0].type!=="titre"?1000:0));continue;}const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(cellule(c.groupe,<div style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>,grp.length===3?"1 / -1":"span 2"));}else{vus.add(c.id);rendus.push(cellule(c.id,un(c),pleine(c)?"1 / -1":"auto",pleine(c)&&c.type!=="titre"?1000:0));}}
   rendus.push(cellule("libres",<CasesLibres etape={nom} v={v} onChange={onChange}/>,"1 / -1"));
   // les photos obligatoires (champs « photo_requise ») s'affichent dans leur champ : on ne les répète pas dans « Photos — étape »
   const catsRequises=new Set(champs.filter(c=>c.type==="photo_requise").flatMap(c=>[c.categorie,...(c.anciennesCategories||[])]));
   rendus.push(cellule("photos",<SectionPhotos etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom&&!catsRequises.has(p.categorie_nom))} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>,"1 / -1"));
-  if(large)return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",columnGap:24,alignItems:"start"}}>{rendus}</div>;
+  if(large)return <div style={{display:"grid",gridTemplateColumns:"repeat("+colsGrille+",minmax(0,1fr))",columnGap:24,alignItems:"start"}}>{rendus}</div>;
   return <>{rendus}</>;
 }
 
@@ -3331,13 +3332,15 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const verrouRef=useRef(null);const evaluerVerrouRef=useRef(null);
   useEffect(()=>{
     if(lecture||!ficheId)return undefined;
-    const ctrl=creerVerrou(ficheId,nomVerrou);verrouRef.current=ctrl;
-    let vivant=true,etaitBloque=false,premiere=true;
+    // l'administrateur n'est jamais mis en lecture seule : il reprend la fiche (celui qui l'avait voit alors « reprise par … » à son prochain signe de vie)
+    const ctrl=creerVerrou(ficheId,nomVerrou,!!(moiVerrou&&moiVerrou.profil==="admin"));verrouRef.current=ctrl;
+    let vivant=true,etaitBloque=false,premiere=true,avaitLaFiche=false;
     // rouvrir la fiche à jour : on libère d'abord notre verrou, pour que la nouvelle ouverture puisse le reprendre aussitôt
     const rouvrir=async()=>{await ctrl.liberer();if(vivant)onReouvrir(ficheId);};
     const evaluer=r=>{
       if(!vivant)return;
-      if(!r.ok){etaitBloque=true;setVerrou({par:r.par,depuis:r.depuis,appareil:!!r.appareil});return;}
+      if(!r.ok){etaitBloque=true;setVerrou({par:r.par,depuis:r.depuis,appareil:!!r.appareil,perdu:avaitLaFiche});return;}
+      avaitLaFiche=true;
       // la fiche vient d'être libérée alors qu'on la regardait : ce qu'on a à l'écran peut être périmé, on la recharge entièrement
       if(etaitBloque){etaitBloque=false;if(onReouvrir){rouvrir();return;}}
       setVerrou(null);
@@ -3549,7 +3552,8 @@ const onChange=useCallback((id,val)=>setV(p=>{
   if(verrou)return(<div style={{maxWidth:"var(--lp,800px)",margin:"0 auto",padding:"28px 16px",textAlign:"center"}}>
     <div role="status" style={{background:"#FFF8E1",border:"1.5px solid #E8720C",borderRadius:12,padding:"18px 16px",color:"#8A4B00"}}>
       <p style={{fontSize:30,margin:"0 0 6px"}}>🔒</p>
-      <p style={{fontSize:16,fontWeight:700,margin:"0 0 6px"}}>{verrou.appareil?"Fiche déjà ouverte sur un autre appareil":"Fiche en cours de modification par "+verrou.par}</p>
+      <p style={{fontSize:16,fontWeight:700,margin:"0 0 6px"}}>{verrou.perdu?"Fiche reprise par "+verrou.par:verrou.appareil?"Fiche déjà ouverte sur un autre appareil":"Fiche en cours de modification par "+verrou.par}</p>
+      {verrou.perdu&&<p style={{fontSize:13,margin:"0 0 6px",fontWeight:700,color:"#D73A49"}}>⚠ Vos modifications non enregistrées n'ont pas été prises en compte.</p>}
       <p style={{fontSize:13,margin:"0 0 4px",fontWeight:600}}>{v.de||ficheInit?.de||""}{v.client?" · "+v.client:""}</p>
       <p style={{fontSize:13,margin:0,lineHeight:1.5}}>{verrou.appareil?"Vous l'avez ouverte":"Ouverte"} depuis {new Date(verrou.depuis).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}. Pour éviter les doublons, elle s'ouvre en <b>lecture seule</b> tant qu'elle est utilisée. Elle se libère dès que la personne quitte la fiche (ou après 5 minutes sans activité).</p>
     </div>
@@ -3990,7 +3994,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   function rendreChamps(champs){
     var rendus=[];var vus={};
     // ordinateur (≥ 1000 px) : les champs se rangent en plusieurs colonnes ; les champs larges prennent toute la ligne (plafonnée à 1000 px)
-    var large=largeur>=1000;
+    var large=largeur>=1000;var colsGrille=largeur>=1300?3:2;
     var pleineC=function(c){return ["technicien","techniciens_multi","contact","materiel_liste","case_atelier","tags","textarea"].indexOf(c.type)>=0;};
     var cell=function(cle,el,col,plafond){return large?<div key={cle} style={{gridColumn:col,minWidth:0,maxWidth:plafond||undefined}}>{el}</div>:el;};
     champs.forEach(function(c){
@@ -3998,10 +4002,11 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
       if(c.groupe){
         var grp=champs.filter(function(cc){return cc.groupe===c.groupe;});
         grp.forEach(function(cc){vus[cc.id]=true;});
+        if(large&&grp.length===1){rendus.push(cell(grp[0].id,rendreChamp(grp[0]),pleineC(grp[0])?"1 / -1":"auto",pleineC(grp[0])?1000:0));return;}
         rendus.push(cell("g_"+c.groupe,<div key={"g_"+c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+grilleCols(grp.length,largeur)+",1fr)",gap:8}}>{grp.map(rendreChamp)}</div>,grp.length>=3?"1 / -1":"span 2"));
       }else{vus[c.id]=true;rendus.push(cell(c.id,rendreChamp(c),pleineC(c)?"1 / -1":"auto",pleineC(c)?1000:0));}
     });
-    if(large)return [<div key="grille-large" style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(340px,1fr))",columnGap:24,alignItems:"start"}}>{rendus}</div>];
+    if(large)return [<div key="grille-large" style={{display:"grid",gridTemplateColumns:"repeat("+colsGrille+",minmax(0,1fr))",columnGap:24,alignItems:"start"}}>{rendus}</div>];
     return rendus;
   }
 
