@@ -1234,22 +1234,70 @@ function CasesLibres({etape,v,onChange}){
   </div>);
 }
 
+// Champs larges : ils prennent toute la ligne de la grille (ordinateur) ; les autres sont des cases de même largeur
+const CHAMPS_PLEINE_LIGNE=["titre","conseil","illustration","verdict","fait","photo_requise","photo_skf","joints","materiel_liste","technicien","techniciens_multi","contact","case_atelier","tags","textarea"];
+const pleineLigne=cc=>CHAMPS_PLEINE_LIGNE.includes(cc.type)||(cc.type==="text"&&!!cc.dictee);
+// Trame d'une fiche sur ordinateur (≥ 1000 px) : une grille de cases TOUTES de même largeur (2 colonnes, 4 à partir de 1500 px), remplie de gauche à droite
+// puis de haut en bas dans l'ordre de la fiche. Un groupe de champs liés (isolement + DAR, flasque + arbre…) reste sur la même ligne : s'il ne tient pas
+// dans ce qui reste de la ligne, on passe à la suivante (la fin de ligne reste vide). Les champs larges prennent la ligne entière.
+// « placer(c) » reçoit un champ ; « vide() » complète la ligne en cours avec des cases vides.
+// Intertitres de la trame sur ordinateur : ils s'ajoutent tout seuls avant le champ indiqué (comme si l'on avait mis un intertitre dans la Maintenance), sur une nouvelle ligne.
+// Les variantes d'un même champ (2e passage « _2 », moteur d'une pompe « _m », pompe « _p ») reçoivent le même intertitre.
+const INTERTITRES_TRAME=(()=>{
+  const t={
+    // Entrée
+    depose_nos_soins:"Dépose et enlèvement",sur_variateur:"Installation et délai",marque_moteur:"Moteur",marque_pompe:"Pompe",marque_reducteur:"Réducteur",devis_necessaire:"Devis et rapport",
+    // Infos électriques
+    isol_masse:"Isolements",adx_resultat:"Mesure ADX",adx_resultat_var:"Mesure ADX",adx_resultat_novar:"Mesure ADX",plaque_bornes_etat:"Plaque à bornes",sonde_presence:"Sonde",
+    // Rotation avant démontage
+    int_p1_avant:"Intensités",vib_av_mms_avant:"Vibrations",int_560_p1_avant:"Intensités à 560 V",nettoyage_hp:"Nettoyage et isolement",pression_essai_avant:"Essai en eau / air et pressions",
+    // Matériel au démontage moteur
+    circlips_avant:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",
+    // Mécanique pompe au démontage
+    diametre_nez_roue:"Roue et volute",etat_jc:"Joint de corps",type_gm_fixe:"Garniture mécanique",roulement_av_p_present:"Roulement avant de la pompe",roulement_ar_p_present:"Roulement arrière de la pompe",marque_pompe_neuve:"Pompe neuve",
+    // Essais après remontage
+    int_p1_apres:"Intensités",vib_av_mms_apres:"Vibrations",int_560_p1_apres:"Intensités à 560 V",pression_essai_apres:"Essai en eau / air et pressions",vib_p_av_mms_apres:"Vibrations de la pompe",
+  };
+  const out={};
+  const avecVariantes=["isol_masse","adx_resultat","adx_resultat_var","adx_resultat_novar","int_p1_avant","vib_av_mms_avant","int_560_p1_avant","nettoyage_hp"];
+  Object.keys(t).forEach(k=>{out[k]=t[k];if(avecVariantes.includes(k))["_2","_m","_p"].forEach(suf=>{out[k+suf]=t[k];});});
+  return out;
+})();
+function trameFiche(champs,v,cols,rendre){
+  const cases=[];let col=0;const vus=new Set();let dernierTitre=false;
+  const vide=()=>{if(col===0)return;while(col<cols){cases.push(<div key={"vide-"+cases.length} aria-hidden="true"/>);col++;}col=0;};
+  const placer=m=>{
+    if(pleineLigne(m)){vide();cases.push(<div key={m.id} style={{gridColumn:"1 / -1",minWidth:0,maxWidth:m.type==="titre"?undefined:1000}}>{rendre(m)}</div>);col=0;}
+    else{cases.push(<div key={m.id} style={{minWidth:0}}>{rendre(m)}</div>);col=(col+1)%cols;}
+  };
+  for(let i=0;i<champs.length;i++){
+    const c=champs[i];
+    if(vus.has(c.id))continue;
+    if(!champVisible(c,v)){vus.add(c.id);continue;}
+    const membres=c.groupe?champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v)):[c];
+    membres.forEach(m=>vus.add(m.id));
+    const inter=INTERTITRES_TRAME[c.id];
+    if(inter&&!dernierTitre&&cases.length>0){vide();cases.push(<p key={"it-"+c.id} style={{gridColumn:"1 / -1",fontSize:13,fontWeight:700,color:"#1B4F8A",margin:"14px 0 8px",paddingBottom:4,borderBottom:"1px solid #E2E6EA"}}>{inter}</p>);}
+    dernierTitre=c.type==="titre";
+    if(membres.length>1&&membres.length<=cols&&!membres.some(pleineLigne)&&col+membres.length>cols)vide();
+    membres.forEach(placer);
+  }
+  vide();
+  return {cases,vide};
+}
 function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,onPhotoRemoved,champsSource}){
   const width=useWidth();const champs=(champsSource||CHAMPS)[nom]||[];const rendus=[];const vus=new Set();
   const un=cc=><UnChamp key={cc.id} c={cc} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} etape={nom}/>;
-  // Ordinateur (≥ 1000 px) : grille régulière de 2 colonnes (3 à partir de 1300 px), lue de gauche à droite puis de haut en bas dans l'ordre de la fiche ;
-  // les couples de champs (même groupe) occupent deux colonnes, les champs larges (textes longs, photos, joints, intertitres, messages…) toute la ligne
-  const large=width>=1000;const colsGrille=width>=1300?3:2;
-  const pleine=cc=>["titre","conseil","illustration","verdict","fait","photo_requise","photo_skf","joints","materiel_liste","technicien","contact"].includes(cc.type)||(cc.type==="text"&&!!cc.dictee);
-  // plafond de largeur des champs qui prennent toute la ligne (une zone de texte de 1700 px de large ne se lit pas) ; les intertitres et les photos gardent toute la largeur
-  const cellule=(cle,element,colonne,plafond)=>large?<div key={cle} style={{gridColumn:colonne,minWidth:0,...(plafond?{maxWidth:plafond}:{})}}>{element}</div>:React.cloneElement(element,{key:cle});
-  for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));if(large&&grp.length===1){rendus.push(cellule(grp[0].id,un(grp[0]),pleine(grp[0])?"1 / -1":"auto",pleine(grp[0])&&grp[0].type!=="titre"?1000:0));continue;}const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(cellule(c.groupe,<div style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>,grp.length===3?"1 / -1":"span 2"));}else{vus.add(c.id);rendus.push(cellule(c.id,un(c),pleine(c)?"1 / -1":"auto",pleine(c)&&c.type!=="titre"?1000:0));}}
-  rendus.push(cellule("libres",<CasesLibres etape={nom} v={v} onChange={onChange}/>,"1 / -1"));
   // les photos obligatoires (champs « photo_requise ») s'affichent dans leur champ : on ne les répète pas dans « Photos — étape »
   const catsRequises=new Set(champs.filter(c=>c.type==="photo_requise").flatMap(c=>[c.categorie,...(c.anciennesCategories||[])]));
-  rendus.push(cellule("photos",<SectionPhotos etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom&&!catsRequises.has(p.categorie_nom))} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>,"1 / -1"));
-  if(large)return <div style={{display:"grid",gridTemplateColumns:"repeat("+colsGrille+",minmax(0,1fr))",columnGap:24,alignItems:"start"}}>{rendus}</div>;
-  return <>{rendus}</>;
+  const pied=[<CasesLibres key="libres" etape={nom} v={v} onChange={onChange}/>,<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom&&!catsRequises.has(p.categorie_nom))} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>];
+  if(width>=1000){
+    const cols=width>=1500?4:2;
+    const {cases}=trameFiche(champs,v,cols,un);
+    return <><div style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",columnGap:24,alignItems:"start"}}>{cases}</div>{pied}</>;
+  }
+  for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>);}else{vus.add(c.id);rendus.push(un(c));}}
+  return <>{rendus}{pied}</>;
 }
 
 // Case « Étape non réalisable » + justification obligatoire (étape en cours ou déjà validée)
@@ -3992,21 +4040,21 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
     </div>);
   }
   function rendreChamps(champs){
+    // ordinateur (≥ 1000 px) : même trame que la fiche atelier (cases de même largeur, groupes sur la même ligne, champs larges sur toute la ligne)
+    if(largeur>=1000){
+      var cols=largeur>=1500?4:2;
+      var sansCondition=champs.map(function(c){return c.condition?Object.assign({},c,{condition:undefined}):c;});
+      return [<div key="grille-large" style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",columnGap:24,alignItems:"start"}}>{trameFiche(sansCondition,v,cols,rendreChamp).cases}</div>];
+    }
     var rendus=[];var vus={};
-    // ordinateur (≥ 1000 px) : les champs se rangent en plusieurs colonnes ; les champs larges prennent toute la ligne (plafonnée à 1000 px)
-    var large=largeur>=1000;var colsGrille=largeur>=1300?3:2;
-    var pleineC=function(c){return ["technicien","techniciens_multi","contact","materiel_liste","case_atelier","tags","textarea"].indexOf(c.type)>=0;};
-    var cell=function(cle,el,col,plafond){return large?<div key={cle} style={{gridColumn:col,minWidth:0,maxWidth:plafond||undefined}}>{el}</div>:el;};
     champs.forEach(function(c){
       if(vus[c.id])return;
       if(c.groupe){
         var grp=champs.filter(function(cc){return cc.groupe===c.groupe;});
         grp.forEach(function(cc){vus[cc.id]=true;});
-        if(large&&grp.length===1){rendus.push(cell(grp[0].id,rendreChamp(grp[0]),pleineC(grp[0])?"1 / -1":"auto",pleineC(grp[0])?1000:0));return;}
-        rendus.push(cell("g_"+c.groupe,<div key={"g_"+c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+grilleCols(grp.length,largeur)+",1fr)",gap:8}}>{grp.map(rendreChamp)}</div>,grp.length>=3?"1 / -1":"span 2"));
-      }else{vus[c.id]=true;rendus.push(cell(c.id,rendreChamp(c),pleineC(c)?"1 / -1":"auto",pleineC(c)?1000:0));}
+        rendus.push(<div key={"g_"+c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+grilleCols(grp.length,largeur)+",1fr)",gap:8}}>{grp.map(rendreChamp)}</div>);
+      }else{vus[c.id]=true;rendus.push(rendreChamp(c));}
     });
-    if(large)return [<div key="grille-large" style={{display:"grid",gridTemplateColumns:"repeat("+colsGrille+",minmax(0,1fr))",columnGap:24,alignItems:"start"}}>{rendus}</div>];
     return rendus;
   }
 
