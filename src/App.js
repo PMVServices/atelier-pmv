@@ -103,6 +103,9 @@ const siNeuf=v=>v.moteur_neuf==="Oui";
 const siAncien=v=>v.moteur_neuf!=="Oui";
 const siPompeNeuve=v=>v.pompe_neuve==="Oui";
 const siPompeAncienne=v=>v.pompe_neuve!=="Oui";
+// roulements de la pompe : question « Roulement avant / arrière pompe » Oui / Non ; avec « Non », tout ce qui concerne ce roulement disparaît (sans réponse, il reste affiché)
+const siRoulementAvP=v=>siPompeAncienne(v)&&v.roulement_av_p_present!=="Non";
+const siRoulementArP=v=>siPompeAncienne(v)&&v.roulement_ar_p_present!=="Non";
 const MARQUES_REDUCTEUR=["SEW-Eurodrive","Bonfiglioli","Nord Drivesystems","Flender","Bauer","Autre"];
 const siReducteurNeuf=v=>v.reducteur_neuf==="Oui";
 const siReducteurAncien=v=>v.reducteur_neuf!=="Oui";
@@ -456,13 +459,15 @@ const CHAMPS_POMPE={
     {id:"type_gm_mobile",label:"Type GM mobile",type:"garniture_mobile",required:true,groupe:"gm_mobile_type_diam",condition:siPompeAncienne},
     {id:"diametre_gm_mobile",label:"Diamètre arbre GM mobile",type:"number",unite:"mm",required:true,groupe:"gm_mobile_type_diam",condition:siPompeAncienne},
     {id:"etat_gm_mobile",label:"État GM mobile",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:siPompeAncienne},
-    {id:"type_roulement_av_p",label:"Type roulement avant pompe",type:"roulement",required:true,condition:siPompeAncienne},
-    {id:"etat_roulement_av_p",label:"État roulement avant pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_av_p_pair",condition:siPompeAncienne},{id:"roulement_av_p_change",label:"Roulement avant pompe changé",type:"oui_non",required:false,groupe:"roulement_av_p_pair",condition:siPompeAncienne},
+    {id:"roulement_av_p_present",label:"Roulement avant pompe",type:"oui_non",required:true,condition:siPompeAncienne},
+    {id:"type_roulement_av_p",label:"Type roulement avant pompe",type:"roulement",required:true,condition:siRoulementAvP},
+    {id:"etat_roulement_av_p",label:"État roulement avant pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_av_p_pair",condition:siRoulementAvP},{id:"roulement_av_p_change",label:"Roulement avant pompe changé",type:"oui_non",required:false,groupe:"roulement_av_p_pair",condition:siRoulementAvP},
     {id:"etat_flasque_av_p",label:"État visuel flasque avant pompe",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_av_p_pair",condition:siPompeAncienne},
     {id:"etat_arbre_av_p",label:"État visuel arbre avant pompe",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_av_p_pair",condition:siPompeAncienne},
     {id:"joint_av_p",label:"Joints avant pompe",type:"joints",required:false,groupe:"joint_av_p",condition:siPompeAncienne},
-    {id:"type_roulement_ar_p",label:"Type roulement arrière pompe",type:"roulement",required:true,condition:siPompeAncienne},
-    {id:"etat_roulement_ar_p",label:"État roulement arrière pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_ar_p_pair",condition:siPompeAncienne},{id:"roulement_ar_p_change",label:"Roulement arrière pompe changé",type:"oui_non",required:false,groupe:"roulement_ar_p_pair",condition:siPompeAncienne},
+    {id:"roulement_ar_p_present",label:"Roulement arrière pompe",type:"oui_non",required:true,condition:siPompeAncienne},
+    {id:"type_roulement_ar_p",label:"Type roulement arrière pompe",type:"roulement",required:true,condition:siRoulementArP},
+    {id:"etat_roulement_ar_p",label:"État roulement arrière pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_ar_p_pair",condition:siRoulementArP},{id:"roulement_ar_p_change",label:"Roulement arrière pompe changé",type:"oui_non",required:false,groupe:"roulement_ar_p_pair",condition:siRoulementArP},
     {id:"etat_flasque_ar_p",label:"État visuel flasque arrière pompe",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_ar_p_pair",condition:siPompeAncienne},
     {id:"etat_arbre_ar_p",label:"État visuel arbre arrière pompe",type:"select",options:["OK","Marqué"],required:true,groupe:"visuel_ar_p_pair",condition:siPompeAncienne},
     {id:"joint_ar_p",label:"Joints arrière pompe",type:"joints",required:false,groupe:"joint_ar_p",condition:siPompeAncienne},
@@ -781,8 +786,8 @@ function detecterPieces(v,typeMat){
       const ref=(v.type_gm_mobile||"").replace("Autre:","").trim()+" "+(v.diametre_gm_mobile||"");
       pieces.push({designation:"GM mobile",reference:ref.trim()});
     }
-    if((v.etat_roulement_av_p&&mauvais.includes(v.etat_roulement_av_p))||v.roulement_av_p_change==="Oui")pieces.push({designation:"Roulement avant pompe",reference:(v.type_roulement_av_p||"").replace("Autre:","").trim()});
-    if((v.etat_roulement_ar_p&&mauvais.includes(v.etat_roulement_ar_p))||v.roulement_ar_p_change==="Oui")pieces.push({designation:"Roulement arrière pompe",reference:(v.type_roulement_ar_p||"").replace("Autre:","").trim()});
+    if(v.roulement_av_p_present!=="Non"&&((v.etat_roulement_av_p&&mauvais.includes(v.etat_roulement_av_p))||v.roulement_av_p_change==="Oui"))pieces.push({designation:"Roulement avant pompe",reference:(v.type_roulement_av_p||"").replace("Autre:","").trim()});
+    if(v.roulement_ar_p_present!=="Non"&&((v.etat_roulement_ar_p&&mauvais.includes(v.etat_roulement_ar_p))||v.roulement_ar_p_change==="Oui"))pieces.push({designation:"Roulement arrière pompe",reference:(v.type_roulement_ar_p||"").replace("Autre:","").trim()});
     ajouterJoints("joint_av_p","Joint à lèvres avant pompe");
     ajouterJoints("joint_ar_p","Joint à lèvres arrière pompe");
     if(v.remplacement_jc==="Oui")pieces.push({designation:"Joint de corps",reference:v.matiere_taille_jc||""});
