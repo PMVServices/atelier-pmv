@@ -26,6 +26,7 @@ import {TYPE_CHEMINEE, prefixeNumero, normaliserNumero} from "./railClients";
 import PageStockRail, {synchroniserIsolateursRail, supprimerMouvementsRailFiche, chargerClientsRail} from "./Rail";
 import {appliquerConfig, chargerConfig, surChangementConfig, appliquerStatuts} from "./configFiches";
 import PageMaintenance from "./Maintenance";
+import {creerVerrou, BATTEMENT_MS, useVerrous, verrouDeAutrui, idAppareil} from "./verrouFiche";
 import {lireStock, trouverArticle, sousMini, marquePrelevement, lirePrelevements, appliquerPrelevements} from "./stockLien";
 import {qteEff, miniEff, maxiEff} from "./stockGroupes";
 
@@ -2203,6 +2204,12 @@ function CarteKanban({f,s,urgence,onOuvrirFiche,onStatutChange,onDragStart,onTou
 // ─── PAGE ACCUEIL EXPLORATEUR ───────────────────────────────────────────
 
 // ─── FICHE ITEM (niveau 3 : Lieu/Identification) ────────────────────────
+// « 🔒 nom » sur une fiche ouverte en ce moment par quelqu'un d'autre (verrouFiche.js) : on peut quand même l'ouvrir, en lecture seule
+function BadgeVerrou({id}){
+  const m=useVerrous();const o=m[id];
+  if(!o||o.d===idAppareil())return null;
+  return <span title={"En cours de modification par "+o.p} style={{display:"inline-block",maxWidth:130,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",verticalAlign:"middle",marginRight:6,fontSize:11,fontWeight:700,padding:"1px 8px",borderRadius:12,background:"#FFF8E1",color:"#8A4B00",border:"1px solid #E8720C"}}>🔒 {o.p}</span>;
+}
 function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupliquer}){
   const lecture=React.useContext(LectureCtx);
   const [ouvert,setOuvert]=useState(false);
@@ -2234,6 +2241,8 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
   }
 
   async function supprimerFiche(){
+    const prise=await verrouDeAutrui(f.id);
+    if(prise){alert("Impossible de supprimer : cette fiche est en cours de modification par "+prise.p+".");setConfirmSupprFiche(false);return;}
     try{
       await db.del("fiche_photos","?fiche_id=eq."+f.id);
       await db.del("fiche_valeurs","?fiche_id=eq."+f.id);
@@ -2287,6 +2296,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
         <p style={{margin:0,fontSize:13,fontWeight:600,color:"#1B4F8A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.materiel||"Sans identification"}</p>
         <p style={{margin:0,fontSize:11,color:"#9CA3AF"}}>{fmt(f.created_at)}</p>
       </div>
+      <BadgeVerrou id={f.id}/>
       <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:12,whiteSpace:"nowrap",background:st.bg,color:st.color}}>{st.label}</span>
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
@@ -2453,8 +2463,8 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
         ?{display:"grid",gridTemplateColumns:"120px minmax(0,1fr) minmax(0,1.3fr) 110px",gap:12,alignItems:"center",padding:"10px 16px",borderTop:"1px solid #EEF1F5",cursor:"pointer"}
         :{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:"1px solid #EEF1F5",cursor:"pointer"}}>
         {grille
-          ?<><span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{fi.de||"Sans DE"}</span><span style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.client||""}>{fi.client||"—"}</span><span style={{fontSize:13,color:"#4B5563",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.materiel||""}>{fi.materiel||"—"}</span></>
-          :<div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#1B4F8A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fi.de||"Sans DE"} <span style={{color:"#1A1A2E",fontWeight:600}}>· {fi.client||"—"}</span></div><div style={{fontSize:12,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fi.materiel||"—"}</div></div>}
+          ?<><span style={{fontSize:13,fontWeight:700,color:"#1B4F8A"}}>{fi.de||"Sans DE"}</span><span style={{fontSize:13,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.client||""}>{fi.client||"—"}</span><span style={{fontSize:13,color:"#4B5563",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={fi.materiel||""}><BadgeVerrou id={fi.id}/>{fi.materiel||"—"}</span></>
+          :<div style={{flex:1,minWidth:0}}><div style={{fontSize:14,fontWeight:700,color:"#1B4F8A",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}><BadgeVerrou id={fi.id}/>{fi.de||"Sans DE"} <span style={{color:"#1A1A2E",fontWeight:600}}>· {fi.client||"—"}</span></div><div style={{fontSize:12,color:"#6B7280",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{fi.materiel||"—"}</div></div>}
         <button type="button" onClick={e=>{e.stopPropagation();versDossier(fi);}} title="Voir ce dossier (client > N° DE)" style={{...S.p2,fontSize:12,padding:"5px 10px",minHeight:36,whiteSpace:"nowrap"}}>📁 Dossier</button>
       </div>)}
     </div>}
@@ -3267,7 +3277,7 @@ function variantesEtapesPourType(type){
     :[{}];
   return vs.map(v=>etapesPourType(type,v));
 }
-function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed}){
+function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed,onReouvrir}){
   const lecture=React.useContext(LectureCtx);
   const largeurEcran=useWidth();
   const etroit=largeurEcran<600; // téléphone : en-tête de la fiche plus compact
@@ -3301,6 +3311,46 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
     if(seedValeurs&&onSeedConsumed)onSeedConsumed();
   },[]);
 
+  // ── Verrou : une seule personne à la fois modifie une fiche ; les autres l'ouvrent en lecture seule (verrouFiche.js) ──
+  const ctxVerrou=React.useContext(PersonneCtx);const moiVerrou=ctxVerrou&&ctxVerrou.moi;
+  const nomVerrou=moiVerrou?nomComplet(moiVerrou):(sessionTech&&sessionTech!=="—"?sessionTech:"Quelqu'un");
+  const [verrou,setVerrou]=useState(null); // {par, depuis, appareil} : fiche tenue par quelqu'un d'autre
+  const verrouRef=useRef(null);const evaluerVerrouRef=useRef(null);
+  useEffect(()=>{
+    if(lecture||!ficheId)return undefined;
+    const ctrl=creerVerrou(ficheId,nomVerrou);verrouRef.current=ctrl;
+    let vivant=true,etaitBloque=false,premiere=true;
+    // rouvrir la fiche à jour : on libère d'abord notre verrou, pour que la nouvelle ouverture puisse le reprendre aussitôt
+    const rouvrir=async()=>{await ctrl.liberer();if(vivant)onReouvrir(ficheId);};
+    const evaluer=r=>{
+      if(!vivant)return;
+      if(!r.ok){etaitBloque=true;setVerrou({par:r.par,depuis:r.depuis,appareil:!!r.appareil});return;}
+      // la fiche vient d'être libérée alors qu'on la regardait : ce qu'on a à l'écran peut être périmé, on la recharge entièrement
+      if(etaitBloque){etaitBloque=false;if(onReouvrir){rouvrir();return;}}
+      setVerrou(null);
+      // la liste dont on vient d'ouvrir la fiche peut dater : si l'avancement a changé depuis, on rouvre la fiche à jour (avant de saisir quoi que ce soit)
+      if(premiere&&!r.hors&&ficheInit&&ficheInit.id===ficheId&&onReouvrir){
+        premiere=false;
+        db.get("fiches","?id=eq."+ficheId+"&select=etape_active,etapes_validees,statut_chantier").then(rows=>{
+          const f=Array.isArray(rows)?rows[0]:null;if(!f||!vivant)return;
+          const a=JSON.stringify([f.etape_active,f.etapes_validees,f.statut_chantier]);
+          const b=JSON.stringify([ficheInit.etape_active,ficheInit.etapes_validees,ficheInit.statut_chantier]);
+          if(a!==b)rouvrir();
+        }).catch(()=>{/* sans effet */});
+      }
+      premiere=false;
+    };
+    evaluerVerrouRef.current=evaluer;
+    ctrl.prendre().then(evaluer);
+    const minuteur=setInterval(()=>{ctrl.garder().then(evaluer);},BATTEMENT_MS);
+    const auRetour=()=>{if(!document.hidden)ctrl.garder().then(evaluer);};
+    const aLaFermeture=()=>ctrl.libererVite();
+    document.addEventListener("visibilitychange",auRetour);
+    window.addEventListener("pagehide",aLaFermeture);
+    return()=>{vivant=false;clearInterval(minuteur);document.removeEventListener("visibilitychange",auRetour);window.removeEventListener("pagehide",aLaFermeture);ctrl.liberer();};
+  },[ficheId,lecture]);
+  function reessayerVerrou(){const c=verrouRef.current;if(c)c.prendre().then(r=>{if(evaluerVerrouRef.current)evaluerVerrouRef.current(r);});}
+
   const apercuAutoFait=useRef(false);
   useEffect(()=>{
     if(lecture&&ficheInit?.id&&chargeFini&&!apercuAutoFait.current){apercuAutoFait.current=true;setApercu(true);}
@@ -3319,8 +3369,9 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
     db.get("suivi_pieces","?fiche_id=eq."+ficheInit.id).then(rows=>{if(Array.isArray(rows))setPiecesCommande(rows);});
   },[ficheInit?.id]);
   useEffect(()=>{
+    if(verrou)return; // fiche en lecture seule (tenue par quelqu'un d'autre) : rien à récupérer en cas de plantage
     saveDraft({ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier});
-  },[ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier]);
+  },[ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier,verrou]);
   const instantaneRef=useRef({v:"",c:""});instantaneRef.current={v:JSON.stringify(v),c:commentaires};
   useEffect(()=>{
     if(!chargeFini)return undefined;
@@ -3480,6 +3531,22 @@ const onChange=useCallback((id,val)=>setV(p=>{
   }
 
   const prog=Math.round((validees.length/etapesActives.length)*100);const chem=cheminFiche(v);const st=statutInfo(statutChantier);
+
+  // Fiche tenue par quelqu'un d'autre : lecture seule (on peut regarder l'aperçu, pas modifier)
+  if(verrou)return(<div style={{maxWidth:800,margin:"0 auto",padding:"28px 16px",textAlign:"center"}}>
+    <div role="status" style={{background:"#FFF8E1",border:"1.5px solid #E8720C",borderRadius:12,padding:"18px 16px",color:"#8A4B00"}}>
+      <p style={{fontSize:30,margin:"0 0 6px"}}>🔒</p>
+      <p style={{fontSize:16,fontWeight:700,margin:"0 0 6px"}}>{verrou.appareil?"Fiche déjà ouverte sur un autre appareil":"Fiche en cours de modification par "+verrou.par}</p>
+      <p style={{fontSize:13,margin:"0 0 4px",fontWeight:600}}>{v.de||ficheInit?.de||""}{v.client?" · "+v.client:""}</p>
+      <p style={{fontSize:13,margin:0,lineHeight:1.5}}>{verrou.appareil?"Vous l'avez ouverte":"Ouverte"} depuis {new Date(verrou.depuis).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}. Pour éviter les doublons, elle s'ouvre en <b>lecture seule</b> tant qu'elle est utilisée. Elle se libère dès que la personne quitte la fiche (ou après 5 minutes sans activité).</p>
+    </div>
+    <div style={{display:"flex",gap:10,justifyContent:"center",flexWrap:"wrap",marginTop:16}}>
+      <button type="button" style={{...S.p1,opacity:chargeFini?1:0.5}} disabled={!chargeFini} onClick={()=>setApercu(true)}>{chargeFini?"👁 Voir la fiche (lecture seule)":"Chargement…"}</button>
+      <button type="button" style={S.p2} onClick={reessayerVerrou}>🔄 Réessayer</button>
+      <button type="button" style={S.p2} onClick={()=>{clearDraft();onRetour();}}>← Retour à la liste</button>
+    </div>
+    {apercu&&<ApercuFiche v={v} photos={photos} statutChantier={statutChantier} commentaires={commentaires} pieces={piecesCommande} nrMap={nrMap} champsData={champsActifs} etapesData={etapesActives} onClose={()=>{setApercu(false);document.body.style.overflow="";}}/>}
+  </div>);
 
   if(lecture)return(<div style={{maxWidth:800,margin:"0 auto",padding:"40px 16px",textAlign:"center",color:"#6B7280"}}>
     {!apercu&&(chargeFini?<button type="button" style={S.p1} onClick={()=>setApercu(true)}>👁 Voir l'aperçu</button>:"Chargement de l'aperçu…")}
@@ -6183,6 +6250,15 @@ export default function App(){
     if(sessionTech)aller();else askIdent(t=>{setSessionTech(t);aller();});
   }
   function confirmIdent(t){setSessionTech(t);setDemandeIdent(false);if(pending){pending(t);setPending(null);}}
+  // rouvre une fiche avec ses données à jour (verrou : elle vient d'être libérée, ou son avancement a changé depuis l'ouverture de la liste) ; le brouillon local est abandonné
+  const [cleFiche,setCleFiche]=useState(0);
+  async function reouvrirFiche(id){
+    clearDraft();
+    try{
+      const rows=await db.get("fiches","?id=eq."+id);
+      if(Array.isArray(rows)&&rows[0]){setFicheOuverte(rows[0]);setFiches(prev=>prev.map(f=>f.id===id?{...f,...rows[0]}:f));setCleFiche(k=>k+1);}
+    }catch(e){/* la fiche reste telle quelle */}
+  }
   function onFicheUpdated(id,updates){setFiches(prev=>prev.map(f=>f.id===id?{...f,...updates}:f));if(ficheOuverte?.id===id)setFicheOuverte(prev=>({...prev,...updates}));}
   async function onStatutChange(ficheId,newStatut){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});onFicheUpdated(ficheId,{statut_chantier:newStatut});}
 
@@ -6338,7 +6414,7 @@ export default function App(){
     {page==="dashboard"&&role!=="maintenance"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
     {page==="accueil"&&<EcritureAtelier><PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/></EcritureAtelier>}
     {page==="choix"&&<EcritureAtelier><PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"&&m!==TYPE_CHEMINEE){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");}}/></EcritureAtelier>}
-    {page==="fiche"&&<EcritureAtelier><PageFiche ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/></EcritureAtelier>}
+    {page==="fiche"&&<EcritureAtelier><PageFiche key={"fiche-"+cleFiche} onReouvrir={reouvrirFiche} ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/></EcritureAtelier>}
     {page==="planning"&&<EcritureAtelier><PagePlanning fiches={fiches} clients={clients} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onNouvelleFiche={()=>askIdent(t=>{setSessionTech(t);setRetourFiche("planning");setPage("choix");})}/></EcritureAtelier>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
     {page==="rapport"&&rapportFicheId&&((fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel===TYPE_CHEMINEE?<PageRapportCheminee ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>:<PageRapport ficheId={rapportFicheId} typeMateriel={(fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel||"Moteur"} techs={techs} onRetour={()=>setRapportFicheId(null)}/>)}
