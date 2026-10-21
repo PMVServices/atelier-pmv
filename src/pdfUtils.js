@@ -10,7 +10,8 @@ function stPdf(id){var liste=(typeof window!=="undefined"&&window.__statutsApp)|
 function slugP(s){return (s||"").replace(/\s+/g,"_").replace(/[^a-zA-Z0-9_-]/g,"").substring(0,30);}
 function deslug(de){return (de||"").replace(/-/g,"");}
 function chPdf(v){var c=slugP(v.client||"Client");var d=deslug(v.de||"DE");var m=slugP(v.materiel_lieu||v.type_moteur||"Materiel");return {client:c,de:d,mat:m};}
-function champVisiblePdf(c,v){if(!c.condition)return true;if(typeof c.condition==="function")return c.condition(v);return v[c.condition.champ]===c.condition.valeur;}
+function condVraiePdf(cd,v){return cd.sauf!==undefined?v[cd.champ]!==cd.sauf:v[cd.champ]===cd.valeur;}
+function champVisiblePdf(c,v){if(!c.condition)return true;if(typeof c.condition==="function")return c.condition(v);if(Array.isArray(c.condition))return c.condition.every(function(cd){return condVraiePdf(cd,v);});return condVraiePdf(c.condition,v);}
 
 export function genHtml(v,photos,sc,comm,pieces,nrMap,champsData,etapesData,opts){
   opts=opts||{};
