@@ -164,7 +164,14 @@ export function statutsAvecConfig(base,cfgStatuts){
   const par=new Map(cfgStatuts.map(x=>[x.id,x]));
   liste.forEach(s=>{const o=par.get(s.id);if(o){if(o.label)s.label=o.label;if(o.color){s.color=o.color;s.bg=teinte(o.color);}}});
   cfgStatuts.forEach(o=>{if(!liste.find(s=>s.id===o.id))liste.push({id:o.id,label:o.label||"Nouveau statut",color:o.color||"#6B7280",bg:teinte(o.color||"#6B7280")});});
-  const rang=id=>{const i=cfgStatuts.findIndex(x=>x.id===id);return i<0?9999:i;};
+  // un statut ajouté par le code après la publication de la configuration (ex. « Rapport à faire ») se range juste après le statut qui le précède dans le code
+  const rangCfg=id=>cfgStatuts.findIndex(x=>x.id===id);
+  const rang=id=>{
+    const i=rangCfg(id);if(i>=0)return i;
+    const k=base.findIndex(x=>x.id===id);
+    for(let j=k-1;j>=0;j--){const r=rangCfg(base[j].id);if(r>=0)return r+0.5;}
+    return k<0?9999:-1;
+  };
   return liste.map((s,i)=>({s,i})).sort((a,b)=>(rang(a.s.id)-rang(b.s.id))||(a.i-b.i)).map(x=>x.s);
 }
 // remplace le contenu du tableau STATUTS_CHANTIER (même objet : tout le code qui l'importe voit le changement)

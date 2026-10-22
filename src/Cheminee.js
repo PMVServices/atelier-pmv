@@ -2,6 +2,7 @@
 // Procédure reprise de « Procedure controle cheminées V2.xlsx ». Les photos de la procédure sont obligatoires (champ « photo_requise ») :
 // on ne passe pas à l'étape suivante sans photo, sauf « photo impossible » avec une justification.
 import {TYPE_CHEMINEE, ISOLATEURS_SNCF_PAR_CHEMINEE} from "./railClients";
+import {champsDelai} from "./delai";
 export {TYPE_CHEMINEE};
 
 // ── normes de conformité (rapport DV0040) ─────────────────────────────────────────────────
@@ -71,7 +72,6 @@ const mes=(id,label,unite,groupe,extra)=>({id,label,type:"mesure",unite,required
 const verdict=(id,label,calcul,extra)=>({id,label,type:"verdict",verdict:calcul,...extra});
 const OK_HS=["OK","HS"];
 // même choix que les autres fiches : « Pas de délai demandé » dans la liste d'unités (la durée disparaît alors, aucune échéance n'est calculée)
-const PAS_DE_DELAI="Pas de délai demandé";
 
 // Essais moteur seul (petite et grande vitesse, avant et arrière) puis intensités ; suf = "" avant démontage, "_ap" après remontage
 function essaisSansTurbine(suf){
@@ -112,8 +112,7 @@ export const CHAMPS_CHEMINEE={
     {id:"date_entree",label:"Date d'entrée",type:"date",required:true,groupe:"rail_entree"},
     {id:"de",label:"N° DV",type:"text",required:true,groupe:"rail_entree",prefixe:"DV"},
     {id:"client",label:"Client",type:"client",required:true},
-    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair",condition:v=>v.delai_unite!==PAS_DE_DELAI},
-    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois",PAS_DE_DELAI],required:true,groupe:"delai_pair"},
+    ...champsDelai(),
     {id:"n_cheminee",label:"N° de cheminée",type:"text",required:true,aide:{texte:"Le n° de cheminée se lit sur la plaque jaune de la cheminée, à la ligne « n° de série »."}},
     {id:"cheminee_origine",label:"SNCF ou IMATEQ",type:"choix",options:["SNCF","IMATEQ"],required:true,note:"décide du changement des isolateurs"},
     {id:"msg_sncf",type:"conseil",condition:siSncf,texte:"Cheminée SNCF : tous les isolateurs sont changés. "+ISOLATEURS_SNCF_PAR_CHEMINEE+" isolateurs sont décomptés automatiquement du stock SNCF dès l'enregistrement de cette étape. Le numéro de gravure des 8 plaques est à noter à la fin (Remontage cheminée)."},

@@ -30,6 +30,9 @@ import {creerVerrou, BATTEMENT_MS, useVerrous, verrouDeAutrui, idAppareil} from 
 import {lireStock, trouverArticle, sousMini, marquePrelevement, lirePrelevements, appliquerPrelevements} from "./stockLien";
 import {controleVibration} from "./vibrations";
 import {messageSeuil} from "./seuils";
+import ProgrammerAgenda from "./ProgrammerAgenda";
+import {champsDelai, echeanceDe, echeanceFixe, joursOuvresRestants, CASES_DELAI, dateIso} from "./delai";
+import {lireAgenda, libTravail} from "./googleAgenda";
 import {qteEff, miniEff, maxiEff, estPrincipal, libelleGroupe} from "./stockGroupes";
 
 const LOGO_B64 = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEAYABgAAD/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wAARCABjAN0DASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQFBgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRolJicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKztLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcYGRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9oADAMBAAIRAxEAPwD9U6KKKAGt61FJMlvGzuyoq/eZqlPAr85P2zv2pdc8V6xq/wAPPD8V7o2iWkrWupTTI8NxfSf3B/ch/wDQ/wDcrqw+HniZ8kTuwWDnjKvJA+0Phb8bND+MGpeJ4/D2brS9CuksjqX/ACwuZtm9wnqqZT5vevSGTeOa+RP2DL7Rvh1+zrJq+v6pp+h2+pavczedqFwlsm1NkPVyP+edJ8av2wJHu59A+Hs8cm35LjXc74x/1x/v/wC/0rSWG5q0qVLodM8DOpip0MOvhPpPxj8RPDPgCxE/iDW7PSY8fIt1MA7/AO6n3n/CvhL9sL9psePNQ8NW/wAP9XvLa10e4e+kvoFe3Zrj7ibN4GdieZ/33XAX1pc65eT3+oXNxf6jN873V0+93/4HXL65o/l7/kr1cPg40ZczPpcDlNHDz56nvSPsD9mf9uDT/iE9r4Y8eSQaN4lcbLbUAdltfuO3+xN/s/df+D+4Pr1WG3gD8K/CzxfcWPh+Brq+uFtbZeAzda9A+E//AAVw1/4W+Gn8P3nheTxpbwvstL7UtV8maKH+4f3L7/qz1yY/D0qL5qZ5OcYHDYZ89Gf/AG6fsxRX5Ox/8FxNTHD/AAgtZP8Ad8QuP/batWx/4LiWzDF58H5I/wDrj4h/+5q8c+ZP1Nor819N/wCC3HgZuNR+G3iG1/69byCf/wBC2V2+h/8ABZH4Gaoqi+0/xfo79zcabC6/+Q53oA+8aK+VvDP/AAU0/Zz8SMEX4iRaZJ/zz1LTrmH/AMf8vZ+tew+Ev2ivhb46VF8P/Efwvq8rDiG11eB5P++N+6gD0iioo5VkjVkberfxLUtABRRRQAUUUUAFFFFABRRRQAUUUUAFcV8Svit4R+D/AIdk17xn4j0/w1pa5xPfTBN/+yiffd/9hATXzz+3R+3fpH7KfhuHSNJjt9b+IeqQl7TT3b9zaQ9PtM+P4c/cTq5B7A1+JnxW+L/jH43eLLnxH4216617VJicSXEnyQrn7kKfdRP9hMCgD9PvjJ/wWY8O6fdSad8LfCVz4kud+xdU1xjbWze6Qp87/wDAtlfO37TfxM8QQ+H73xlrtzC3jDWpoYTJAnyI+z59iP8AwIieX+NfKfwM0Fde+LnhezlXfD9sSWT/AHU+c/8AoNez/tjXM2t+MvCPhu1HziFpRH/tzSbP/adejh+eFKU4H0GB5qOHq1ofF8Jzfwq0mf4jeKG8X+I4451jfba2+z5C6gfNs9Ov/AzXp3jX9pDQvh2sllYRjW9ZT70Kv+4iPo7/APsicV4r4+8fR+F9PTwx4emMf2eLybm5jP8A44vp/te9c54f+Dus+ILNLgT2UNu39+bd/wCg5rvlOUF7LD+9L7R6Mq1Wivq+D96f2pGj4r/aQ8f+LpG83XJtNtXP/Htpn+jIP++Pm/WvWbP9ofSvBvwh8O27zNr3iV7d90LzFxD+8f8A1r9f+AVzHwf+CtpD40mh8WWtpqWlvZv5O6Vwnnb0A7p2317lp37OvgS4sbWR/C1r5jwo/wDrpv8A4uuDmxNGXvniTxWLwcpur8R5T4R+Auu/tGeF7bxlqXih7Y3U0yLaraGRIwj7MJ844rT/AOGCJ/8Aoam/8AP/ALOvfvDPg7/hEtLTStCmu9J0uF3dLW1vJkRN/wB/+Otj7DrH/QY1P/wMeub4vjPGlWnUnzzPzh+LHgJ/hl4/1Xwy939uewaMefs2b98aP93t9+uQ5r9GPEXwD8LeLdYutV1rSP7S1S5/111Pczb3/g/v1lf8Mv8AgP8A6FiL/v8ATf8AxdZ8oc5+fnNHNfoB/wAMx+BP+hWh/wC/03/xdZk37PPgK31j7M3hqDy3tvM/1839/wD36OUOc+EuaOa9Y/aJ+GmnfDjxnDFpAePTL62+0wwO+8xPvKumfbFdD+z58FfD/wAVNF1e81d76OW0uEhT7LMifwZ7oajlL5jzjwf8YfHXw9kjbwv4z17w+EPyLpupzQKP+Ao1fQfw/wD+CpH7QvgTasviy28UWq/8sNfsEm/8fTY//j9dCn7G/g2T/ltq3/A7tP8A4iua8efsd2Nvo81z4av7r+0ETelresjpL/sbx91/rV8pHMfUXw3/AOC3C5WHx/8ADfZ/evPDl5/7Rm/+OV9afDH/AIKP/AD4pLFFaeOIPD9+/H2PxGn2Bx/20f8Adf8Aj9fkD8Ef2bdN8d+Fo9e12/vIo7iWSOG1tdiZ2vs+d36fPUnx2/ZntPht4NXxNotzdyWsUyQXMN1tbZv+46OO26jlDmP6CtM1Kz1qyhu7C6ivLWYbkmt3Do//AAIVe2iv56f2PLfx1eeLNQbwp4413wjp+nw+fcyaNeOnmu3CJs+4c4/jUj5K/RzwX+2B8RPBdolprbW/jPyk/wBZfIlrdP8A8DhTZ/45S5Q5j77or4O+GH7eviDxzdeH9XuLXS4PC+pzI9zH5L+dbw79j/Pv++n/ALJX2z4e8SaX4t0qHVNF1W11nTphmK7sbhJoX+jpUFmxRXin7THxj1L4Q+H9Jk0WGB9Uv7hx/pS7kWFEy5/9ArT/AGdvHHiT4j/D0eIfEaWkUl1cyJbraxbF8lMJ/fP8YegD1iiiigD+bL9qT4ial8Uv2hviH4k1WR3nudYuYYVfrDDE5jhj/wCARoifhXk9fbv/AAUw/ZD1b4K/FTVvH+j2Rk8B+Kbx7sTQodlheP8APJC/9wO+907YOz+CvjDR9FvNevEtLG3e6uH5EcfWgcI8/wAB6Z+zDcLafFqwlfosEx/8cNdH+0h4qnsfjEL+IETQ6XDDDIDjazo2X/8AH2rhvBunap8P/HejXuo2c1nBJKYg8wxww2k/k1af7Q3nv4utbiX/AJaWir/3y7ivV5ZRwn+GR9FDmjl0v5oyPKWyzHNXtJ1y+0S6S4srmW2mTo8b4NUE+Z1r9G9W/YX+H2h6HPqd3pV39mtofOmk+3TV50b8/uHgQ5+b3Nz56+EvjK++IP22zexeS/sbb7VNNCnymHeiFiP+BpX0j8JPGjx3MGia2/8Aos3yW11J/A/9x/8AYr0L4J/sz+Gvg948/tLTLFke+sJrObzrh5o3T5H/AI64rxd8Pf8AhH7xERPMtbyFLqH/AHH/AIK9zD4j6zD2NY+rweKp5pS+p4r4yt8cvE3xc8D+LYLDwR8O/wDhJNHe2R3vvs011++/jT5H+TZXnf8Awtv9pD/ojP8A5R7n/wCLr0/xX+17qPwd0PRbO98GXPicsrRjUIbzyM7PuI6eW/z7K5b/AIeX/wDVKtQ/8GX/ANorxqsZ058kj5jEYeWFn7GZzP8Awtv9pD/ojP8A5R7n/wCLpn/C2/2kP+iOf+Ue5/8Ai66n/h5f/wBUq1D/AMGX/wBoo/4eWf8AVKdQ/wDBl/8AaKw5jn5D1r4Nx+LPGHgdNS8beGT4Y1l5nT7EY3j3p/A+x/nT/wCwrTuvB32rxaibPuab/wC1q6b4HfFaP45fD9PEw0C98OB7l7X7Ne/OH2fxo/8AGnz/APjj11Vrap/wmz/9gr/2tV85HIfnH/wUE0T+w/FnhGPZs36dMf8AyMa3/wBgjS/7R0LxJ/sX8H/ot6t/8FRI0Txx4E2f9Aqb/wBHUf8ABPe6S10LxRv/AOf6D/0W9OPxCl8B87/tNRvY/Hzx3CjttTU5Er6c/YX0m/1T4TeIZbrzZLJNUjSz3/8AXP59n/jle4+Jv2wvg14L8SahoviBJpNXsZvIufL0RJvn/wB/+OvK/jB/wUB8FR+GZrHwDp11c6k6OlvJNZpbWts/9/Z/HSKLvwh06KTwfqKW/wDqUvNW8nZ/19TVsX2lp8Vv2GdQ1V/9LupvDf2p5P8AptbfO/8A4/C9ch+yzdf8WV095W3O8V67vJ/F8711n/BPvxBD4y/Z01jwrdnP2O8udO2f9MLlN/8A6G70SFE5r/gnF4Hjuvhf4v1iVPnvNVS1V/8AYhg3/wDtauh+HuqSeMPB+oa8ZnnS51vUvJ/2IUmdET/vitH9nq6Pwb/YZ1DVbhPIvobbVtQ/7bb3hT/0BK4f9l26x+znoifx/abz/wBHURCRnfsI6wniPQNd0KX95No9/wCcif8ATGb/AOzR/wDvuvD/ABx4k8d/sl/HzxPYeCfE+peF/JvPtFt9hn2RTQuN8e+P7j/I/wDGKs/sX+Ov+EN/aEtLaVilnrIm0+Tnjf8AfT/x9AP+B17L/wAFBvhfL4q8bfD3XtIi33OtBNAm7/v9/wC4/wDHHf8A74oGfQPhP4peNPjl8D/D/jb4izWsmpfZJpEntrfyU+zI7/vnT7m99n8H+xX2l+zJ8Ufh18RvhjpEPw98T2Ou2OnWiQyx27lJ4Wx/y2hf50P+/XwR+1z4ksPg/wDsyzeHtLdE/wBEh8OWmz+5s2P/AOOI9fm54D+IHiL4ZeJbbX/C2tX2g6xbf6q9sZ/LcdAR/tL/ALJ4qAP6f6K/Pb9h3/gp5p/xmutP8DfE77PovjSUiKx1eIeXZ6o39xx/yxlxj/YfnGzhK/QmgoxfE/hnSvGnh+/0TW9NttV0i/h8m5sryISQyof4XU9a/L/9ov8A4Jgr8Jdcn+InwuvPP8MWXmXN/wCHtRm/fWcIRzI8M3/LREH8D/Pwfnev1WU8CsLxvo3/AAkng/XdJ27vttlNbY/30Zf61pRnyTjI3w8/Z1YTP58fj9oV+dN0bWEDS2Cb4W2dI3blD/wMD/xyvP8AxR4wj8V+G9KS7LjU9PbyfMH/AC1ix94/7QK4r9HfjR+zHf8Awf0lE1KwfW/A2qWkO66dd/2Z2T54Zv7nz42P/wCz18WeNv2aIbWY3HhvWYri0b/l21D5JE/4GvD17eIhOrOU6PvRkfU43D1MTKdbCe9CZ4Aq5avorwL+0l8VPH2rLoOt+NNR1LRJoWjurScpslhRPufc9lryPxZ4AvfBtrBLfT26PcfNFFEzN5qf3/pXpH7Lfhg6tqWvam6/u7a3SJG/23fj/wBArzaFKUa8YyPEwVCUcZCEz6E/ZJ+OfjfxV8edb0XxX4mvtZ0zStMufslrdlNkX76FPT+5X0Z4m8nWPB+jzfx2yJ/3w6V8TfAuZ9G/aW8ZeV/DazJ/5Hhr6n0rxB5/h61hf7n2ZKqEeTEkUZTo5j7n8wzR9Ym8HeIbXVbff8j/AL6OP+NP40qG4/4KLfDGzuJIJrXxNHLG21lk05N6uP8AtvWbrF8myuEg0PStY8VaWkulaf8AJNvmnjs4Ud/433vs3vXq4jC+298+rzTL/rK9t/Iehf8ADyb4Uf8APHxJ/wCACf8Ax6j/AIeTfCj/AJ4+JP8AwAT/AOPVak8K+A/+hM8N/wDgqh/+IpknhXwN/wBCZ4e/8FUP/wARXz/Kfn/OesfDT46+H/jF4XPiDw89w9l5z2zx30Wx0dP/ANtKuR+Jkg8bb3f/AJhv/tavMtN1Ww0OwSz0yzt9Nsk+5a2sKQon/AErIvvEc0nidHif/lw/9no5TPnPA/8Agpdqy6p428EOnRdNmH/kasD9jfWLfSfDviXzr+3tHN5DhJ5lTPyP61gftraw+q+NvD0Lt88GmZ2f700hrgPhP4U8IeINO1mbxDqptb+32Gy09rlbRLnn5wZnRwlY1KkaEeZBUqctLmkZ3x4v01D4xeLbmOZZ45r938yN9yt+NcCfave4fglYarrHhVbaxms9E1LUBZy6lb6vDfoWK52LsRNr/K/Wq3jL4c+EvD/9swwQwPJZ+akRbxNC0pZDjPlCHlv9iuP69SnLlOeOOpfAe1fs+69YWHwT0lJdStLeZIrrfG9yiP8AfeuC/Yf+LFj8PvE2u6Xqeox6bb6rFC0Mlw+xPOR/7/b5HNQTfAfw9HN4atYLK61GfV7KC4ffr1tbOjv98JC6b2rDm+C/hnVtT8a+HNBv7y71/Rz52nef8ou0QDz4dmzO9G3emcVEMxoTMIY6lUPd/wBrr42aLH8IbrwtpOpWcl9qMyL9lsnjcJDv3v8Ac+586Vi/sy69YWfwb0y2uNRtLd1ubk+XNcoj/frwW3+F+maL8NdP1nXJLiPW9aulj0uzRtgWEN88z5/zytdh4j+BPhfwzfePLueXVLrSfDq2YhtI5kSaVpk/jcpxzn+CtJY+lGRpLGUoe4eDWmqT6J4kg1K0fy7m0uxcwv8A7SPuU/mK/SXTvi14P+IukaDqtxqWmTmzmh1O2jkuUR7a5RP7n+xveviP4deEPCnxP8d6TotpY6po9u6zNcSSX6XDvsQuuz9ym3p71J4u8H+FdD0e+e1hg+0RttR4/EkNw/3/APnkkPzfnVfXIRl7Ll94qWKhzey+0dz+2p8W7bx7rmi6Fpl/HfWWmxvPcPA+9DM5xj/gCJ/4/XzFzX0Q3wq8DXl5Y2nh6ceJDcImx38QQ2c0kp/g8qSCvEPE2j3Oga9faddW72NzbytE9s7bmjIP3d1XTxMcRL3TShiI1fciZEcjRyKyNsdejV+9X/BNT9pa+/aI+A/leIbhrzxV4XmTTL+5YZa6Qpuhnbr87J8rerxO38VfgnzX6o/8EX/B+oXPhf4p60l5JZWFxeafZROnSSSJJ3f8hOh/4FXQdh+qlFLRQBRvLSDULd7e4hSaGVdro67lZfSvL7j9lX4TXWrf2jJ4B0Q3W7fzajZn/c+5+let81zvjrWn8M+CPEOrRMqS2Nhc3SM/QMkbP/StIynH4GbUp1YaQkZfjD4QeCPiB4Xj8N+JPCekaxocabYrG6tEMcP+5/c/4Divzu8f/BrwH8E/GXiXQvAVnJYaMlxG80E1w8u2bZ86I7/PsT/4uvsZf2rvDx+C9t4uee3GtXEPkJpPmfvDeY+ZNv8AcHL7v7nNfIfg2zuPil8StF0h3ee61S/8y5f/AGN++Z/++N9ephKUoSnOZ9JleFnSnOvW+yfG/wAaPhD8bf2d/Gur+Mbvw1qOi6ZqckkkOuQwx3Vq8MkgdN8mHWNvuff2vXWfs5/FzWvH2h6nY6ij3dxpCJM98if8sncId/51+6ElpDcWzW0kSvAy7GiZflK+lfKvxm/4JufC/wCJUl5qXho3nwz8RXGd9/4XbyYJvaW2B2MOv3NnWuKliJU5854mHxcsPifbHwrqviD5Pv1qfDLwrc+LptRv4vtEcFtshSSD+/TfjT+zv43+ANzZW3imS01a2u9yW+sadv8AJuXQZ+dH+4/+x/3xXxr8Q/iJrcPi69i0vWdQsbSBzCkdndvGny8N9019Biq0Pq/PD7R9lmmMhPL+aj9s/Qj/AIVjf/8APzqH/ff/ANhR/wAKxv8A/n51D/vv/wCwr8zP+FleLf8Aoatb/wDBhN/8XR/wsrxb/wBDVrf/AIMZv/i6+Y5j875D9EvFvwd8U3Wl3T6B4n1TStQRHeHz4YZoX/3/AJK+F/8Aho/4iR3Xnf8ACQnzdmz/AI9of/iK5f8A4WT4s/6GrW//AAYTf/F1zXNLmCMDU8SeJtU8YatNqusXcl9ezHLzSHJNe8/s8/Bnxp498KaprHhfxLpvh62OopYMl8rgSv5e/hvLfna52p95+eK+c8HOK1tO8SatpLWn2PUry0+yXAu7fyLl4/KmGMSpg/K/A+brWUoxnpIcoRn7sj6+sv2W/i144sdA1/SfiHpd/ozb73S76SS6tSmI0eN/J8n5Gcuyp/1zesT4nfBv4meEdHtH1Lx1pmqrreqLocMMAzI8j7Ebzvk3J98etfO1x8X/AB3f3clzceMvEE9zK6O8j6nMXZl+6T8/asyHxr4gtdLTTYtb1KOwS6+2rapeOIRN/wA9dmcb/wDa61n7Cl/IZ+wpfyH1T42/Y5+JWh6poUvijxzo0d2t4NC0aZHuZnNykj/Zo/kh/do6J5yO/wDA6VhXXwB8a3F0/jmw+IFlqWosiSQ30Ec8M0zvp6Xmwb0T/l2mh/77rwuL4wePbNZzH408QR/aIfJlxqk3zp93afn5Hy1W0/4leKtKh8qx8TazYwhopPLtr6WP50RUjbAf+BERV9AielP2cP5TT2dL+Q93+KX7Ofj7TLfwT4h8U+MtNu5fEF3Yafbz3Esw+x/aQ7oXOz7ibH37PuZT1re0f9nX4u3epQalfeN7PQvEmrzDT7m2vriRJEdLVJilz8n8ELx/3/vV8u6x4y1zXlmGqazqOp+a6vJ9runm3uvmbGO/082T/vt/71XZvih4wuFvUk8V626X0nn3e7UZj9pfZs3yZf522fLz24p+ypfDyh7Ol/IfSl98BfiVHcXV4PHdh/wkvhu21K9uLFYJ4Zrf7NHB9pQP5O13/fQp1qla/BP4leKPAeg6r4h8Y2OlaT4osXurWG7tZnZyLqGFI32Q/Iz+dC6f7D188r8TPF0OpNqCeKNah1J3eZ7tdRmWZmfYzuX3Zy2xM+uxKrzfEDxNdT3MsviLVZJrh0eaR76XfM652M53cle3pS9jS/lM/YUv5T69sP2bfjHfXmoafpPxA0mbWdLmjs7+3RJ0eG5cQukMb+R8/wC6m8z5P+ebf7Ofi7Vrm5utQuZLudrm5aV/NldtzO2eWzXQyfGLx5N9h3+NvEL/AGH/AI9M6rN+4/3Pn+X8K7r4E/sifFL9pHUEHg7wrcPpjPibWr7MGnw8/wDPZvvkf3E3t7URpQh8ES40qUPgieb+BPAOt/ErxhpXhjw5ZPqWtapOtvbWyYG5j688L/te1f0RfsrfAXTv2ZvgjoHgaxIurm1Qz6jexoR9qvHwZZOecZAVc/wIleZfsZfsH+FP2S9Ll1N5/wDhJPHl7EIrzWniKJChxmG2T+BP9v77+33R9WVqWFFFJQA2vIP2stYbQf2ePHd0n3/7Mkh/77+T/wBmr18dq4v4rfDjTPi/4H1Twnq0lzDY3yoJHs5Nki7HDqQf95BV0pRhOPOb0JRhVhOR+Otr4j8ivvP9gz4S3NvpN18RdatmSa/X7NpEci/OLb+Of/gZxs/2F/268V+K3/BPfx14Naa68K3Fv4w09RkQn/Rrxf8AgH3G/wCAuP8Acr6u/Yq8Xajr3wgt9A161urHxF4Yk/sq7tr2Fo5lRP8AUttYdNny/wDADX0eNrwnh/3J9nm2Mp1sJfDS9T6JFLRRXzJ8KcX8TPhtofxb8HX/AIa8Q2v2rTLtOdnyPE38Lo38Lr2NfL/7UP8AwTH+HHx006bUvDVvH4E8ZIh2XunRD7Lctjj7RD35/jTD+u/pX2kKKrnfwl88uXkufzQfG/4DeMv2e/GkvhjxppTadfLl4ZkG+G7izjzYn/jWvOua/o1/aw/Zq0b9p/4R6p4X1OOKLV442m0XU5Ey9neY+R/9xvuuv90/TH86t/p0+k31xZ3SGG6t5Xiljb+F0OCPzqSCpzRzRzRzQAc0c0c1r6L4R1zxFJs0rRb/AFZ/7ljavN/6AKAMjmjmvaPC/wCxx8cPFWyTTfhR4rkRvuSXGlS20Z/4HIEr1fwv/wAEq/2ivETI1x4TsNBikOd+qarbf+go7t+lAHyBzRzX6Q+Ev+CJvj2+8tvEnxC8P6Tn7yabbT3rL/335Ne3+Dv+CK3w10zy28S+NfEeuuhyVskhs43+o2O3/j9AH4381b03TbzWLyO2sbaW8uZD8kMMe92/4CK/fnwR/wAE1f2d/A7RvF8PLfWZ16z65czXm7/gDvs/8cr33wr8O/C/gW3+z+GPDmk+Hof+eelWEVsn/jiigD8Afh5+wb8evicY30n4aavaW0xz9p1iNdPjA9R55TP/AAGvqj4Yf8EU/FmptFceP/HOm6DB1az0SF7yb6b32In/AI/X690UAfKXwf8A+CaHwF+EhguT4V/4S7Votv8Ap3iWT7X83r5PEP8A45X1Fa2kFjbJb28SQ28S7EiRdiKtW6KACiiigAooooAKSiigAwD1GaZ5KBt+0bsdaKKAJKKKKACiiigAr81/GH7E3wXvPHGrSzeDPMkm1GZ5GOqXvzFpPmP+u75oooA9W+Gv/BOn9ne+jaS5+HENw4GQZdVvm/nPXrGkfsK/s/6H5X2b4S+GZP8Ar7sxc/8Ao0tRRQB3ug/A/wCHPhoQ/wBkeAPC+lf9eWjW0P8A6CgrtobWGziSKCJYYx0WMbR+lFFAE9FFFABRRRQAUUUUAFFFFABRRRQAUUUUAf/Z";
@@ -59,6 +62,7 @@ const STATUTS_CHANTIER=[
   {id:"En_commande",label:"En commande",color:"#1B4F8A",bg:"#EEF4FF"},
   {id:"A_remonter",label:"À remonter",color:"#22863A",bg:"#F0FFF4"},
   {id:"Peinture",label:"Peinture",color:"#0D9488",bg:"#F0FDFA"},
+  {id:"Rapport_a_faire",label:"Rapport à faire",color:"#B45309",bg:"#FFF7ED"},
   {id:"Termine",label:"Terminé",color:"#6B7280",bg:"#F5F6F8"},
   {id:"Abandonne",label:"Abandonné",color:"#9B59B6",bg:"#F5EEF8"},
 ];
@@ -142,7 +146,6 @@ function puissanceKw(v,champ){
 }
 const PETIT_MOTEUR_KW=4;
 // Délai demandé : "Pas de délai demandé" se choisit dans la liste d'unités (la durée n'est alors plus demandée)
-const PAS_DE_DELAI="Pas de délai demandé";
 // "Ne sais pas encore" compte comme "Non" partout où l'on teste "Oui"
 const NE_SAIT_PAS="Ne sais pas encore";
 const CHOIX_OUI_NON_NS=["Oui","Non",NE_SAIT_PAS];
@@ -256,8 +259,7 @@ const CHAMPS={
     {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true},
     {id:"lignage",label:"Lignage",type:"choix",options:["Non","Poulie","Accouplement"],required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
-    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair",condition:v=>v.delai_unite!==PAS_DE_DELAI},
-    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois",PAS_DE_DELAI],required:true,groupe:"delai_pair"},
+    ...champsDelai(),
     {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:true,remplit:{telephone:"telephone",mail:"mail"}},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
@@ -350,8 +352,7 @@ const CHAMPS_POMPE={
     {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true},
     {id:"lignage",label:"Lignage",type:"choix",options:["Non","Poulie","Accouplement"],required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
-    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair",condition:v=>v.delai_unite!==PAS_DE_DELAI},
-    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois",PAS_DE_DELAI],required:true,groupe:"delai_pair"},
+    ...champsDelai(),
     {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:true,remplit:{telephone:"telephone",mail:"mail"}},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
@@ -543,8 +544,7 @@ const CHAMPS_REDUCTEUR={
     {id:"sur_variateur",label:"Moteur sur variateur",type:"oui_non",required:true},
     {id:"lignage",label:"Lignage",type:"choix",options:["Non","Poulie","Accouplement"],required:true},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
-    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair",condition:v=>v.delai_unite!==PAS_DE_DELAI},
-    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois",PAS_DE_DELAI],required:true,groupe:"delai_pair"},
+    ...champsDelai(),
     {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:true,remplit:{telephone:"telephone",mail:"mail"}},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
@@ -714,29 +714,9 @@ function etapeOk(nom,v,nr,cs,photos){
 }
 function today(){return new Date().toISOString().split("T")[0];}
 
-// ─── Délai client / échéance (jours ouvrés = lundi-vendredi) ────────────
-function estJourOuvre(date){const d=date.getDay();return d!==0&&d!==6;}
-function ajouterJoursOuvres(date,n){const d=new Date(date);let c=0;while(c<n){d.setDate(d.getDate()+1);if(estJourOuvre(d))c++;}return d;}
-function calculerEcheance(dateEntreeStr,valeur,unite){
-  if(!dateEntreeStr||!valeur||unite===PAS_DE_DELAI)return null;
-  const n=parseFloat(valeur);
-  if(isNaN(n)||n<=0)return null;
-  const base=new Date(dateEntreeStr+"T00:00:00");
-  if(isNaN(base.getTime()))return null;
-  if(unite==="Semaine(s)"){base.setDate(base.getDate()+Math.round(n*7));return base;}
-  if(unite==="Mois"){base.setMonth(base.getMonth()+Math.round(n));return base;}
-  return ajouterJoursOuvres(base,Math.round(n));
-}
-function joursOuvresRestants(dateEcheance){
-  const t=new Date();t.setHours(0,0,0,0);
-  const cible=new Date(dateEcheance);cible.setHours(0,0,0,0);
-  if(cible.getTime()<=t.getTime())return 0;
-  const d=new Date(t);let c=0;
-  while(d.getTime()<cible.getTime()){d.setDate(d.getDate()+1);if(estJourOuvre(d))c++;}
-  return c;
-}
+// ─── Délai client / échéance (delai.js : jours ouvrés = lundi-vendredi ; l'échéance est fixée dès la saisie, ou choisie en « Date précise ») ────────────
 function urgenceInfo(v){
-  const ech=calculerEcheance(v.date_entree,v.delai_valeur,v.delai_unite);
+  const ech=echeanceDe(v);
   if(!ech)return null;
   const j=joursOuvresRestants(ech);
   const echStr=ech.toLocaleDateString("fr-FR");
@@ -1737,8 +1717,8 @@ function PageStats({fiches,pieces}){
   const total=fichesFilt.length;
 
   // Taux conversion : Devis -> (En_commande + A_remonter + Termine)
-  const totalDevis=fichesFilt.filter(f=>["Devis","En_commande","A_remonter","Termine"].includes(f.statut_chantier||"A_demonter")).length;
-  const devisAcceptes=fichesFilt.filter(f=>["En_commande","A_remonter","Termine"].includes(f.statut_chantier)).length;
+  const totalDevis=fichesFilt.filter(f=>["Devis","En_commande","A_remonter","Rapport_a_faire","Termine"].includes(f.statut_chantier||"A_demonter")).length;
+  const devisAcceptes=fichesFilt.filter(f=>["En_commande","A_remonter","Rapport_a_faire","Termine"].includes(f.statut_chantier)).length;
   const tauxConversion=totalDevis>0?Math.round((devisAcceptes/totalDevis)*100):0;
   const tauxAbandon=total>0?Math.round(((parStatut["Abandonne"]||0)/total)*100):0;
   const tauxTermine=total>0?Math.round(((parStatut["Termine"]||0)/total)*100):0;
@@ -1911,7 +1891,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
   useEffect(()=>{
     if(!fiches.length){setDelaisMap({});return;}
     const ids=fiches.map(f=>f.id).join(",");
-    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite,__export_nas)").then(rows=>{
+    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite,delai_date,delai_echeance,__export_nas)").then(rows=>{
       if(!Array.isArray(rows))return;
       const m={};
       rows.forEach(r=>{if(!m[r.fiche_id])m[r.fiche_id]={};m[r.fiche_id][r.champ_id]=r.valeur;});
@@ -2083,6 +2063,8 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
   // chantiers « sans fiche » : seulement dans le planning (planningLibre.js)
   const lecture=React.useContext(LectureCtx);
   const ctxP=React.useContext(PersonneCtx);const moiP=ctxP&&ctxP.moi;
+  const [agenda,setAgenda]=useState({});const [programmer,setProgrammer]=useState(null); // événements Google Agenda programmés {id de carte: [...]} ; fenêtre « Programmer » ouverte
+  useEffect(()=>{let vivant=true;lireAgenda().then(a=>{if(vivant)setAgenda(a);}).catch(()=>{});return()=>{vivant=false;};},[]);
   const [libres,setLibres]=useState([]);const [erreurLibre,setErreurLibre]=useState("");
   const [formLibre,setFormLibre]=useState(null);const [enregLibre,setEnregLibre]=useState(false);
   useEffect(()=>{let vivant=true;lirePlanningLibre().then(l=>{if(vivant){setLibres(l);setErreurLibre("");}}).catch(e=>{if(vivant)setErreurLibre(e.message);});return()=>{vivant=false;};},[]);
@@ -2105,7 +2087,7 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
   useEffect(()=>{
     if(!fiches.length){setDelaisMap({});return;}
     const ids=fiches.map(f=>f.id).join(",");
-    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite)").then(rows=>{
+    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite,delai_date,delai_echeance)").then(rows=>{
       if(!Array.isArray(rows))return;
       const m={};
       rows.forEach(r=>{if(!m[r.fiche_id])m[r.fiche_id]={};m[r.fiche_id][r.champ_id]=r.valeur;});
@@ -2176,6 +2158,7 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
         <button onClick={()=>setShowAbandonne(!showAbandonne)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#9B59B6",borderColor:"#9B59B6"}}>{showAbandonne?"Masquer Abandonné":"Afficher Abandonné"}</button>
       </div>
     </div>
+    {programmer&&<ProgrammerAgenda cible={programmer.cible} existant={programmer.existant} nomPersonne={moiP?nomCourt(moiP):""} admin={!!(moiP&&moiP.profil==="admin")} onFermer={()=>setProgrammer(null)} onChange={setAgenda}/>}
     {erreurLibre&&<div style={{...S.alert,marginBottom:10}}>⚠ Chantiers sans fiche : {erreurLibre}</div>}
     {formLibre&&!lecture&&<FormPlanningLibre key={formLibre.id||"nouveau"} init={formLibre} clients={clients} enCours={enregLibre} onEnregistrer={enregistrerLibre} onAnnuler={()=>setFormLibre(null)}/>}
     {rq
@@ -2195,8 +2178,8 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
           </div>
           {(parStatut[s.id]||[]).length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
           {(parStatut[s.id]||[]).map(f=>f.libre
-            ?<CartePlanningLibre key={f.id} e={f} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id} onModifier={x=>{setFormLibre(x);window.scrollTo&&window.scrollTo({top:0,behavior:"smooth"});}} onSupprimer={supprimerLibre}/>
-            :<CarteKanban key={f.id} f={f} s={s} urgence={delaisMap[f.id]?urgenceInfo(delaisMap[f.id]):null} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id}/>)}
+            ?<CartePlanningLibre key={f.id} e={f} agenda={agenda[f.id]} onProgrammer={(c,x)=>setProgrammer({cible:c,existant:x})} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id} onModifier={x=>{setFormLibre(x);window.scrollTo&&window.scrollTo({top:0,behavior:"smooth"});}} onSupprimer={supprimerLibre}/>
+            :<CarteKanban key={f.id} f={f} s={s} urgence={delaisMap[f.id]?urgenceInfo(delaisMap[f.id]):null} agenda={agenda[f.id]} onProgrammer={(c,x)=>setProgrammer({cible:c,existant:x})} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id}/>)}
         </div>
       ))}
     </div>
@@ -2236,7 +2219,7 @@ function FormPlanningLibre({init,clients,onEnregistrer,onAnnuler,enCours}){
   </div>);
 }
 
-function CartePlanningLibre({e,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging,onModifier,onSupprimer}){
+function CartePlanningLibre({e,agenda,onProgrammer,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging,onModifier,onSupprimer}){
   const [ouvert,setOuvert]=useState(false);
   const [confirmer,setConfirmer]=useState(false);
   const lecture=React.useContext(LectureCtx);
@@ -2253,6 +2236,7 @@ function CartePlanningLibre({e,onStatutChange,onDragStart,onTouchStart,onTouchEn
         <span style={{fontSize:12,color:"#1A1A2E",marginLeft:6,fontWeight:500}}>{e.client||"—"}</span>
         <span style={{fontSize:11,color:"#6B7280",marginTop:2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{e.description}</span>
         <span style={{display:"inline-block",fontSize:10,background:"#EEF4FF",color:"#1B4F8A",borderRadius:10,padding:"1px 7px",marginTop:3}}>📌 Sans fiche</span>
+        {agenda&&agenda.length>0&&<span style={{display:"inline-block",fontSize:10,background:"#EEF4FF",color:"#1B4F8A",borderRadius:10,padding:"1px 7px",marginTop:3,marginLeft:4}}>📅 {agenda.length>1?agenda.length+" événements":libTravail(agenda[0].travail)+" "+String(agenda[0].jour).slice(8,10)+"/"+String(agenda[0].jour).slice(5,7)}</span>}
       </div>
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
@@ -2260,6 +2244,7 @@ function CartePlanningLibre({e,onStatutChange,onDragStart,onTouchStart,onTouchEn
       <div style={{fontSize:12,color:"#1A1A2E",whiteSpace:"pre-wrap",marginBottom:6}}>{e.description}</div>
       {e.contact&&<div style={{fontSize:11,color:"#4B5563",marginBottom:4}}>👤 {e.contact}</div>}
       <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>Ajouté le {fmt(e.cree)}{e.par?" par "+e.par:""}</div>
+      <BlocAgenda cible={{id:e.id,de:e.de,client:e.client,type:"",materiel:e.description,statut:e.statut}} entrees={agenda} lecture={lecture} onProgrammer={onProgrammer}/>
       <select value={e.statut||"A_demonter"} disabled={lecture} onChange={ev=>onStatutChange(e.id,ev.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
         {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
       </select>
@@ -2277,7 +2262,21 @@ function CartePlanningLibre({e,onStatutChange,onDragStart,onTouchStart,onTouchEn
     </div>}
   </div>);
 }
-function CarteKanban({f,s,urgence,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging}){
+// Événements Google Agenda programmés pour une carte du Planning (liste + bouton « Programmer ») ; googleAgenda.js, ProgrammerAgenda.js
+function BlocAgenda({cible,entrees,lecture,onProgrammer}){
+  const liste=(entrees||[]).slice().sort((a,b)=>(a.jour+a.debut).localeCompare(b.jour+b.debut));
+  const jj=j=>{const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(j||"");return m?m[3]+"/"+m[2]:j;};
+  if(lecture&&!liste.length)return null;
+  return(<div style={{marginBottom:8}}>
+    {liste.map(x=><div key={x.id} style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",background:"#EEF4FF",border:"1px solid #AFC6E6",borderRadius:6,padding:"5px 8px",marginBottom:4,fontSize:11,color:"#1B4F8A"}}>
+      <span style={{flex:"1 1 150px",minWidth:0,overflowWrap:"anywhere"}}>📅 <b>{libTravail(x.travail)}</b> · {jj(x.jour)} {x.debut}–{x.fin}<span style={{color:"#6B7280"}}> · {x.calNom}</span></span>
+      {x.lien&&<a href={x.lien} target="_blank" rel="noopener noreferrer" style={{color:"#1B4F8A",fontWeight:600}} onClick={e=>e.stopPropagation()}>ouvrir</a>}
+      {!lecture&&<button type="button" onClick={()=>onProgrammer(cible,x)} style={{fontSize:11,padding:"3px 8px",borderRadius:6,border:"1px solid #1B4F8A",background:"#fff",color:"#1B4F8A",cursor:"pointer",fontWeight:600}}>✏️ Modifier</button>}
+    </div>)}
+    {!lecture&&<button type="button" onClick={()=>onProgrammer(cible,null)} style={{width:"100%",fontSize:12,padding:"7px",borderRadius:6,border:"1px solid #1B4F8A",background:"#fff",color:"#1B4F8A",cursor:"pointer",fontWeight:700,minHeight:36}}>📅 Programmer dans l'agenda</button>}
+  </div>);
+}
+function CarteKanban({f,s,urgence,agenda,onProgrammer,onOuvrirFiche,onStatutChange,onDragStart,onTouchStart,onTouchEnd,isDragging}){
   const [ouvert,setOuvert]=useState(false);
   const lecture=React.useContext(LectureCtx);
   return(<div
@@ -2293,13 +2292,15 @@ function CarteKanban({f,s,urgence,onOuvrirFiche,onStatutChange,onDragStart,onTou
         <span style={{fontSize:12,fontWeight:700,color:"#1B4F8A"}}>{f.de}</span>
         <span style={{fontSize:12,color:"#1A1A2E",marginLeft:6,fontWeight:500}}>{f.client||"—"}</span>
         {urgence&&<span style={{display:"block",fontSize:10,fontWeight:700,color:urgence.color,marginTop:2}}>● {urgence.label}</span>}
+        {agenda&&agenda.length>0&&<span style={{display:"inline-block",fontSize:10,background:"#EEF4FF",color:"#1B4F8A",borderRadius:10,padding:"1px 7px",marginTop:3}}>📅 {agenda.length>1?agenda.length+" événements":libTravail(agenda[0].travail)+" "+String(agenda[0].jour).slice(8,10)+"/"+String(agenda[0].jour).slice(5,7)}</span>}
       </div>
       <span style={{fontSize:13,color:"#9CA3AF"}}>{ouvert?"▲":"▼"}</span>
     </div>
     {ouvert&&<div style={{padding:"8px 10px",borderTop:"1px solid #E2E6EA",background:"#fff"}}>
       <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{f.materiel||"Moteur"}</div>
       <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>Entrée le {fmt(f.created_at)}</div>
-      {urgence&&<div style={{fontSize:11,fontWeight:600,color:urgence.color,background:urgence.bg,borderRadius:6,padding:"5px 8px",marginBottom:8}}>{urgence.label} — échéance le {urgence.echeance}</div>}
+      {urgence&&<div style={{fontSize:11,fontWeight:600,color:urgence.color,background:urgence.bg,borderRadius:6,padding:"5px 8px",marginBottom:8}}>{urgence.label} — échéance le {urgence.echeance}{urgence.jours>0?" (dans "+urgence.jours+" jour"+(urgence.jours>1?"s":"")+" ouvré"+(urgence.jours>1?"s":"")+")":" (aujourd'hui ou dépassée)"}</div>}
+      <BlocAgenda cible={{id:f.id,de:f.de,client:f.client,type:f.type_materiel||"Moteur",materiel:f.materiel,statut:f.statut_chantier}} entrees={agenda} lecture={lecture} onProgrammer={onProgrammer}/>
       <select value={f.statut_chantier||"A_demonter"} disabled={lecture} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
         {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
       </select>
@@ -2598,7 +2599,7 @@ function PageChoix({onChoisir,onRetour}){
 
 // ─── RAPPORT CLIENT (moteur) ────────────────────────────────────────────
 const VERDICT_OPTIONS=["Conforme","Non conforme","Autre"];
-const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","contact","bordereau","commande_achat","date_depart","materiel_controle","descriptif_travaux","commentaire_vibration_avant","commentaire_roulements","commentaire_demontage","ensemble_libre","commentaire_apres","certifie_par","realise_par","date","adx_captures","sections"];
+const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","contact","bordereau","commande_achat","date_depart","materiel_controle","descriptif_travaux","commentaire_vibration_avant","commentaire_roulements","commentaire_demontage","ensemble_libre","commentaire_apres","certifie_par","realise_par","date","adx_captures","sections","termine","termine_le"];
 const RAPPORT_SECTIONS=[
   {key:"electrique",label:"Photo à l'arrivée + rapport électrique du bobinage"},
   {key:"avant",label:"Relevé électrique + vibration avant entretien"},
@@ -2697,7 +2698,26 @@ async function apercuRapportMaintenance(type,ficheId,config){
   if(type===TYPE_CHEMINEE)await apercuRapportCheminee(r.v,r.data,r.photos);else await apercuRapport(r.v,r.data,r.photos);
 }
 
-function PageRapport({ficheId,techs,onRetour,typeMateriel}){
+// Rapport « enregistré et terminé » : une fois marqué, il passe dans « Déjà fait » de l'onglet Rapport ; si la fiche était dans la colonne « Rapport à faire » du Planning, elle passe dans « Terminé »
+function BlocRapportTermine({termine,termineLe,statutChantier,occupe,peut,onTerminer,note}){
+  const quand=/^\d{4}-\d{2}-\d{2}$/.test(termineLe||"")?new Date(termineLe+"T00:00:00").toLocaleDateString("fr-FR"):"";
+  return(<div style={{...S.card,border:"1.5px solid "+(termine?"#22863A":"#B45309"),background:termine?"#F0FFF4":"#fff"}}>
+    {termine
+      ?<>
+        <p style={{fontSize:14,fontWeight:700,margin:"0 0 6px",color:"#1B6B2E"}}>✅ Rapport enregistré et terminé{quand?" le "+quand:""}</p>
+        <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>Il est dans « Déjà fait » de l'onglet Rapport. Si vous devez encore le modifier, rouvrez-le : il retourne dans « À faire ».</p>
+        <button type="button" style={{...S.p2,fontSize:12,padding:"7px 12px"}} disabled={occupe||!peut} onClick={()=>onTerminer(false)}>↩ Rouvrir le rapport</button>
+      </>
+      :<>
+        <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Rapport fini ?</p>
+        <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>Enregistre le rapport et le marque comme terminé : il passe dans « Déjà fait » de l'onglet Rapport.{statutChantier==="Rapport_a_faire"?" La fiche quittera la colonne « Rapport à faire » du Planning pour « Terminé ».":""}</p>
+        <button type="button" style={{...S.p1,background:"#22863A"}} disabled={occupe||!peut} onClick={()=>onTerminer(true)}>{occupe?"💾 ...":"✅ Enregistrer le rapport et le marquer terminé"}</button>
+      </>}
+    {note&&<p style={{fontSize:12,color:"#1B4F8A",margin:"10px 0 0"}}>{note}</p>}
+  </div>);
+}
+
+function PageRapport({ficheId,techs,onRetour,typeMateriel,statutChantier,onStatutChange}){
   const [loading,setLoading]=useState(true);
   const [v,setV]=useState({});
   const [photos,setPhotos]=useState([]);
@@ -2707,6 +2727,7 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel}){
   const [uploading,setUploading]=useState(null);
   const [exportingWord,setExportingWord]=useState(false);
   const [modeleOk,setModeleOk]=useState(false);
+  const [noteStatut,setNoteStatut]=useState("");
 
   useEffect(()=>{
     if(!ficheId){setLoading(false);return;}
@@ -2789,6 +2810,23 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel}){
     setSaving(false);
   }
 
+  // « Rapport enregistré et terminé » (et « Rouvrir ») : enregistre tout le rapport puis pose ou retire la marque rapport_termine (+ sa date)
+  async function terminer(oui){
+    if(!ficheId||saving)return;
+    setSaving(true);setNoteStatut("");
+    try{
+      const d2={...data};
+      if(oui){d2.termine="Oui";d2.termine_le=dateIso(new Date());}else{delete d2.termine;delete d2.termine_le;}
+      const rows=Object.keys(d2).filter(k=>d2[k]!==undefined&&d2[k]!=="").map(k=>({fiche_id:ficheId,champ_id:"rapport_"+k,valeur:String(d2[k])}));
+      if(rows.length>0)await db.upsert("fiche_valeurs",rows,"fiche_id,champ_id");
+      if(!oui)await db.del("fiche_valeurs","?fiche_id=eq."+ficheId+"&champ_id=in.(rapport_termine,rapport_termine_le)");
+      setData(d2);
+      if(oui&&statutChantier==="Rapport_a_faire"&&onStatutChange){await onStatutChange(ficheId,"Termine");setNoteStatut("La fiche est passée de « Rapport à faire » à « Terminé » dans le Planning.");}
+      setSaved(true);setTimeout(()=>setSaved(false),3000);
+    }catch(e){alert("Erreur enregistrement : "+e.message);}
+    setSaving(false);
+  }
+
   function apercu(){
     apercuRapport(v,data,photosResolved);
   }
@@ -2820,6 +2858,7 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel}){
 
     {!ficheId&&<div style={{...S.alert,marginBottom:14}}>⚠ Enregistrez au moins une étape de la fiche avant de remplir le rapport.</div>}
     {saved&&<div style={S.ok}>✅ Rapport enregistré.</div>}
+    {data.termine==="Oui"&&<div style={{...S.ok,background:"#F0FFF4",border:"1.5px solid #22863A",color:"#1B6B2E",fontWeight:700}}>✅ Rapport enregistré et terminé{/^\d{4}-\d{2}-\d{2}$/.test(data.termine_le||"")?" le "+new Date(data.termine_le+"T00:00:00").toLocaleDateString("fr-FR"):""}</div>}
 
     {generique&&<div style={{...S.card,border:"1.5px solid #1B4F8A"}}><p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Rapport {typeMateriel}</p><p style={{fontSize:11,color:"#6B7280",margin:0}}>Le contenu de ce rapport (titres, textes avec les cases de la fiche, photos) se compose dans la page Maintenance → Rapports. Ici : coordonnées du chantier, signatures et matériel de contrôle, puis aperçu ou export Word.</p></div>}
     {!generique&&<div style={{...S.card,border:"1.5px solid #1B4F8A"}}>
@@ -2910,11 +2949,12 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel}){
       </div>
     </div>
 
-    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:30}}>
+    <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
       <button style={S.p2} onClick={enregistrer} disabled={saving||!ficheId}>{saving?"💾 ...":"💾 Enregistrer le rapport"}</button>
       <button style={S.p1} onClick={apercu}>👁 Aperçu</button>
       <button style={{...S.p1,background:"#22863A"}} onClick={exporterWord} disabled={exportingWord}>{exportingWord?"⏳ ...":"📝 Exporter en Word"}</button>
     </div>
+    <div style={{marginBottom:30}}><BlocRapportTermine termine={data.termine==="Oui"} termineLe={data.termine_le} statutChantier={statutChantier} occupe={saving} peut={!!ficheId} onTerminer={terminer} note={noteStatut}/></div>
   </div>);
 }
 
@@ -2939,7 +2979,8 @@ function ListePhotosRapport({serie,urlsFiche,urlsMain,ficheId,uploading,onAjoute
   </div>);
 }
 
-function PageRapportCheminee({ficheId,techs,onRetour}){
+function PageRapportCheminee({ficheId,techs,onRetour,statutChantier,onStatutChange}){
+  const [noteStatut,setNoteStatut]=useState("");
   const [loading,setLoading]=useState(true);
   const [v,setV]=useState({});
   const [photos,setPhotos]=useState([]);
@@ -3007,6 +3048,22 @@ function PageRapportCheminee({ficheId,techs,onRetour}){
     }catch(e){alert("Erreur enregistrement : "+e.message);}
     setSaving(false);
   }
+  // « Rapport enregistré et terminé » (et « Rouvrir ») : même principe que le rapport moteur, sous le préfixe rapportch_
+  async function terminer(oui){
+    if(!ficheId||saving)return;
+    setSaving(true);setNoteStatut("");
+    try{
+      const d2={...data};
+      if(oui){d2.termine="Oui";d2.termine_le=dateIso(new Date());}else{delete d2.termine;delete d2.termine_le;}
+      const rows=Object.keys(d2).filter(k=>d2[k]!==undefined&&d2[k]!=="").map(k=>({fiche_id:ficheId,champ_id:PREFIXE_RAPPORT_CHEMINEE+k,valeur:String(d2[k])}));
+      if(rows.length>0)await db.upsert("fiche_valeurs",rows,"fiche_id,champ_id");
+      if(!oui)await db.del("fiche_valeurs","?fiche_id=eq."+ficheId+"&champ_id=in.("+PREFIXE_RAPPORT_CHEMINEE+"termine,"+PREFIXE_RAPPORT_CHEMINEE+"termine_le)");
+      setData(d2);
+      if(oui&&statutChantier==="Rapport_a_faire"&&onStatutChange){await onStatutChange(ficheId,"Termine");setNoteStatut("La fiche est passée de « Rapport à faire » à « Terminé » dans le Planning.");}
+      setSaved(true);setTimeout(()=>setSaved(false),3000);
+    }catch(e){alert("Erreur enregistrement : "+e.message);}
+    setSaving(false);
+  }
   async function exporterWord(){
     setExportingWord(true);
     try{await exporterRapportCheminee(v,data,resolues,(v.de||"rapport"));}catch(e){alert("Erreur export Word : "+e.message);}
@@ -3033,6 +3090,7 @@ function PageRapportCheminee({ficheId,techs,onRetour}){
       <button style={S.p2} onClick={onRetour}>← Retour</button>
     </div>
     {saved&&<div style={S.ok}>✅ Rapport enregistré.</div>}
+    {data.termine==="Oui"&&<div style={{...S.ok,background:"#F0FFF4",border:"1.5px solid #22863A",color:"#1B6B2E",fontWeight:700}}>✅ Rapport enregistré et terminé{/^d{4}-d{2}-d{2}$/.test(data.termine_le||"")?" le "+new Date(data.termine_le+"T00:00:00").toLocaleDateString("fr-FR"):""}</div>}
     <div style={{...S.card,border:"1.5px solid #1B4F8A"}}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Livret de rapport d'intervention{origine?" — cheminée "+origine:""}</p>
       <p style={{fontSize:11,color:"#6B7280",margin:0}}>Tout ce que la fiche contient (mesures, conformités, plaques, photos) est repris automatiquement. Complétez seulement ce qui est vide ci-dessous, puis vérifiez l'aperçu.{origine==="SNCF"?" Cheminée SNCF : le N° d'engin, le symbole, les numéros de gravure et le lot d'isolateurs sont ajoutés.":origine==="IMATEQ"?" Cheminée IMATEQ : N° de loco, nombre d'isolateurs changés.":""}</p>
@@ -3111,16 +3169,17 @@ function PageRapportCheminee({ficheId,techs,onRetour}){
       <button style={S.p1} onClick={()=>apercuRapportCheminee(v,data,resolues)}>👁 Aperçu</button>
       <button style={{...S.p1,background:"#22863A"}} onClick={exporterWord} disabled={exportingWord}>{exportingWord?"⏳ ...":"📝 Exporter en Word"}</button>
     </div>
+    <div style={{marginBottom:30}}><BlocRapportTermine termine={data.termine==="Oui"} termineLe={data.termine_le} statutChantier={statutChantier} occupe={saving} peut={!!ficheId} onTerminer={terminer} note={noteStatut}/></div>
   </div>);
 }
 
-// Fiches qui ont un rapport : « Rapport client demandé ? » = Oui à l'entrée (demandes), ou un rapport déjà enregistré (cases « rapport_… » du moteur, de la pompe…
-// et « rapportch_… » de la cheminée ; on écarte « rapport_client » et « rapport_reduction », qui sont des cases ordinaires de la fiche). Lève une erreur si la lecture échoue.
+// Rapports des fiches : « Rapport client demandé ? » = Oui à l'entrée (demandes), rapport déjà enregistré (cases « rapport_… » du moteur, de la pompe… et « rapportch_… » de la cheminée ;
+// on écarte « rapport_client » et « rapport_reduction », cases ordinaires de la fiche) et rapport marqué « terminé » (cases « …termine » / « …termine_le »). Lève une erreur si la lecture échoue.
 async function lireFichesAvecRapport(){
-  const lire=async filtre=>{
+  const lire=async(filtre,select)=>{
     const tout=[];
     for(let debut=0;debut<50000;debut+=1000){
-      const r=await fetch(SUPA_URL+"/rest/v1/fiche_valeurs?select=fiche_id,champ_id&"+filtre+"&order=fiche_id,champ_id&limit=1000&offset="+debut,{headers:H});
+      const r=await fetch(SUPA_URL+"/rest/v1/fiche_valeurs?select="+select+"&"+filtre+"&order=fiche_id,champ_id&limit=1000&offset="+debut,{headers:H});
       const rows=await r.json();
       if(!r.ok||!Array.isArray(rows))throw new Error("lecture des rapports");
       tout.push(...rows);
@@ -3128,36 +3187,48 @@ async function lireFichesAvecRapport(){
     }
     return tout;
   };
-  const [dem,reps]=await Promise.all([lire("champ_id=eq.rapport_client&valeur=eq.Oui"),lire("champ_id=like.rapport*")]);
-  return {demandes:new Set(dem.map(x=>x.fiche_id)),enregistres:new Set(reps.filter(x=>x.champ_id!=="rapport_client"&&x.champ_id!=="rapport_reduction").map(x=>x.fiche_id))};
+  const [dem,reps,fin]=await Promise.all([lire("champ_id=eq.rapport_client&valeur=eq.Oui","fiche_id,champ_id"),lire("champ_id=like.rapport*","fiche_id,champ_id"),lire("champ_id=in.(rapport_termine,rapport_termine_le,rapportch_termine,rapportch_termine_le)","fiche_id,champ_id,valeur")]);
+  const termines=new Map(); // id de la fiche -> date où le rapport a été marqué terminé ("" si inconnue)
+  fin.forEach(x=>{if(/termine$/.test(x.champ_id)&&x.valeur==="Oui"&&!termines.has(x.fiche_id))termines.set(x.fiche_id,"");});
+  fin.forEach(x=>{if(/termine_le$/.test(x.champ_id)&&termines.has(x.fiche_id))termines.set(x.fiche_id,x.valeur||"");});
+  return {demandes:new Set(dem.map(x=>x.fiche_id)),enregistres:new Set(reps.filter(x=>x.champ_id!=="rapport_client"&&x.champ_id!=="rapport_reduction").map(x=>x.fiche_id)),termines};
 }
 
 function PageRapportsListe({fiches,onOpen}){
   const [q,setQ]=useState("");
-  const [info,setInfo]=useState(undefined); // undefined : lecture en cours ; null : lecture impossible (on montre tout) ; sinon {demandes, enregistres}
+  const [info,setInfo]=useState(undefined); // undefined : lecture en cours ; null : lecture impossible (on montre tout) ; sinon {demandes, enregistres, termines}
   useEffect(()=>{let vivant=true;lireFichesAvecRapport().then(r=>{if(vivant)setInfo(r);}).catch(()=>{if(vivant)setInfo(null);});return()=>{vivant=false;};},[]);
   const [toutes,setToutesEtat]=useState(()=>{try{return localStorage.getItem("pmv_rapports_toutes")==="1";}catch(e){return false;}});
   const setToutes=x=>{setToutesEtat(x);try{localStorage.setItem("pmv_rapports_toutes",x?"1":"0");}catch(e){/* mémorisation facultative */}};
+  const [sous,setSousEtat]=useState(()=>{try{return localStorage.getItem("pmv_rapports_sous")==="fait"?"fait":"afaire";}catch(e){return "afaire";}});
+  const setSous=x=>{setSousEtat(x);try{localStorage.setItem("pmv_rapports_sous",x);}catch(e){/* mémorisation facultative */}};
   const tousTypes=fiches.filter(f=>["Moteur","Autre","Moto-réducteur","Pompe","Ventilateur",TYPE_CHEMINEE].includes(f.type_materiel||"Moteur"));
-  // la cheminée a toujours un rapport (pas de question « Rapport client demandé ? »)
-  const etatRapport=f=>!info?"":info.enregistres.has(f.id)?"fait":(info.demandes.has(f.id)||f.type_materiel===TYPE_CHEMINEE)?"demande":"aucun";
-  const avecRapport=tousTypes.filter(f=>etatRapport(f)!=="aucun");
-  const sansRapport=info?tousTypes.length-avecRapport.length:0;
-  const moteurFiches=info===undefined?[]:(info===null||toutes)?tousTypes:avecRapport;
-  const filtrees=moteurFiches.filter(f=>{
+  // état d'une fiche : « termine » (rapport marqué terminé) · « encours » (rapport commencé ou enregistré) · « demande » (demandé à l'entrée, cheminée, ou colonne « Rapport à faire » du Planning) · « aucun »
+  const etatRapport=f=>!info?"":info.termines.has(f.id)?"termine":info.enregistres.has(f.id)?"encours":(info.demandes.has(f.id)||f.type_materiel===TYPE_CHEMINEE||f.statut_chantier==="Rapport_a_faire")?"demande":"aucun";
+  const aFaire=tousTypes.filter(f=>{const e=etatRapport(f);return e==="encours"||e==="demande";});
+  const faits=tousTypes.filter(f=>etatRapport(f)==="termine");
+  const sansRapport=info?tousTypes.length-aFaire.length-faits.length:0;
+  const liste=info===undefined?[]:info===null?(sous==="fait"?[]:tousTypes):sous==="fait"?faits:toutes?tousTypes.filter(f=>etatRapport(f)!=="termine"):aFaire;
+  const filtrees=liste.filter(f=>{
     const qq=q.toLowerCase();
     return !qq||(f.de||"").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq);
   });
   const parClient={};filtrees.forEach(f=>{const c=f.client||"Sans client";if(!parClient[c])parClient[c]=[];parClient[c].push(f);});
   const clientList=Object.keys(parClient).sort();
+  const quand=iso=>/^\d{4}-\d{2}-\d{2}$/.test(iso||"")?new Date(iso+"T00:00:00").toLocaleDateString("fr-FR"):"";
+  const pastille=actif=>({padding:"9px 18px",minHeight:44,borderRadius:22,border:"1.5px solid "+(actif?"#1B4F8A":"#D1D5DB"),background:actif?"#1B4F8A":"#fff",color:actif?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer"});
   return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>📧 Rapports client</h1>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>{info===undefined?"Chargement…":info===null?tousTypes.length+" fiche"+(tousTypes.length>1?"s":"")+" · le tri par rapport n'a pas pu être fait (connexion ?), toutes les fiches sont affichées.":(toutes?tousTypes.length+" fiche"+(tousTypes.length>1?"s":""):avecRapport.length+" fiche"+(avecRapport.length>1?"s":"")+" avec rapport")+" · sélectionnez-en une pour créer ou modifier son rapport."}</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px"}}>{info===undefined?"Chargement…":info===null?"Le tri des rapports n'a pas pu être fait (connexion ?) : toutes les fiches sont affichées.":sous==="fait"?"Rapports enregistrés et terminés. Touchez-en un pour le revoir, l'exporter ou le rouvrir.":"Rapports en cours ou pas encore commencés. Touchez une fiche pour créer ou modifier son rapport ; marquez-le terminé quand il est fini."}</p>
+    <div role="tablist" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+      <button type="button" role="tab" aria-selected={sous==="afaire"} onClick={()=>setSous("afaire")} style={pastille(sous==="afaire")}>📝 À faire{info?" ("+aFaire.length+")":""}</button>
+      <button type="button" role="tab" aria-selected={sous==="fait"} onClick={()=>setSous("fait")} style={pastille(sous==="fait")}>✅ Déjà fait{info?" ("+faits.length+")":""}</button>
+    </div>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16}}>
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={S.inp}/>
     </div>
-    {info&&(sansRapport>0||toutes)&&<div style={{display:"flex",marginBottom:12}}><button type="button" onClick={()=>setToutes(!toutes)} aria-pressed={toutes} style={{padding:"8px 16px",minHeight:44,borderRadius:22,border:"1.5px solid #6B7280",background:toutes?"#6B7280":"#fff",color:toutes?"#fff":"#4B5563",fontSize:13,fontWeight:700,cursor:"pointer"}}>{toutes?"🙈 Masquer les fiches sans rapport":"👁 Afficher aussi les fiches sans rapport ("+sansRapport+")"}</button></div>}
-    {info!==undefined&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{info&&!toutes?"Aucune fiche n'a de rapport pour le moment. Une fiche arrive ici dès que « Rapport client demandé » est sur Oui, ou que son rapport est enregistré.":"Aucune fiche."}</div>}
+    {info&&sous==="afaire"&&(sansRapport>0||toutes)&&<div style={{display:"flex",marginBottom:12}}><button type="button" onClick={()=>setToutes(!toutes)} aria-pressed={toutes} style={{padding:"8px 16px",minHeight:44,borderRadius:22,border:"1.5px solid #6B7280",background:toutes?"#6B7280":"#fff",color:toutes?"#fff":"#4B5563",fontSize:13,fontWeight:700,cursor:"pointer"}}>{toutes?"🙈 Masquer les fiches sans rapport":"👁 Afficher aussi les fiches sans rapport ("+sansRapport+")"}</button></div>}
+    {info!==undefined&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{sous==="fait"?"Aucun rapport terminé pour le moment.":info&&!toutes?"Aucun rapport à faire pour le moment. Une fiche arrive ici dès que « Rapport client demandé » est sur Oui, qu'elle est dans la colonne « Rapport à faire » du Planning, ou que son rapport est commencé.":"Aucune fiche."}</div>}
     <div className="grille-large">
     {clientList.map(c=>(
       <div key={c} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,padding:"12px 16px"}}>
@@ -3166,8 +3237,9 @@ function PageRapportsListe({fiches,onOpen}){
           <div key={f.id} onClick={()=>onOpen(f)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",padding:"8px 10px",borderRadius:6,cursor:"pointer",background:"#F8F9FA",marginBottom:6}}>
             <span style={{fontSize:13,minWidth:0,overflowWrap:"anywhere"}}>{f.de} · {f.materiel||"—"}</span>
             <span style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
-              {er==="fait"&&<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#E9F6EC",color:"#1B6B2E"}}>✅ Rapport enregistré</span>}
-              {er==="demande"&&<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#EEF4FF",color:"#1B4F8A"}}>📧 Rapport demandé</span>}
+              {er==="termine"&&<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#E9F6EC",color:"#1B6B2E"}}>✅ Terminé{quand(info.termines.get(f.id))?" le "+quand(info.termines.get(f.id)):""}</span>}
+              {er==="encours"&&<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#FFF3DC",color:"#8A4B00"}}>✏️ Rapport en cours</span>}
+              {er==="demande"&&<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#EEF4FF",color:"#1B4F8A"}}>📧 Rapport à faire</span>}
               {er==="aucun"&&<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#F3F4F6",color:"#6B7280"}}>sans rapport</span>}
               <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:st.bg,color:st.color}}>{st.label}</span>
             </span>
@@ -3235,8 +3307,7 @@ const CHAMPS_VENTILATEUR={
     {id:"enleve_nos_soins",label:"Enlevé par nos soins",type:"oui_non",required:true,groupe:"enleve_pair"},
     {id:"enleve_technicien",label:"Par qui",type:"technicien",required:true,groupe:"enleve_pair",condition:{champ:"enleve_nos_soins",valeur:"Oui"}},
     {id:"de",label:"N° DE",type:"text",required:true,groupe:"entree_de"},
-    {id:"delai_valeur",label:"Délai demandé par le client",type:"number",required:true,groupe:"delai_pair",condition:v=>v.delai_unite!==PAS_DE_DELAI},
-    {id:"delai_unite",label:"Unité",type:"select",options:["Jours","Semaine(s)","Mois",PAS_DE_DELAI],required:true,groupe:"delai_pair"},
+    ...champsDelai(),
     {id:"contact",label:"Contact (carnet d'adresses)",type:"contact",required:true,remplit:{telephone:"telephone",mail:"mail"}},
     {id:"mail",label:"Mail du client",type:"text",required:true,groupe:"mail_tel"},
     {id:"telephone",label:"Téléphone",type:"text",required:true,groupe:"mail_tel"},
@@ -3553,6 +3624,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       else{const s=parseFloat(val);if(!isNaN(s)&&s>0)n.rapport_reduction=String(Math.round((vm/s)*100)/100);}
     }
   }
+  if(CASES_DELAI.includes(id))n.delai_echeance=echeanceFixe(n); // l'échéance est rangée dans la fiche : elle ne bouge plus avec les jours qui passent
   return n;
 }),[]);
   const onAutoSaveChamp=useCallback(async(champId,valeur)=>{
@@ -6574,7 +6646,7 @@ export default function App(){
     {page==="fiche"&&<EcritureAtelier><PageFiche key={"fiche-"+cleFiche} onReouvrir={reouvrirFiche} ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/></EcritureAtelier>}
     {page==="planning"&&<EcritureAtelier><PagePlanning fiches={fiches} clients={clients} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onNouvelleFiche={()=>askIdent(t=>{setSessionTech(t);setRetourFiche("planning");setPage("choix");})}/></EcritureAtelier>}
     {page==="rapport"&&!rapportFicheId&&<PageRapportsListe fiches={fiches} onOpen={f=>setRapportFicheId(f.id)}/>}
-    {page==="rapport"&&rapportFicheId&&((fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel===TYPE_CHEMINEE?<PageRapportCheminee ficheId={rapportFicheId} techs={techs} onRetour={()=>setRapportFicheId(null)}/>:<PageRapport ficheId={rapportFicheId} typeMateriel={(fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel||"Moteur"} techs={techs} onRetour={()=>setRapportFicheId(null)}/>)}
+    {page==="rapport"&&rapportFicheId&&((fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel===TYPE_CHEMINEE?<PageRapportCheminee ficheId={rapportFicheId} techs={techs} statutChantier={(fiches.find(f=>f.id===rapportFicheId)||{}).statut_chantier} onStatutChange={onStatutChange} onRetour={()=>setRapportFicheId(null)}/>:<PageRapport ficheId={rapportFicheId} typeMateriel={(fiches.find(f=>f.id===rapportFicheId)||{}).type_materiel||"Moteur"} statutChantier={(fiches.find(f=>f.id===rapportFicheId)||{}).statut_chantier} onStatutChange={onStatutChange} techs={techs} onRetour={()=>setRapportFicheId(null)}/>)}
     {page==="suivi"&&(admin
       ?<PageMateriel pieces={pieces} setPieces={setPieces} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>
       :<PageMesDemandes techs={techs} sessionTech={sessionTech} onDemandeMateriel={()=>ouvrirDemande("suivi")}/>)}
