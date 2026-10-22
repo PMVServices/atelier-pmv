@@ -103,6 +103,23 @@ const MARQUES_MOTEUR=["WEG","ABB","Siemens","Leroy Sommer","Nidec","Autre"];
 const MARQUES_POMPE=["Grundfos","KSB","LOWARA","WILO","XYLEM","FYGT","SALMSON","SIHI","SEEPEX","Autre"];
 const siNeuf=v=>v.moteur_neuf==="Oui";
 const siAncien=v=>v.moteur_neuf!=="Oui";
+// Circlips avant / arrière du moteur : « Oui / Non », puis le nombre (6 au plus) et la taille de CHAQUE circlips (autant de cases que le nombre indiqué).
+// Les anciennes cases de texte libre ne restent affichées que dans les fiches qui en contiennent déjà une valeur.
+const NB_CIRCLIPS_MAX=6;
+const nbCirclips=(v,c)=>{const n=parseInt(v["circlips_"+c+"_nb"],10);return isNaN(n)?0:n;};
+function champsCirclips(){
+  const out=[];
+  [["av","avant","circlips_avant"],["ar","arrière","circlips_arriere"]].forEach(([c,lib,ancien])=>{
+    const present="circlips_"+c+"_present";
+    const si=v=>siAncien(v)&&v[present]==="Oui";
+    out.push({id:present,label:"Circlips "+lib,type:"oui_non",required:v=>!String(v[ancien]||"").trim(),groupe:"circlips_"+c+"_pair",condition:siAncien});
+    out.push({id:"circlips_"+c+"_nb",label:"Combien de circlips "+lib,type:"select",options:["1","2","3","4","5","6"],required:true,groupe:"circlips_"+c+"_pair",condition:si});
+    for(let k=1;k<=NB_CIRCLIPS_MAX;k++)out.push({id:"circlips_"+c+"_t"+k,label:"Taille du circlips "+lib+" n°"+k,type:"text",required:true,groupe:"circlips_"+c+"_tailles",condition:v=>si(v)&&nbCirclips(v,c)>=k});
+  });
+  out.push({id:"circlips_avant",label:"Circlips avant (ancienne saisie)",type:"text",required:false,groupe:"circlips",condition:v=>siAncien(v)&&!!String(v.circlips_avant||"").trim()});
+  out.push({id:"circlips_arriere",label:"Circlips arrière (ancienne saisie)",type:"text",required:false,groupe:"circlips",condition:v=>siAncien(v)&&!!String(v.circlips_arriere||"").trim()});
+  return out;
+}
 const siPompeNeuve=v=>v.pompe_neuve==="Oui";
 const siPompeAncienne=v=>v.pompe_neuve!=="Oui";
 // roulements de la pompe : question « Roulement avant / arrière pompe » Oui / Non ; avec « Non », tout ce qui concerne ce roulement disparaît (sans réponse, il reste affiché)
@@ -264,8 +281,7 @@ const CHAMPS={
   "Information matériel au démontage":[
     {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,condition:v=>v.essai_vide_avant!=="Non"},
     {id:"ventilateur_present",label:"Présence d'un ventilateur",type:"oui_non",required:true,condition:siAncien},
-    {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips",condition:siAncien},
-    {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips",condition:siAncien},
+    ...champsCirclips(),
     {id:"rondelle_presence",label:"Rondelle souplesse — présence",type:"select",options:["Oui","Non"],required:false,condition:siAncien},
     {id:"rondelle_avant",label:"Rondelle souplesse avant",type:"select",options:["Oui","Non"],required:false,condition:v=>siAncien(v)&&v.rondelle_presence==="Oui",groupe:"rondelle_pair"},
     {id:"rondelle_arriere",label:"Rondelle souplesse arrière",type:"select",options:["Oui","Non"],required:false,condition:v=>siAncien(v)&&v.rondelle_presence==="Oui",groupe:"rondelle_pair"},
@@ -416,8 +432,7 @@ const CHAMPS_POMPE={
   "Matériel au démontage moteur":[
     {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true},
     {id:"ventilateur_present",label:"Présence d\'un ventilateur",type:"oui_non",required:true,condition:siAncien},
-    {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips",condition:siAncien},
-    {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips",condition:siAncien},
+    ...champsCirclips(),
     {id:"rondelle_presence",label:"Rondelle souplesse — présence",type:"select",options:["Oui","Non"],required:false,condition:siAncien},
     {id:"rondelle_avant",label:"Rondelle souplesse avant",type:"select",options:["Oui","Non"],required:false,condition:v=>siAncien(v)&&v.rondelle_presence==="Oui",groupe:"rondelle_pair"},
     {id:"rondelle_arriere",label:"Rondelle souplesse arrière",type:"select",options:["Oui","Non"],required:false,condition:v=>siAncien(v)&&v.rondelle_presence==="Oui",groupe:"rondelle_pair"},
@@ -602,8 +617,7 @@ const CHAMPS_REDUCTEUR={
   "Matériel au démontage moteur":[
     {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true},
     {id:"ventilateur_present",label:"Présence d\'un ventilateur",type:"oui_non",required:true,condition:siAncien},
-    {id:"circlips_avant",label:"Circlips avant",type:"text",required:false,groupe:"circlips",condition:siAncien},
-    {id:"circlips_arriere",label:"Circlips arrière",type:"text",required:false,groupe:"circlips",condition:siAncien},
+    ...champsCirclips(),
     {id:"rondelle_presence",label:"Rondelle souplesse — présence",type:"select",options:["Oui","Non"],required:false,condition:siAncien},
     {id:"rondelle_avant",label:"Rondelle souplesse avant",type:"select",options:["Oui","Non"],required:false,condition:v=>siAncien(v)&&v.rondelle_presence==="Oui",groupe:"rondelle_pair"},
     {id:"rondelle_arriere",label:"Rondelle souplesse arrière",type:"select",options:["Oui","Non"],required:false,condition:v=>siAncien(v)&&v.rondelle_presence==="Oui",groupe:"rondelle_pair"},
@@ -1257,7 +1271,7 @@ const INTERTITRES_TRAME=(()=>{
     // Rotation avant démontage
     int_p1_avant:"Intensités",vib_av_mms_avant:"Vibrations",int_560_p1_avant:"Intensités à 560 V",nettoyage_hp:"Nettoyage et isolement",pression_essai_avant:"Essai en eau / air et pressions",
     // Matériel au démontage moteur
-    circlips_avant:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",
+    circlips_av_present:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",
     // Mécanique pompe au démontage
     diametre_nez_roue:"Roue et volute",etat_jc:"Joint de corps",type_gm_fixe:"Garniture mécanique",roulement_av_p_present:"Roulement avant de la pompe",roulement_ar_p_present:"Roulement arrière de la pompe",marque_pompe_neuve:"Pompe neuve",
     // Essais après remontage
