@@ -14,7 +14,7 @@ export const dimNorm=s=>txt(s).replace(/\s*[xX×]\s*/g,"×");
 // Feuilles « une ligne = un article » rangées en familles (demande du 21/10/2026). feuille : nom de la feuille sans accents ni majuscules ;
 // ref : intitulés possibles de la colonne qui sert de référence ; dim : colonne de description (sinon la colonne « Dimensions ») ;
 // sections : les lignes de titre (« Extérieur », « Presse étoupe »…) deviennent la description des lignes qui suivent.
-// Pour ces feuilles, une ligne dont le stock, le stock mini ou le stock maxi est vide n'est PAS importée.
+// Pour ces feuilles, une ligne dont le stock, le stock mini ou le stock maxi est vide, ou dont le stock maxi vaut 0 (article qu'on ne tient pas en stock), n'est PAS importée.
 export const FAMILLES_FEUILLES=[
   {famille:"GV2",feuille:"gv2",ref:["reference"],dim:["ampere"]},
   {famille:"Circlips",feuille:"circlips",ref:["diametre"],sections:true},
@@ -66,8 +66,8 @@ export function analyserFeuille(XLSX,wb,nom){
     const autres=[l.dimensions,l.emplacement,l.stock_mini,l.stock_maxi,l.prix_unitaire,l.stock].some(v=>v!=null&&v!=="");
     if(!autres){if(prof&&prof.sections)section=reference;ignorees++;continue;}
     if(prof){
-      // famille : une ligne sans stock, sans mini ou sans maxi n'est pas importée
-      const manque=[];if(stock==null)manque.push("stock");if(mini==null)manque.push("mini");if(maxi==null)manque.push("maxi");
+      // famille : une ligne sans stock, sans mini ou sans maxi (ou avec un maxi à 0) n'est pas importée
+      const manque=[];if(stock==null)manque.push("stock");if(mini==null)manque.push("mini");if(maxi==null)manque.push("maxi");else if(maxi===0)manque.push("maxi à 0");
       if(manque.length){vides.push({ligne:numLigne,reference,manque});continue;}
       l.famille=prof.famille;
       if(prof.sections&&!l.dimensions&&section)l.dimensions=section;

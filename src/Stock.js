@@ -94,7 +94,8 @@ const serieDe=ref=>{
 // Famille d'une référence : roulements et garnitures se reconnaissent à la référence (chiffre en tête = roulement) ; les autres familles (GV2, circlips, boîtes à bornes,
 // plaques à bornes, presse-étoupes, condensateurs, divers) sont rangées à l'import dans parametres_app (clé « stock_familles » : {référence: famille}), lue avec les articles.
 let MAP_FAMILLES={};
-const familleDe=ref=>MAP_FAMILLES[ref]||(/^\d/.test(String(ref||"").trim())?"Roulements":"Garniture");
+const familleParDefaut=ref=>/^\d/.test(String(ref||"").trim())?"Roulements":"Garniture";
+const familleDe=ref=>MAP_FAMILLES[ref]||familleParDefaut(ref);
 // Libellé utilisé dans Matériel à commander (même style que l'assistant : "GM CNK 12")
 // « GM CNK 12 » pour la garniture ; « Circlips E45 », « Plaque à bornes PABO.2011 »… pour les autres familles (une référence nue comme « E45 » ne dirait rien)
 const PREFIXE_DEMANDE={Circlips:"Circlips ",PAB:"Plaque à bornes ",BAB:"Boîte à bornes ",PE:"Presse-étoupe "};
@@ -150,6 +151,19 @@ async function appel(methode,chemin,corps,prefer){
 async function enregistrerMouvement(m){
   const r=await appel("POST","stock_mouvements",m,"return=representation");
   return r.ok&&Array.isArray(r.data)&&r.data.length===1;
+}
+// Met à jour la table des familles (parametres_app « stock_familles » : {référence: famille}) : modifs = {référence: famille, ou null pour l'effacer}.
+// Relit la table juste avant d'écrire pour ne pas écraser un changement fait entre-temps ; renvoie false si la lecture ou l'écriture échoue.
+async function majFamilles(modifs){
+  const r0=await appel("GET","parametres_app?select=valeur&cle=eq.stock_familles");
+  if(!r0.ok||!Array.isArray(r0.data))return false;
+  let carte={};
+  if(r0.data[0]&&r0.data[0].valeur){try{carte=JSON.parse(r0.data[0].valeur)||{};}catch(e){carte={};}}
+  Object.keys(modifs).forEach(k=>{if(modifs[k])carte[k]=modifs[k];else delete carte[k];});
+  const r1=await appel("POST","parametres_app?on_conflict=cle",[{cle:"stock_familles",valeur:JSON.stringify(carte)}],"resolution=merge-duplicates,return=minimal");
+  if(!r1.ok)return false;
+  MAP_FAMILLES=carte;
+  return true;
 }
 function telechargerFichier(blob,nom){
   const a=document.createElement("a");
@@ -319,8 +333,9 @@ const CSS_STOCK=`
 .stk-liste-sel{border:1px solid #E2E6EA;border-radius:12px;max-height:260px;overflow-y:auto;padding:6px 10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:2px 12px}
 .stk-liste-sel label{display:flex;align-items:center;gap:8px;min-height:40px;font-size:14px;font-family:${MONO}}
 .stk-liste-titre{grid-column:1/-1;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#667085;padding:8px 0 2px}
-.stk-fams{grid-template-columns:repeat(var(--nb,3),1fr)}
-.stk-fams button{font-size:14px;min-height:46px}
+/* catégories : des boutons qui retournent à la ligne (9 catégories ne tiennent pas sur une ligne de téléphone) */
+.stk-fams{display:flex;flex-wrap:wrap;gap:8px}
+.stk-fams button{flex:1 1 auto;min-width:0;font-size:14px;min-height:46px;padding:0 12px !important}
 .stk-mode button.on.fam{border-color:#1B4F8A;background:#EEF4FF;color:#1B4F8A}
 .stk-liste-sel input{width:22px;height:22px;min-height:0 !important;padding:0 !important}
 .stk-champs{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px}
@@ -337,7 +352,7 @@ const CSS_STOCK=`
   .stk-liste{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:10px;align-items:start}
   .stk-duo{grid-template-columns:repeat(2,minmax(0,440px))}
   .stk-grand--i{width:min(100%,560px)}
-  .stk-mode.stk-fams{grid-template-columns:repeat(var(--nb,3),minmax(0,220px));justify-content:start}
+  .stk-mode.stk-fams button{flex:0 0 auto;min-width:130px}
 }
 `;
 
@@ -803,8 +818,78 @@ function ImportExcel({articles,onFermer,onTermine}){
   </Feuille>);
 }
 
+// ─── Créer ou modifier un article (administrateur) ───────────────────────────────────────────────
+// Modifier : nom (référence), catégorie, dimensions, emplacement, mini, maxi — la quantité en stock ne se change que par un mouvement (entrée, sortie, inventaire).
+// Renommer : l'ancien nom est gardé comme code associé, pour que les étiquettes déjà collées soient encore reconnues par la douchette.
+function FormArticle({article,familleInit,articles,qui,onFermer,onFait}){
+  const nouveau=!article;
+  const [nom,setNom]=useState(article?article.reference:"");
+  const [fam,setFam]=useState(article?familleDe(article.reference):(familleInit||""));
+  const [dim,setDim]=useState(article&&article.dimensions||"");
+  const [emp,setEmp]=useState(article&&article.emplacement||"");
+  const [mini,setMini]=useState(article&&article.stock_mini!=null?String(article.stock_mini):"");
+  const [maxi,setMaxi]=useState(article&&article.stock_maxi!=null?String(article.stock_maxi):"");
+  const [qte,setQte]=useState("0");
+  const [envoi,setEnvoi]=useState({enCours:false,erreur:null});
+  const nomNet=nom.trim();
+  const doublon=!!nomNet&&articles.some(a=>(!article||a.id!==article.id)&&cle(a.reference)===cle(nomNet));
+  const miniN=mini===""?null:parseInt(mini,10),maxiN=maxi===""?null:parseInt(maxi,10);
+  const incoherent=miniN!=null&&maxiN!=null&&miniN>maxiN;
+  const valide=!!nomNet&&!!fam&&!doublon&&!incoherent;
+  const renomme=!nouveau&&nomNet!==article.reference;
+  const saisieEntier=set=>e=>{setEnvoi(v=>v.erreur?{enCours:false,erreur:null}:v);set(e.target.value.replace(/\D/g,""));};
+  async function enregistrer(){
+    if(!valide||envoi.enCours)return;
+    setEnvoi({enCours:true,erreur:null});
+    const corps={reference:nomNet,dimensions:dim.trim()||null,emplacement:emp.trim()||null,stock_mini:miniN,stock_maxi:maxiN};
+    const r=nouveau?await appel("POST","stock_articles",corps,"return=representation"):await appel("PATCH","stock_articles?id=eq."+article.id,corps,"return=representation");
+    if(!r.ok||!Array.isArray(r.data)||r.data.length!==1){
+      const dup=r.status===409||(r.data&&r.data.code==="23505");
+      setEnvoi({enCours:false,erreur:dup?"Un article porte déjà ce nom.":"L'enregistrement n'a pas abouti (connexion ?). Rien n'a été modifié : réessayez."});
+      return;
+    }
+    const a=r.data[0];
+    const avert=[];
+    // catégorie : rangée dans la table des familles seulement si elle diffère de celle que la référence donne d'elle-même
+    const modifs={};
+    if(renomme)modifs[article.reference]=null;
+    modifs[nomNet]=fam===familleParDefaut(nomNet)?null:fam;
+    if(Object.keys(modifs).some(k=>(MAP_FAMILLES[k]||null)!==modifs[k])&&!(await majFamilles(modifs)))avert.push("la catégorie n'a pas pu être enregistrée (modifiez l'article pour réessayer)");
+    // ancien nom gardé comme code associé : les étiquettes déjà collées restent reconnues
+    if(renomme&&cle(article.reference)!==cle(nomNet))await appel("POST","stock_codes?on_conflict=code",{code:article.reference,article_id:article.id},"resolution=merge-duplicates,return=minimal");
+    if(nouveau){
+      const q=parseInt(qte,10);
+      if(!isNaN(q)&&q>0&&!(await enregistrerMouvement({article_id:a.id,type:"initial",delta:q,utilisateur:qui||null,commentaire:"Création de l'article"})))avert.push("le stock de départ n'a pas pu être enregistré (faites une entrée)");
+    }
+    onFait(a,{nouveau,avert});
+  }
+  return(<Feuille titre={nouveau?"Nouvel article":"Modifier l'article"} haut onFermer={onFermer}>
+    <label><span className="stk-lib">Catégorie</span>
+      <select className="stk-select" style={{width:"100%"}} value={fam} onChange={e=>setFam(e.target.value)}>
+        {!fam&&<option value="">Choisir la catégorie…</option>}
+        {FAMILLES.map(f=><option key={f} value={f}>{LIB_FAMILLE[f]}</option>)}
+      </select>
+    </label>
+    <label><span className="stk-lib">Nom (référence)</span><input className="stk-champ" value={nom} onChange={e=>{setEnvoi(v=>v.erreur?{enCours:false,erreur:null}:v);setNom(e.target.value);}} autoComplete="off" autoFocus={nouveau}/></label>
+    {doublon&&<div className="stk-alerte">Un article porte déjà ce nom.</div>}
+    {renomme&&!doublon&&<div className="stk-info">L'ancien nom « {article.reference} » reste reconnu par la douchette (les étiquettes déjà collées fonctionnent encore). Pensez à réimprimer l'étiquette.</div>}
+    {renomme&&!doublon&&(fam==="Roulements"||fam==="Garniture")&&<div className="stk-alerte">Les fiches atelier retrouvent les roulements et les garnitures par leur référence : ne renommez que pour corriger une faute ou un format.</div>}
+    <label><span className="stk-lib">Dimensions ou description — facultatif</span><input className="stk-champ" value={dim} onChange={e=>setDim(e.target.value)} autoComplete="off"/></label>
+    <div className="stk-champs">
+      <label><span>Emplacement</span><input value={emp} onChange={e=>setEmp(e.target.value)} autoComplete="off"/></label>
+      <label><span>Stock mini</span><input inputMode="numeric" value={mini} onChange={saisieEntier(setMini)} autoComplete="off"/></label>
+      <label><span>Stock maxi</span><input inputMode="numeric" value={maxi} onChange={saisieEntier(setMaxi)} autoComplete="off"/></label>
+      {nouveau&&<label><span>Stock de départ</span><input inputMode="numeric" value={qte} onChange={saisieEntier(setQte)} autoComplete="off"/></label>}
+    </div>
+    {incoherent&&<div className="stk-alerte">Le stock mini ne peut pas dépasser le stock maxi.</div>}
+    {!nouveau&&<p className="stk-aide">Quantité en stock : <strong>{article.quantite||0}</strong>. Pour la changer, utilisez Entrée, Sortie ou Inventaire dans la fiche de l'article.</p>}
+    {envoi.erreur&&<div className="stk-alerte">{envoi.erreur}</div>}
+    <button type="button" className="stk-btn stk-btn--p" disabled={!valide||envoi.enCours} onClick={enregistrer}>{envoi.enCours?"Enregistrement…":nouveau?"Créer l'article":"Enregistrer"}</button>
+  </Feuille>);
+}
+
 // ─── Fiche d'un article : mouvements, historique, codes ──────────────────────────────────────────
-function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,onEtiquette,onAssocier,onTermineScan}){
+function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,onEtiquette,onAssocier,onTermineScan,onModifier,onSupprimer}){
   const liste=(techs||[]).filter(t=>t!=="Autre");
   const stock=article.quantite||0;
   const [mode,setMode]=useState("sortie"); // sortie | entree | inventaire
@@ -817,6 +902,7 @@ function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,on
   const [histo,setHisto]=useState(null);
   const [codes,setCodes]=useState(null);
   const [qr,setQr]=useState("");
+  const [suppr,setSuppr]=useState(null); // null | {nb: nombre de mouvements (null = en cours de lecture), enCours, erreur}
   const n=parseInt(qte,10);
   const valide=!isNaN(n)&&(mode==="inventaire"?n>=0:n>=1);
   const delta=!valide?0:mode==="sortie"?-n:mode==="entree"?n:n-stock;
@@ -831,6 +917,16 @@ function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,on
   },[article.id]);
   useEffect(()=>{chargerHisto();chargerCodes();},[chargerHisto,chargerCodes]);
   useEffect(()=>{let a=false;codeSvg("qr",article.reference).then(s=>{if(!a)setQr(s);}).catch(()=>{});return()=>{a=true;};},[article.reference]);
+  async function demanderSuppression(){
+    setSuppr({nb:null,enCours:false,erreur:null});
+    const r=await appel("GET","stock_mouvements?article_id=eq."+article.id+"&select=id&limit=5000");
+    setSuppr({nb:r.ok&&Array.isArray(r.data)?r.data.length:0,enCours:false,erreur:null});
+  }
+  async function confirmerSuppression(){
+    setSuppr(s=>({...s,enCours:true,erreur:null}));
+    const ok=await onSupprimer(article);
+    if(!ok)setSuppr(s=>({...s,enCours:false,erreur:"La suppression n'a pas abouti (connexion ?). Rien n'a été supprimé : réessayez."}));
+  }
   function changerMode(m){setMode(m);setFait(null);setEnvoi({enCours:false,erreur:null});setQte(m==="inventaire"?String(stock):"1");}
   const ajuster=d=>{setFait(null);setQte(String(Math.max(mode==="inventaire"?0:1,(isNaN(n)?0:n)+d)));};
   async function valider(){
@@ -858,6 +954,7 @@ function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,on
       {article.emplacement&&<div><b>Emplacement</b>{article.emplacement}</div>}
       {(article.fournisseur1||article.fournisseur2||article.fournisseur3)&&<div><b>Fournisseurs</b>{[article.fournisseur1,article.fournisseur2,article.fournisseur3].filter(Boolean).join(" · ")}</div>}
     </div>
+    {onModifier&&<div><button type="button" className="stk-btn stk-btn--s" onClick={()=>onModifier(article)}>✏️ Modifier le nom et les infos</button></div>}
     <div className="stk-seg" role="group" aria-label="Type de mouvement">
       {[["sortie","Sortie"],["entree","Entrée"],["inventaire","Inventaire"]].map(([m,l])=><button type="button" key={m} className={mode===m?"on "+m:""} aria-pressed={mode===m} onClick={()=>changerMode(m)}>{l}</button>)}
     </div>
@@ -899,6 +996,16 @@ function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,on
         <button type="button" className="stk-btn stk-btn--s" onClick={()=>onAssocier(article)}>📷 Associer un code fabricant</button>
       </div>
     </div>
+    {onSupprimer&&(suppr
+      ?<div className="stk-alerte" style={{display:"flex",flexDirection:"column",gap:10}}>
+        <div><strong>Supprimer « {article.reference} » ?</strong> Son historique ({suppr.nb==null?"…":suppr.nb+" mouvement"+(suppr.nb>1?"s":"")}) et ses codes associés sont effacés aussi, et le stock actuel ({stock}) disparaît. C'est définitif.</div>
+        {suppr.erreur&&<div><strong>{suppr.erreur}</strong></div>}
+        <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+          <button type="button" className="stk-btn stk-btn--s" disabled={suppr.enCours} onClick={()=>setSuppr(null)}>Annuler</button>
+          <button type="button" className="stk-btn stk-btn--s stk-btn--r" disabled={suppr.enCours||suppr.nb==null} onClick={confirmerSuppression}>{suppr.enCours?"Suppression…":"Oui, supprimer l'article"}</button>
+        </div>
+      </div>
+      :<div><button type="button" className="stk-btn stk-btn--s" style={{borderColor:"#D73A49",color:"#B42318"}} onClick={demanderSuppression}>🗑 Supprimer l'article</button></div>)}
   </Feuille>);
 }
 
@@ -1619,7 +1726,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
   const [recherche,setRecherche]=useState("");
   const [voirTout,setVoirTout]=useState(false);
   const [serie,setSerie]=useState("toutes");
-  const [famille,setFamilleEtat]=useState(()=>{try{const v=localStorage.getItem("pmv_stock_famille");return FAMILLES.includes(v)?v:"toutes";}catch(e){return "toutes";}});
+  const [familleChoisie,setFamilleEtat]=useState(()=>{try{const v=localStorage.getItem("pmv_stock_famille");return FAMILLES.includes(v)?v:"toutes";}catch(e){return "toutes";}});
   const setFamille=f=>{setFamilleEtat(f);setSerie("toutes");try{localStorage.setItem("pmv_stock_famille",f);}catch(e){/* mémorisation facultative */}};
   const [ficheId,setFicheId]=useState(null);
   const [session,setSession]=useState(null); // null | "sortie" | "entree"
@@ -1635,6 +1742,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
   const [assoc,setAssoc]=useState(null); // article dont on associe un code fabricant
   const [importOuvert,setImportOuvert]=useState(false);
   const [etiquettes,setEtiquettes]=useState(null);
+  const [formArticle,setFormArticle]=useState(null); // null | {article} (modifier) | {nouveau:true}
   const [recents,setRecents]=useState([]);
   const [demandes,setDemandes]=useState(()=>new Set());
   const [cmdEnCours,setCmdEnCours]=useState(false);
@@ -1663,6 +1771,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
   const article=ficheId?articles.find(a=>a.id===ficheId):null;
   const parId=id=>articles.find(a=>a.id===id);
   const fams=grouperParFamille(articles);
+  const famille=familleChoisie==="toutes"||fams.some(([f])=>f===familleChoisie)?familleChoisie:"toutes"; // une catégorie devenue vide (tous ses articles supprimés) retombe sur « Tout »
   const base=articles.filter(a=>famille==="toutes"||familleDe(a.reference)===famille); // ce qui est affiché selon la famille choisie
   const series=[...new Set(base.map(a=>serieDe(a.reference)))].sort();
   const q=cle(recherche);
@@ -1687,6 +1796,21 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
     if(!r.ok){afficherToast("La demande n'a pas abouti (connexion, ou « Matériel à commander » pas encore activé)");return;}
     setDemandes(prev=>{const n=new Set(prev);arts.forEach(a=>n.add(cle(designationDemande(a))));return n;});
     afficherToast("✓ "+arts.length+" référence"+(arts.length>1?"s":"")+" ajoutée"+(arts.length>1?"s":"")+" au Matériel (à renouveler)");
+  }
+  async function supprimerArticle(a){
+    const r=await appel("DELETE","stock_articles?id=eq."+a.id,undefined,"return=representation");
+    if(!r.ok||!Array.isArray(r.data)||r.data.length!==1)return false;
+    if(MAP_FAMILLES[a.reference]!==undefined)await majFamilles({[a.reference]:null});
+    setFicheId(null);
+    await apresMouvement();
+    afficherToast("✓ « "+a.reference+" » supprimé");
+    return true;
+  }
+  async function articleEnregistre(a,{nouveau,avert}){
+    setFormArticle(null);
+    await apresMouvement();
+    if(nouveau)setFicheId(a.id);
+    afficherToast((nouveau?"✓ « "+a.reference+" » créé":"✓ « "+a.reference+" » enregistré")+(avert.length?" — mais "+avert.join(" ; "):""));
   }
   async function traiterAssociation(brut){
     const code=String(brut||"").trim();
@@ -1757,7 +1881,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
       <button type="button" className="stk-btn stk-btn--p" onClick={()=>setImportOuvert(true)}>⬆ Importer depuis Excel</button>
     </div>}
     {admin&&articles.length>0&&<>
-      {fams.length>1&&<div className="stk-mode stk-fams" style={{"--nb":fams.length+1,marginBottom:10}} role="group" aria-label="Famille">
+      {fams.length>1&&<div className="stk-mode stk-fams" style={{marginBottom:10}} role="group" aria-label="Famille">
         {[["toutes","Tout ("+articles.length+")"]].concat(fams.map(([f,l])=>[f,LIB_FAMILLE[f]+" ("+l.length+")"])).map(([f,l])=><button type="button" key={f} className={famille===f?"on fam":""} aria-pressed={famille===f} onClick={()=>setFamille(f)}>{l}</button>)}
       </div>}
       <input className="stk-champ" value={recherche} onChange={e=>setRecherche(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){const a=articles.find(x=>cle(x.reference)===cle(recherche))||(trouves.length===1?trouves[0]:null);if(a){setRecherche("");setFicheId(a.id);}}}} placeholder="🔍 Chercher une référence, des dimensions…" autoComplete="off"/>
@@ -1779,6 +1903,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
       <div className="stk-outils">
         <button type="button" onClick={()=>setVoirTout(v=>!v)}>{voirTout?"▲ Masquer le catalogue":"📋 Catalogue ("+base.length+")"}</button>
         <button type="button" onClick={()=>setEtiquettes({ids:famille==="toutes"?[]:base.map(a=>a.id)})}>🏷 Étiquettes{famille==="toutes"?"":" ("+LIB_FAMILLE[famille]+")"}</button>
+        <button type="button" onClick={()=>setFormArticle({nouveau:true})}>➕ Nouvel article</button>
         <button type="button" onClick={()=>setImportOuvert(true)}>⬆ Importer Excel</button>
         <button type="button" onClick={exporter}>⬇ Exporter</button>
         <button type="button" onClick={()=>setReglages(true)}>🎛 Codes douchette</button>
@@ -1802,7 +1927,8 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
     {admin&&reglages&&<ReglagesDouchette onFermer={()=>setReglages(false)}/>}
     {admin&&remiseMax&&<RemiseMax liste={base} libelle={famille==="toutes"?"toutes les familles":LIB_FAMILLE[famille]} qui={qui} onFermer={n=>{setRemiseMax(false);if(n)afficherToast("✓ "+n+" référence"+(n>1?"s":"")+" remise"+(n>1?"s":"")+" au stock maximum");}} onFait={apresMouvement}/>}
     {admin&&inv&&<SessionInventaire articles={articles} techs={techs} qui={qui} setQui={setQui} recharger={recharger} afficherToast={afficherToast} onFini={apresMouvement} onFermer={()=>{setInv(false);setBrouillon(lireBrouillonInv());}}/>}
-    {admin&&article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={qui} depuisScan={false} onFermer={()=>setFicheId(null)} onChange={apresMouvement} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setAssoc(a);}} onTermineScan={()=>{}}/>}
+    {admin&&article&&<FicheArticle key={article.id} article={article} techs={techs} sessionTech={qui} depuisScan={false} onFermer={()=>setFicheId(null)} onChange={apresMouvement} onEtiquette={a=>setEtiquettes({ids:[a.id]})} onAssocier={a=>{setFicheId(null);setAssoc(a);}} onTermineScan={()=>{}} onModifier={a=>setFormArticle({article:a})} onSupprimer={supprimerArticle}/>}
+    {admin&&formArticle&&<FormArticle key={formArticle.article?"form-"+formArticle.article.id:"form-nouveau"} article={formArticle.article} familleInit={famille==="toutes"?"":famille} articles={articles} qui={qui} onFermer={()=>setFormArticle(null)} onFait={articleEnregistre}/>}
     {admin&&assoc&&<ScanneurCode titre={"Associer un code à "+assoc.reference} aide="Scannez le code imprimé sur la boîte du fabricant." onCode={traiterAssociation} onFermer={()=>setAssoc(null)}/>}
     {admin&&importOuvert&&<ImportExcel articles={articles} onFermer={()=>setImportOuvert(false)} onTermine={apresMouvement}/>}
     {admin&&etiquettes&&<Etiquettes articles={articles} idsInitiaux={etiquettes.ids} onFermer={()=>setEtiquettes(null)}/>}
