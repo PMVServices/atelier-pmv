@@ -3069,9 +3069,36 @@ function PageRapportCheminee({ficheId,techs,onRetour}){
   </div>);
 }
 
+// Fiches qui ont un rapport : « Rapport client demandé ? » = Oui à l'entrée (demandes), ou un rapport déjà enregistré (cases « rapport_… » du moteur, de la pompe…
+// et « rapportch_… » de la cheminée ; on écarte « rapport_client » et « rapport_reduction », qui sont des cases ordinaires de la fiche). Lève une erreur si la lecture échoue.
+async function lireFichesAvecRapport(){
+  const lire=async filtre=>{
+    const tout=[];
+    for(let debut=0;debut<50000;debut+=1000){
+      const r=await fetch(SUPA_URL+"/rest/v1/fiche_valeurs?select=fiche_id,champ_id&"+filtre+"&order=fiche_id,champ_id&limit=1000&offset="+debut,{headers:H});
+      const rows=await r.json();
+      if(!r.ok||!Array.isArray(rows))throw new Error("lecture des rapports");
+      tout.push(...rows);
+      if(rows.length<1000)break;
+    }
+    return tout;
+  };
+  const [dem,reps]=await Promise.all([lire("champ_id=eq.rapport_client&valeur=eq.Oui"),lire("champ_id=like.rapport*")]);
+  return {demandes:new Set(dem.map(x=>x.fiche_id)),enregistres:new Set(reps.filter(x=>x.champ_id!=="rapport_client"&&x.champ_id!=="rapport_reduction").map(x=>x.fiche_id))};
+}
+
 function PageRapportsListe({fiches,onOpen}){
   const [q,setQ]=useState("");
-  const moteurFiches=fiches.filter(f=>["Moteur","Autre","Moto-réducteur","Pompe","Ventilateur",TYPE_CHEMINEE].includes(f.type_materiel||"Moteur"));
+  const [info,setInfo]=useState(undefined); // undefined : lecture en cours ; null : lecture impossible (on montre tout) ; sinon {demandes, enregistres}
+  useEffect(()=>{let vivant=true;lireFichesAvecRapport().then(r=>{if(vivant)setInfo(r);}).catch(()=>{if(vivant)setInfo(null);});return()=>{vivant=false;};},[]);
+  const [toutes,setToutesEtat]=useState(()=>{try{return localStorage.getItem("pmv_rapports_toutes")==="1";}catch(e){return false;}});
+  const setToutes=x=>{setToutesEtat(x);try{localStorage.setItem("pmv_rapports_toutes",x?"1":"0");}catch(e){/* mémorisation facultative */}};
+  const tousTypes=fiches.filter(f=>["Moteur","Autre","Moto-réducteur","Pompe","Ventilateur",TYPE_CHEMINEE].includes(f.type_materiel||"Moteur"));
+  // la cheminée a toujours un rapport (pas de question « Rapport client demandé ? »)
+  const etatRapport=f=>!info?"":info.enregistres.has(f.id)?"fait":(info.demandes.has(f.id)||f.type_materiel===TYPE_CHEMINEE)?"demande":"aucun";
+  const avecRapport=tousTypes.filter(f=>etatRapport(f)!=="aucun");
+  const sansRapport=info?tousTypes.length-avecRapport.length:0;
+  const moteurFiches=info===undefined?[]:(info===null||toutes)?tousTypes:avecRapport;
   const filtrees=moteurFiches.filter(f=>{
     const qq=q.toLowerCase();
     return !qq||(f.de||"").toLowerCase().includes(qq)||(f.client||"").toLowerCase().includes(qq)||(f.materiel||"").toLowerCase().includes(qq);
@@ -3080,19 +3107,25 @@ function PageRapportsListe({fiches,onOpen}){
   const clientList=Object.keys(parClient).sort();
   return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>📧 Rapports client</h1>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>{moteurFiches.length} fiche{moteurFiches.length>1?"s":""} · sélectionnez-en une pour créer ou modifier son rapport.</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 16px"}}>{info===undefined?"Chargement…":info===null?tousTypes.length+" fiche"+(tousTypes.length>1?"s":"")+" · le tri par rapport n'a pas pu être fait (connexion ?), toutes les fiches sont affichées.":(toutes?tousTypes.length+" fiche"+(tousTypes.length>1?"s":""):avecRapport.length+" fiche"+(avecRapport.length>1?"s":"")+" avec rapport")+" · sélectionnez-en une pour créer ou modifier son rapport."}</p>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16}}>
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={S.inp}/>
     </div>
-    {clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>Aucune fiche.</div>}
+    {info&&(sansRapport>0||toutes)&&<div style={{display:"flex",marginBottom:12}}><button type="button" onClick={()=>setToutes(!toutes)} aria-pressed={toutes} style={{padding:"8px 16px",minHeight:44,borderRadius:22,border:"1.5px solid #6B7280",background:toutes?"#6B7280":"#fff",color:toutes?"#fff":"#4B5563",fontSize:13,fontWeight:700,cursor:"pointer"}}>{toutes?"🙈 Masquer les fiches sans rapport":"👁 Afficher aussi les fiches sans rapport ("+sansRapport+")"}</button></div>}
+    {info!==undefined&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{info&&!toutes?"Aucune fiche n'a de rapport pour le moment. Une fiche arrive ici dès que « Rapport client demandé » est sur Oui, ou que son rapport est enregistré.":"Aucune fiche."}</div>}
     <div className="grille-large">
     {clientList.map(c=>(
       <div key={c} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,padding:"12px 16px"}}>
         <p style={{fontWeight:700,fontSize:14,margin:"0 0 8px"}}>{c}</p>
-        {parClient[c].map(f=>{const st=statutInfo(f.statut_chantier);return(
-          <div key={f.id} onClick={()=>onOpen(f)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:6,cursor:"pointer",background:"#F8F9FA",marginBottom:6}}>
-            <span style={{fontSize:13}}>{f.de} · {f.materiel||"—"}</span>
-            <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:st.bg,color:st.color}}>{st.label}</span>
+        {parClient[c].map(f=>{const st=statutInfo(f.statut_chantier);const er=etatRapport(f);return(
+          <div key={f.id} onClick={()=>onOpen(f)} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",padding:"8px 10px",borderRadius:6,cursor:"pointer",background:"#F8F9FA",marginBottom:6}}>
+            <span style={{fontSize:13,minWidth:0,overflowWrap:"anywhere"}}>{f.de} · {f.materiel||"—"}</span>
+            <span style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+              {er==="fait"&&<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#E9F6EC",color:"#1B6B2E"}}>✅ Rapport enregistré</span>}
+              {er==="demande"&&<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#EEF4FF",color:"#1B4F8A"}}>📧 Rapport demandé</span>}
+              {er==="aucun"&&<span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:"#F3F4F6",color:"#6B7280"}}>sans rapport</span>}
+              <span style={{fontSize:11,fontWeight:600,padding:"2px 8px",borderRadius:20,background:st.bg,color:st.color}}>{st.label}</span>
+            </span>
           </div>
         );})}
       </div>
