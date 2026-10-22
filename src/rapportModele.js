@@ -14,7 +14,7 @@
 
 import { configDuType } from "./configRapports";
 import { appliquerChapitres, typeGenerique } from "./rapportPerso";
-import { conclusionVibrations } from "./vibrations";
+import { conclusionVibrations, lignesGeMoteur } from "./vibrations";
 
 export const SOCIETE = {
   nom: "PMV Services",
@@ -252,9 +252,11 @@ export function construireRapport(v, data, photos) {
     if (num("vib_ar_mms_apres")) vib.push(num("vib_ar_mms_apres", "mm/s") + " COC");
     const pair = [photos.skf_av_rem && { url: photos.skf_av_rem, legende: "CC — côté commande" }, photos.skf_ar_rem && { url: photos.skf_ar_rem, legende: "COC — côté opposé commande" }].filter(Boolean);
     const cVibApres = conclusionVibrations(v, "apres", "après entretien");
-    if (vib.length || pair.length || cVibApres) {
+    const geApres = lignesGeMoteur(v, "apres");
+    if (vib.length || pair.length || cVibApres || geApres.length) {
       b.push({ t: "sous", id: "apres.essai", txt: "Essai mécanique après entretien et remplacement des roulements" });
       if (vib.length) b.push({ t: "para", parts: ["Le moteur vibre à " + vib.join(" et ") + " pour une norme à 3 mm/s."] });
+      if (geApres.length) b.push({ t: "lignes", lignes: geApres });
       if (cVibApres) b.push({ t: "para", parts: cVibApres.parts });
       if (pair.length) b.push({ t: "paire", items: pair });
     }

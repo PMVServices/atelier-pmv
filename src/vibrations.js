@@ -78,6 +78,17 @@ export function lireVibrations(v, moment) {
   return Object.keys(lignes).map((k) => lignes[k]).sort((a, b) => ORDRE_ORGANES.indexOf(a.organe) - ORDRE_ORGANES.indexOf(b.organe) || (a.cote === b.cote ? 0 : a.cote === "av" ? -1 : 1));
 }
 
+// Lignes « Mesure de Ge CC : 0.8 Ge, conforme (limite : …) » du moteur pour un moment (côté commande = CC, côté opposé commande = COC), avec le verdict de chaque côté
+export function lignesGeMoteur(v, moment) {
+  return lireVibrations(v, moment).filter((x) => x.organe === "m" && x.ge != null).map((x) => {
+    const cote = x.cote === "av" ? "CC" : "COC";
+    const debut = "Mesure de Ge " + cote + " : " + x.geTxt + " Ge";
+    if (x.limGe == null) return [debut + " (pas de limite définie : " + (x.ref ? "roulement " + x.ref : "type de roulement non renseigné") + ")."];
+    const limite = " (limite : " + x.limGe + " Ge au plus pour un roulement " + x.ref + ").";
+    return x.geOk ? [debut + ", ", { v: "ok", txt: "conforme" }, limite] : [debut + ", ", { v: "ko", txt: "non conforme" }, limite];
+  });
+}
+
 // Petite conclusion pour un rapport : null s'il n'y a aucune mesure, sinon { ok, parts } (parts : morceaux de phrase du modèle de rapport, voir rapportModele.js)
 // moment : "avant" | "apres" ; libelle : « avant entretien » / « après entretien »
 export function conclusionVibrations(v, moment, libelle) {
@@ -87,8 +98,11 @@ export function conclusionVibrations(v, moment, libelle) {
   const hors = [];
   l.forEach((x) => {
     const pre = (plusieurs ? ORGANES[x.organe].nom + " " : "") + COTES[x.organe][x.cote] + " : ";
-    if (x.mmsOk === false) hors.push(pre + x.mmsTxt + " mm/s (norme : " + SEUIL_MMS + " mm/s au plus)");
-    if (x.geOk === false) hors.push(pre + x.geTxt + " Ge (limite : " + x.limGe + " Ge au plus pour un roulement " + x.ref + ")");
+    // un seul « côté … : » par côté, même si la vitesse et le Ge dépassent tous les deux
+    const depassements = [];
+    if (x.mmsOk === false) depassements.push(x.mmsTxt + " mm/s (norme : " + SEUIL_MMS + " mm/s au plus)");
+    if (x.geOk === false) depassements.push(x.geTxt + " Ge (limite : " + x.limGe + " Ge au plus pour un roulement " + x.ref + ")");
+    if (depassements.length) hors.push(pre + depassements.join(" et "));
   });
   const titre = { b: "Conclusion sur les vibrations " + libelle + " : " };
   if (hors.length) return { ok: false, parts: [titre, { v: "ko", txt: "non conformes" }, " — " + hors.join(" ; ") + "."] };
