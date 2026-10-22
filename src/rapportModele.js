@@ -14,6 +14,7 @@
 
 import { configDuType } from "./configRapports";
 import { appliquerChapitres, typeGenerique } from "./rapportPerso";
+import { conclusionVibrations } from "./vibrations";
 
 export const SOCIETE = {
   nom: "PMV Services",
@@ -178,11 +179,13 @@ export function construireRapport(v, data, photos) {
       const intAvant = [num("int_p1_avant", "A"), num("int_p2_avant", "A"), num("int_p3_avant", "A")].filter(Boolean);
       if (intAvant.length) lignes.push(["Le moteur consomme à vide sous 400 V " + intAvant.join(", ") + " par phase."]);
       const pair = [photos.skf_av_dem && { url: photos.skf_av_dem, legende: "Côté commande" }, photos.skf_ar_dem && { url: photos.skf_ar_dem, legende: "Côté opposé commande" }].filter(Boolean);
-      if (pair.length || lignes.length || has(data.commentaire_vibration_avant)) {
+      const cVibAvant = conclusionVibrations(v, "avant", "avant entretien"); // petite conclusion : vitesse ≤ 3 mm/s, Ge ≤ 1 (2 pour un roulement NU)
+      if (pair.length || lignes.length || has(data.commentaire_vibration_avant) || cVibAvant) {
         b.push({ t: "sous", id: "avant.essai", txt: "Essai mécanique avant démontage" });
         if (pair.length) b.push({ t: "paire", items: pair });
         if (lignes.length) b.push({ t: "lignes", lignes });
         if (has(data.commentaire_vibration_avant)) b.push({ t: "para", parts: [String(data.commentaire_vibration_avant).trim()] });
+        if (cVibAvant) b.push({ t: "para", parts: cVibAvant.parts });
       }
     }
     ajouter("avant", "Mesures avant entretien", b);
@@ -248,9 +251,11 @@ export function construireRapport(v, data, photos) {
     if (num("vib_av_mms_apres")) vib.push(num("vib_av_mms_apres", "mm/s") + " CC");
     if (num("vib_ar_mms_apres")) vib.push(num("vib_ar_mms_apres", "mm/s") + " COC");
     const pair = [photos.skf_av_rem && { url: photos.skf_av_rem, legende: "CC — côté commande" }, photos.skf_ar_rem && { url: photos.skf_ar_rem, legende: "COC — côté opposé commande" }].filter(Boolean);
-    if (vib.length || pair.length) {
+    const cVibApres = conclusionVibrations(v, "apres", "après entretien");
+    if (vib.length || pair.length || cVibApres) {
       b.push({ t: "sous", id: "apres.essai", txt: "Essai mécanique après entretien et remplacement des roulements" });
       if (vib.length) b.push({ t: "para", parts: ["Le moteur vibre à " + vib.join(" et ") + " pour une norme à 3 mm/s."] });
+      if (cVibApres) b.push({ t: "para", parts: cVibApres.parts });
       if (pair.length) b.push({ t: "paire", items: pair });
     }
     const int400 = [num("int_p1_apres", "A"), num("int_p2_apres", "A"), num("int_p3_apres", "A")].filter(Boolean);
@@ -334,6 +339,7 @@ function construireRapportGenerique(v, data, meta, ctxPerso) {
   const chapitres = [];
   const b = [];
   const sign = [];
+  [conclusionVibrations(v, "avant", "avant entretien"), conclusionVibrations(v, "apres", "après entretien")].forEach((c) => { if (c) b.push({ t: "para", parts: c.parts }); });
   if (has(data.certifie_par)) sign.push(["Entretien certifié conforme par " + listeEt(data.certifie_par) + " le " + dateRapport]);
   if (has(data.realise_par)) sign.push(["Rapport réalisé par " + listeEt(data.realise_par) + " le " + dateRapport]);
   if (sign.length) b.push({ t: "lignes", lignes: sign, espace: true });
