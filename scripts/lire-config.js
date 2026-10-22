@@ -33,12 +33,13 @@ async function lire(cle){
       if(o.required!==undefined)modifs.push(o.required?"obligatoire":"facultatif");
       if(o.options)modifs.push("choix : "+o.options.join(" / "));
       if(o.note!==undefined)modifs.push("note : "+(String(o.note).trim()||"(effacée)"));
+      if(o.seuil)modifs.push("SEUIL avec alerte : "+[o.seuil.max!==undefined?"au-dessus de "+o.seuil.max:"",o.seuil.min!==undefined?"en dessous de "+o.seuil.min:""].filter(Boolean).join(", ")+(o.seuil.msg?" — « "+o.seuil.msg+" »":""));
       console.log("  champ du code "+id+" → "+modifs.join(" ; "));
     });
     Object.keys(f.deplace||{}).forEach(id=>console.log("  déplacé : "+id+(f.deplace[id].etape?" vers l'étape « "+f.deplace[id].etape+" »":"")+" après "+f.deplace[id].apres));
     (f.ajouts||[]).forEach(a=>{
       const d=a.def||{};
-      console.log("  AJOUT (id "+a.id+") dans « "+a.etape+" » après "+a.apres+" : "+(d.label||"?")+" ["+d.type+(d.unite?", "+d.unite:"")+(d.options?", choix : "+d.options.join(" / ")+(d.autre?" + Autre":""):"")+(d.required?", obligatoire":"")+"]");
+      console.log("  AJOUT (id "+a.id+") dans « "+a.etape+" » après "+a.apres+" : "+(d.label||"?")+" ["+d.type+(d.unite?", "+d.unite:"")+(d.options?", choix : "+d.options.join(" / ")+(d.autre?" + Autre":""):"")+(d.required?", obligatoire":"")+(d.seuil?", SEUIL alerte : "+[d.seuil.max!==undefined?"au-dessus de "+d.seuil.max:"",d.seuil.min!==undefined?"en dessous de "+d.seuil.min:""].filter(Boolean).join(", ")+(d.seuil.msg?" — « "+d.seuil.msg+" »":""):"")+"]");
     });
   });
   if(cfg.statuts){

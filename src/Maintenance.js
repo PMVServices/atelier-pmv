@@ -3,6 +3,7 @@
 import React, {useState, useEffect, useRef} from "react";
 import EditeurRapports from "./EditeurRapports";
 import {configActuelle, surChangementConfig, appliquerConfigEditeur, publierConfig, lireHistorique, statutsAvecConfig, TYPES_AJOUT} from "./configFiches";
+import {lireSeuil, resumeSeuil, seuilDepuisSaisie} from "./seuils";
 
 const BLEU="#1B4F8A";
 const CARTE={background:"#fff",border:"1px solid #E2E6EA",borderRadius:10,padding:"14px 16px",marginBottom:14};
@@ -194,6 +195,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
                 <div style={{fontSize:11,color:"#9CA3AF"}}>{LIBELLE_TYPE[c.type]||c.type}{c.ajoute&&<span style={{color:"#22863A",fontWeight:700}}> · ajouté</span>}{masque&&<span style={{color:"#6B7280",fontWeight:700}}> · masqué</span>}{c._depuis&&<span style={{color:BLEU,fontWeight:700}}> · ↪ vient de « {c._depuis} »</span>}</div>
                 <div style={{fontSize:14,fontWeight:c.type==="titre"?700:500,color:c.type==="titre"?BLEU:"#1A1A2E",overflowWrap:"anywhere"}}>{resume(c)}{c.required===true&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&<span style={{color:"#9CA3AF"}}> ({c.unite})</span>}</div>
                 {Array.isArray(c.options)&&<div style={{fontSize:11,color:"#6B7280"}}>Choix : {c.options.join(" · ")}</div>}
+                {lireSeuil(c)&&<div style={{fontSize:11,color:"#B45309",fontWeight:600}}>⚠ {resumeSeuil(c)}{lireSeuil(c).msg?" — « "+lireSeuil(c).msg+" »":""}</div>}
               </div>
               <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
                 {!masque&&!SANS_LIBELLE.includes(c.type)&&<button type="button" style={BTN_P} onClick={()=>{setEdition(modeEdition?null:c.id);setAjoutApres(null);}}>✏ Modifier</button>}
@@ -295,15 +297,21 @@ function FormulaireModif({c,onChange,onFermer,ajoute,base}){
   const requisCode=typeof c.required==="function";
   const aOptions=Array.isArray(c.options);
   const aUnite=c.type==="number"||(ajoute&&c.unite!==undefined);
+  const aSeuil=c.type==="number"||c.type==="mesure"; // seuil avec alerte : cases numériques seulement
+  const s0=lireSeuil(c)||{};
+  const [seuilMax,setSeuilMax]=useState(s0.max==null?"":String(s0.max));
+  const [seuilMin,setSeuilMin]=useState(s0.min==null?"":String(s0.min));
+  const [seuilMsg,setSeuilMsg]=useState(s0.msg||"");
   function valider(){
     const opts=choix.split("\n").map(x=>x.trim()).filter(Boolean);
     if(ajoute){
-      onChange({def:{label:label.trim()||c.label,note:note.trim(),unite:unite.trim()||undefined,required:oblig,...(aOptions?{options:opts,autre}:{})}});
+      onChange({def:{label:label.trim()||c.label,note:note.trim(),unite:unite.trim()||undefined,required:oblig,...(aSeuil?{seuil:seuilDepuisSaisie(seuilMax,seuilMin,seuilMsg)}:{}),...(aOptions?{options:opts,autre}:{})}});
     }else{
       const p={label:label.trim()||(base&&base.label)||c.label};
       if(note.trim()!==(c.note||""))p.note=note.trim()||" ";
       if(!SANS_OBLIGATOIRE.includes(c.type)&&!requisCode&&oblig!==(c.required===true))p.required=oblig;
       if(aOptions&&opts.length)p.options=opts.includes("Autre")||!c.options.includes("Autre")?opts:opts.concat(["Autre"]);
+      if(aSeuil)p.seuil=seuilDepuisSaisie(seuilMax,seuilMin,seuilMsg)||null; // null : seuil retiré
       onChange(p);
     }
     onFermer();
@@ -319,10 +327,26 @@ function FormulaireModif({c,onChange,onFermer,ajoute,base}){
     <input type="text" value={note} onChange={e=>setNote(e.target.value)} style={INP}/>
     {!SANS_OBLIGATOIRE.includes(c.type)&&!requisCode&&<label style={{display:"flex",gap:6,alignItems:"center",fontSize:13,marginTop:8}}><input type="checkbox" checked={oblig} onChange={e=>setOblig(e.target.checked)}/> Champ obligatoire (on ne peut pas valider l'étape sans lui)</label>}
     {requisCode&&<p style={{fontSize:11,color:"#9CA3AF",margin:"8px 0 0"}}>Ce champ est obligatoire seulement dans certains cas (règle écrite dans le code) : pour la changer, demandez-le moi.</p>}
+    {aSeuil&&<ZoneSeuil unite={c.unite} max={seuilMax} min={seuilMin} msg={seuilMsg} setMax={setSeuilMax} setMin={setSeuilMin} setMsg={setSeuilMsg}/>}
     <div style={{display:"flex",gap:8,marginTop:10}}>
       <button type="button" style={BTN} onClick={valider}>OK</button>
       <button type="button" style={BTN_O} onClick={onFermer}>Annuler</button>
     </div>
+  </div>);
+}
+
+// Seuil avec alerte d'une case numérique : au-dessus du maximum ou en dessous du minimum, la case passe en rouge avec un message (rien n'est bloqué)
+function ZoneSeuil({unite,max,min,msg,setMax,setMin,setMsg}){
+  const nombre=t=>t.replace(/[^0-9.,\-]/g,"");
+  return(<div style={{background:"#FFF8E1",border:"1px solid #E8720C",borderRadius:8,padding:"8px 10px",marginTop:10}}>
+    <div style={{fontSize:13,fontWeight:700,color:"#8A4B00"}}>⚠ Seuil avec alerte (facultatif)</div>
+    <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+      <div style={{flex:"1 1 150px"}}><label style={LBL}>Alerte au-dessus de{unite?" ("+unite+")":""}</label><input type="text" inputMode="decimal" value={max} onChange={e=>setMax(nombre(e.target.value))} style={INP} placeholder="ex. 3"/></div>
+      <div style={{flex:"1 1 150px"}}><label style={LBL}>Alerte en dessous de{unite?" ("+unite+")":""}</label><input type="text" inputMode="decimal" value={min} onChange={e=>setMin(nombre(e.target.value))} style={INP} placeholder="ex. 0,5"/></div>
+    </div>
+    <label style={LBL}>Message d'alerte (facultatif ; sinon « Au-dessus du seuil : … »)</label>
+    <input type="text" value={msg} onChange={e=>setMsg(e.target.value)} style={INP} placeholder="ex. Non conforme : le moteur vibre"/>
+    <p style={{fontSize:11,color:"#8A4B00",margin:"6px 0 0"}}>La technicienne ou le technicien voit la case en rouge avec ce message dès que la valeur sort des limites ; l'étape peut quand même être enregistrée et validée.</p>
   </div>);
 }
 
@@ -334,10 +358,11 @@ function FormulaireAjout({onAjouter,onAnnuler}){
   const [autre,setAutre]=useState(false);
   const [oblig,setOblig]=useState(false);
   const [note,setNote]=useState("");
+  const [seuilMax,setSeuilMax]=useState("");const [seuilMin,setSeuilMin]=useState("");const [seuilMsg,setSeuilMsg]=useState("");
   const ok=label.trim().length>0&&(type!=="select"||choix.split("\n").some(x=>x.trim()));
   function valider(){
     const def={type,label:label.trim(),note:note.trim()||undefined,required:oblig};
-    if(type==="number")def.unite=unite.trim()||undefined;
+    if(type==="number"){def.unite=unite.trim()||undefined;def.seuil=seuilDepuisSaisie(seuilMax,seuilMin,seuilMsg);}
     if(type==="select"){def.options=choix.split("\n").map(x=>x.trim()).filter(Boolean);def.autre=autre;}
     onAjouter(def);
   }
@@ -347,7 +372,8 @@ function FormulaireAjout({onAjouter,onAnnuler}){
     <select value={type} onChange={e=>setType(e.target.value)} style={INP}>{TYPES_AJOUT.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
     <label style={LBL}>{type==="titre"?"Texte de l'intertitre":"Intitulé"}</label>
     <input type="text" autoFocus value={label} onChange={e=>setLabel(e.target.value)} style={INP} placeholder={type==="photo"?"ex. Photo du joint à lèvres":"ex. Marque du joint à lèvres"}/>
-    {type==="number"&&<><label style={LBL}>Unité (facultatif)</label><input type="text" value={unite} onChange={e=>setUnite(e.target.value)} style={INP} placeholder="ex. mm, kW"/></>}
+    {type==="number"&&<><label style={LBL}>Unité (facultatif)</label><input type="text" value={unite} onChange={e=>setUnite(e.target.value)} style={INP} placeholder="ex. mm, kW"/>
+      <ZoneSeuil unite={unite} max={seuilMax} min={seuilMin} msg={seuilMsg} setMax={setSeuilMax} setMin={setSeuilMin} setMsg={setSeuilMsg}/></>}
     {type==="select"&&<><label style={LBL}>Choix proposés (un par ligne)</label><textarea value={choix} onChange={e=>setChoix(e.target.value)} rows={4} style={{...INP,resize:"vertical"}} placeholder={"SKF\nNBR\nViton"}/>
       <label style={{display:"flex",gap:6,alignItems:"center",fontSize:13,marginTop:6}}><input type="checkbox" checked={autre} onChange={e=>setAutre(e.target.checked)}/> Proposer aussi « Autre » (saisie libre)</label></>}
     {type!=="titre"&&<><label style={LBL}>Note (petit texte à côté de l'intitulé, facultatif)</label><input type="text" value={note} onChange={e=>setNote(e.target.value)} style={INP}/>

@@ -1,7 +1,8 @@
 // Configuration modifiable de l'application sans passer par le code (profil « Maintenance », page « Maintenance »).
 // Stockée dans la base (table parametres_app, clé « config_fiches ») et appliquée PAR-DESSUS les définitions écrites dans le code :
 //   - champs d'une fiche (atelier : un jeu par type de matériel ; chantier : un jeu par type d'équipement, clé « ch:<type> ») :
-//       champs[id] = {label, required, options, note, masque}  → renommer, rendre (non) obligatoire, changer les choix, masquer (les données restent en base)
+//       champs[id] = {label, required, options, note, masque, seuil}  → renommer, rendre (non) obligatoire, changer les choix, masquer (les données restent en base),
+//                                                                       poser un seuil avec alerte sur une case numérique : seuil = {max, min, msg} (voir seuils.js)
 //       deplace[id] = {apres}                                   → déplacer un champ après un autre (« __debut » = en tête de l'étape)
 //       ajouts      = [{id, etape, apres, def:{type,label,…}}]  → champs ajoutés à un endroit précis
 //   - colonnes du planning (statuts de chantier) : statuts = [{id,label,color}] dans l'ordre voulu
@@ -69,7 +70,7 @@ export function champDepuisAjout(a){
   const base={id:a.id,label:d.label||"Nouveau champ",note:d.note||undefined,ajoute:true};
   switch(d.type){
     case "texte_long":return {...base,type:"text",dictee:true,required:!!d.required};
-    case "number":return {...base,type:"number",unite:d.unite||undefined,required:!!d.required};
+    case "number":return {...base,type:"number",unite:d.unite||undefined,required:!!d.required,seuil:d.seuil||undefined};
     case "select":return {...base,type:"select",options:(d.options&&d.options.length?d.options:["—"]).concat(d.autre?["Autre"]:[]),autreTexte:!!d.autre,required:!!d.required};
     case "oui_non":return {...base,type:"oui_non",required:!!d.required};
     case "date":return {...base,type:"date",required:!!d.required};
@@ -95,6 +96,7 @@ function construire(map,cle,cfgGlobale,garderMasques){
     if(Array.isArray(o.options)&&o.options.length&&Array.isArray(c.options))n.options=o.options;
     if(o.note!==undefined)n.note=(String(o.note).trim())||undefined;
     if(o.masque)n._masque=true;
+    if(o.seuil)n.seuil=o.seuil;
     return n;
   };
   // champs du code envoyés dans une autre étape (deplace[id].etape) : id → étape d'arrivée ; ils quittent leur étape du code
