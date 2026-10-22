@@ -2489,6 +2489,13 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
   const setSous=x=>{setSousEtat(x);setCible(null);try{localStorage.setItem("pmv_atelier_sous",x);}catch(e){/* mémorisation facultative */}};
   const versDossier=fi=>{setCible({client:fi.client||"Sans client",de:fi.de||"Sans DE"});setSousEtat("dossiers");try{localStorage.setItem("pmv_atelier_sous","dossiers");}catch(e){/* facultatif */}};
   const nbDossiers=new Set(filtrees.map(fi=>(fi.client||"Sans client")+"|"+(fi.de||"Sans DE"))).size;
+  // sous-onglet « Fiches » : les fiches terminées ne s'affichent pas d'office ; un bouton les montre (choix mémorisé sur l'appareil) ; choisir le statut « Terminé » dans le filtre les montre aussi
+  const [voirTermines,setVoirTerminesEtat]=useState(()=>{try{return localStorage.getItem("pmv_atelier_termines")==="1";}catch(e){return false;}});
+  const setVoirTermines=x=>{setVoirTerminesEtat(x);try{localStorage.setItem("pmv_atelier_termines",x?"1":"0");}catch(e){/* mémorisation facultative */}};
+  const estTermine=f=>(f.statut_chantier||"A_demonter")==="Termine";
+  const nbTermines=filtrees.filter(estTermine).length;
+  const termineVisibles=voirTermines||fs==="Termine";
+  const lignesFiches=termineVisibles?filtrees:filtrees.filter(f=>!estTermine(f));
   const grille=largeur>=700;
   // ordinateur (≥ 1100 px) : la liste montre aussi le type de matériel, le statut et la date d’entrée
   const large=largeur>=1100;
@@ -2513,13 +2520,15 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
       </select>
     </div>
     <div role="tablist" aria-label="Affichage des fiches atelier" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
-      {[["fiches","📋 Fiches ("+filtrees.length+")"],["dossiers","📁 Dossiers ("+nbDossiers+")"]].map(([id,lib])=><button key={id} type="button" role="tab" aria-selected={sous===id} onClick={()=>setSous(id)} style={{padding:"8px 18px",minHeight:44,borderRadius:22,border:"1.5px solid "+(sous===id?"#1B4F8A":"#D1D5DB"),background:sous===id?"#1B4F8A":"#fff",color:sous===id?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer"}}>{lib}</button>)}
+      {[["fiches","📋 Fiches ("+lignesFiches.length+")"],["dossiers","📁 Dossiers ("+nbDossiers+")"]].map(([id,lib])=><button key={id} type="button" role="tab" aria-selected={sous===id} onClick={()=>setSous(id)} style={{padding:"8px 18px",minHeight:44,borderRadius:22,border:"1.5px solid "+(sous===id?"#1B4F8A":"#D1D5DB"),background:sous===id?"#1B4F8A":"#fff",color:sous===id?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer"}}>{lib}</button>)}
+      {sous==="fiches"&&fs!=="Termine"&&(nbTermines>0||voirTermines)&&<button type="button" onClick={()=>setVoirTermines(!voirTermines)} aria-pressed={voirTermines} style={{marginLeft:"auto",padding:"8px 16px",minHeight:44,borderRadius:22,border:"1.5px solid #6B7280",background:voirTermines?"#6B7280":"#fff",color:voirTermines?"#fff":"#4B5563",fontSize:13,fontWeight:700,cursor:"pointer"}}>{voirTermines?"🙈 Masquer les terminées":"👁 Afficher les terminées ("+nbTermines+")"}</button>}
     </div>
     {loading&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF"}}>Chargement…</div>}
     {!loading&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{fiches.length===0?"Aucune fiche — créez la première !":"Aucun résultat."}</div>}
-    {sous==="fiches"&&!loading&&filtrees.length>0&&<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",overflow:"hidden"}}>
+    {sous==="fiches"&&!loading&&filtrees.length>0&&lignesFiches.length===0&&<div style={{textAlign:"center",padding:30,color:"#6B7280",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>Toutes les fiches de cette sélection sont terminées : touchez « Afficher les terminées » pour les voir.</div>}
+    {sous==="fiches"&&!loading&&lignesFiches.length>0&&<div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",overflow:"hidden"}}>
       {grille&&<div style={{display:"grid",gridTemplateColumns:colonnes,gap:12,padding:"9px 16px",background:"#F3F6FA",fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".04em"}}><span>N° DE</span><span>Client</span><span>Matériel</span>{large&&<><span>Type</span><span>Statut</span><span>Entrée</span></>}<span/></div>}
-      {filtrees.map(fi=><div key={fi.id} role="button" tabIndex={0} onClick={()=>onOpen(fi)} onKeyDown={e=>{if(e.key==="Enter")onOpen(fi);}} style={grille
+      {lignesFiches.map(fi=><div key={fi.id} role="button" tabIndex={0} onClick={()=>onOpen(fi)} onKeyDown={e=>{if(e.key==="Enter")onOpen(fi);}} style={grille
         ?{display:"grid",gridTemplateColumns:colonnes,gap:12,alignItems:"center",padding:"10px 16px",borderTop:"1px solid #EEF1F5",cursor:"pointer"}
         :{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:"1px solid #EEF1F5",cursor:"pointer"}}>
         {grille
