@@ -18,7 +18,7 @@ import {useSuiviClients, PageSuiviClients, DashboardCommercial} from "./SuiviCli
 import PageClients, {ouvrirClient} from "./Clients";
 import {PanneauResumeCommercial, verifierResumeCommercial} from "./ResumeCommercial";
 import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
-import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT} from "./rapportModele";
+import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT, estPompeDip, DIP_DESCRIPTIF_DEFAUT, DIP_POMPE_TEXTE_DEFAUT, dipConclusionDefaut} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris, SourcesPhoto} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
 import {CHAMPS_CHEMINEE, ETAPES_CHEMINEE} from "./Cheminee";
@@ -364,6 +364,7 @@ const CHAMPS_POMPE={
     {id:"numero_serie",label:"Numéro de série moteur",type:"text",required:true,groupe:"type_serie_moteur"},
     {id:"fixation",label:"Fixation",type:"select",options:["B3 (pattes)","B5 (bride)","B14","Spécial"],required:true,autreTexte:true},
     {id:"marque_pompe",label:"Marque pompe",type:"select",options:["Grundfos","KSB","LOWARA","WILO","XYLEM","FYGT","SALMSON","SIHI","SEEPEX","Autre"],required:false,autreTexte:true},
+    {id:"famille_pompe",label:"Type de pompe",type:"select",options:["DIP","Autre"],required:true,autreTexte:true,note:"choisit le modèle de rapport client"},
     {id:"modele_pompe",label:"Modèle / Référence pompe",type:"text",required:false,groupe:"pompe_modele_serie"},
     {id:"numero_serie_pompe",label:"Numéro de série pompe",type:"text",required:false,groupe:"pompe_modele_serie"},
     {id:"debit_nominal",label:"Débit nominal",type:"text",required:false,groupe:"debit_pression"},
@@ -2599,7 +2600,7 @@ function PageChoix({onChoisir,onRetour}){
 
 // ─── RAPPORT CLIENT (moteur) ────────────────────────────────────────────
 const VERDICT_OPTIONS=["Conforme","Non conforme","Autre"];
-const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","contact","bordereau","commande_achat","date_depart","materiel_controle","descriptif_travaux","commentaire_vibration_avant","commentaire_roulements","commentaire_demontage","ensemble_libre","commentaire_apres","certifie_par","realise_par","date","adx_captures","sections","termine","termine_le"];
+const RAPPORT_TEXT_KEYS=["mois_annee","adresse_chantier","contact","bordereau","commande_achat","date_depart","materiel_controle","descriptif_travaux","commentaire_vibration_avant","commentaire_roulements","commentaire_demontage","ensemble_libre","commentaire_apres","certifie_par","realise_par","date","adx_captures","sections","termine","termine_le","dip_pompe_texte","dip_conclusion"];
 const RAPPORT_SECTIONS=[
   {key:"electrique",label:"Photo à l'arrivée + rapport électrique du bobinage"},
   {key:"avant",label:"Relevé électrique + vibration avant entretien"},
@@ -2618,7 +2619,19 @@ const RAPPORT_PHOTO_SLOTS=[
   {key:"skf_av_rem",categorie:"Screen SKF avant au remontage",label:"Vibration après remontage — côté commande"},
   {key:"skf_ar_rem",categorie:"Screen SKF arrière au remontage",label:"Vibration après remontage — côté opposé"},
   {key:"apres",categorie:null,label:"Photo après entretien"},
+  // rapport de la pompe DIP : la photo choisie à la main passe avant celle de la fiche ; « Plaque moteur » : la 1re photo = ancien moteur, une 2e (la dernière) = nouveau moteur
+  {key:"dip_vue",categorie:"Vue d'ensemble",label:"Page de garde : pompe et moteur",dip:true,manuelDabord:true},
+  {key:"dip_ancien",categorie:"Plaque moteur",label:"Plaque de l'ancien moteur",dip:true,manuelDabord:true},
+  {key:"dip_pompe",categorie:"Flasque avant",label:"Pompe : roue et flasque",dip:true,manuelDabord:true},
+  {key:"dip_nouveau",categorie:"Plaque moteur",rang:"dernier",label:"Plaque du nouveau moteur",dip:true,manuelDabord:true},
 ];
+// photo d'une case du rapport : celle de la fiche (catégorie) ou celle ajoutée à la main ; cases DIP : la photo ajoutée à la main d'abord
+function photoDuSlot(s,photosFiche,data){
+  const manuel=data["photo_"+s.key+"_url"]||null;
+  let auto=null;
+  if(s.categorie){const l=(photosFiche||[]).filter(p=>p.categorie_nom===s.categorie);auto=s.rang==="dernier"?(l.length>1?l[l.length-1]:null):(l[0]||null);}
+  return s.manuelDabord?(manuel||(auto?auto.url:null)):(auto?auto.url:manuel);
+}
 
 
 function ChampVerdict({valeur,onChange}){
@@ -2688,7 +2701,7 @@ async function preparerRapport(ficheId,type,config){
     if(data.commentaire_apres===undefined)data.commentaire_apres=DEPART_ATELIER_DEFAUT;
     if(data.materiel_controle===undefined)data.materiel_controle=(params&&params.rapport_materiel_controle)||MATERIEL_CONTROLE_DEFAUT;
     resolues={};
-    RAPPORT_PHOTO_SLOTS.forEach(s=>{const auto=s.categorie?photosFiche.find(p=>p.categorie_nom===s.categorie):null;resolues[s.key]=auto?auto.url:(data["photo_"+s.key+"_url"]||null);});
+    RAPPORT_PHOTO_SLOTS.forEach(s=>{resolues[s.key]=photoDuSlot(s,photosFiche,data);});
   }
   resolues._meta=metaRapport(type,photosFiche,config);
   return {v:vv,data,photos:resolues};
@@ -2765,12 +2778,25 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel,statutChantier,onStatu
   function toggleSection(key){const s=sectionsState();s[key]=!sectionActive(key);upd("sections",JSON.stringify(s));}
 
   const photosResolved={};
-  RAPPORT_PHOTO_SLOTS.forEach(s=>{
-    const auto=s.categorie?photos.find(p=>p.categorie_nom===s.categorie):null;
-    photosResolved[s.key]=auto?auto.url:(data["photo_"+s.key+"_url"]||null);
-  });
+  RAPPORT_PHOTO_SLOTS.forEach(s=>{photosResolved[s.key]=photoDuSlot(s,photos,data);});
   photosResolved._meta=metaRapport(typeMateriel||"Moteur",photos);
   const generique=typeGenerique(typeMateriel);
+  const dip=typeMateriel==="Pompe"&&estPompeDip(v); // pompe DIP : rapport de travaux (relevés photo + conclusion), voir rapportModele.js
+  // textes proposés au départ pour une pompe DIP (une seule fois : ce qui est déjà écrit n'est jamais remplacé)
+  useEffect(()=>{
+    if(!dip||loading)return;
+    setData(d=>{
+      const n={...d};let ch=false;
+      if(n.descriptif_travaux===undefined){n.descriptif_travaux=DIP_DESCRIPTIF_DEFAUT;ch=true;}
+      if(n.dip_pompe_texte===undefined){n.dip_pompe_texte=DIP_POMPE_TEXTE_DEFAUT;ch=true;}
+      if(n.dip_conclusion===undefined){n.dip_conclusion=dipConclusionDefaut(v);ch=true;}
+      return ch?n:d;
+    });
+  },[dip,loading]);
+  async function changerFamillePompe(val){
+    setV(p=>({...p,famille_pompe:val}));
+    if(ficheId){try{await db.upsertChamp(ficheId,"famille_pompe",val);}catch(e){alert("Le type de pompe n'a pas pu être enregistré : "+e.message);}}
+  }
 
   async function uploadManuel(slotKey,file){
     if(!file||!ficheId)return;
@@ -2844,7 +2870,7 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel,statutChantier,onStatu
     catch(e){alert("Erreur : "+e.message);}
   }
 
-  const photosAuto=RAPPORT_PHOTO_SLOTS.filter(s=>s.categorie);
+  const photosAuto=RAPPORT_PHOTO_SLOTS.filter(s=>s.categorie&&!s.dip);
   const photoApres=RAPPORT_PHOTO_SLOTS.find(s=>s.key==="apres");
   const techsList=techs||[];
 
@@ -2860,7 +2886,14 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel,statutChantier,onStatu
     {saved&&<div style={S.ok}>✅ Rapport enregistré.</div>}
     {data.termine==="Oui"&&<div style={{...S.ok,background:"#F0FFF4",border:"1.5px solid #22863A",color:"#1B6B2E",fontWeight:700}}>✅ Rapport enregistré et terminé{/^\d{4}-\d{2}-\d{2}$/.test(data.termine_le||"")?" le "+new Date(data.termine_le+"T00:00:00").toLocaleDateString("fr-FR"):""}</div>}
 
-    {generique&&<div style={{...S.card,border:"1.5px solid #1B4F8A"}}><p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Rapport {typeMateriel}</p><p style={{fontSize:11,color:"#6B7280",margin:0}}>Le contenu de ce rapport (titres, textes avec les cases de la fiche, photos) se compose dans la page Maintenance → Rapports. Ici : coordonnées du chantier, signatures et matériel de contrôle, puis aperçu ou export Word.</p></div>}
+    {typeMateriel==="Pompe"&&<div style={S.card}>
+      <label style={S.lbl}>Type de pompe *</label>
+      <select value={estPompeDip(v)?"DIP":String(v.famille_pompe||"").indexOf("Autre")===0?"Autre":""} onChange={e=>changerFamillePompe(e.target.value)} style={{...S.sel,maxWidth:260}} aria-label="Type de pompe">
+        <option value="">— Sélectionner</option><option value="DIP">DIP</option><option value="Autre">Autre pompe</option>
+      </select>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"8px 0 0"}}>DIP : rapport de travaux (relevés en photo et conclusion). Autre pompe : rapport général, composé depuis la page Maintenance. Le choix se fait aussi dans l'étape « Entrée » de la fiche.</p>
+    </div>}
+    {generique&&!dip&&<div style={{...S.card,border:"1.5px solid #1B4F8A"}}><p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Rapport {typeMateriel}</p><p style={{fontSize:11,color:"#6B7280",margin:0}}>Le contenu de ce rapport (titres, textes avec les cases de la fiche, photos) se compose dans la page Maintenance → Rapports. Ici : coordonnées du chantier, signatures et matériel de contrôle, puis aperçu ou export Word.</p></div>}
     {!generique&&<div style={{...S.card,border:"1.5px solid #1B4F8A"}}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Sections à inclure dans ce rapport</p>
       <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 12px"}}>Informations chantier, sommaire et norme ISO sont toujours inclus. Décochez ce qui ne s'applique pas à cette intervention.</p>
@@ -2882,6 +2915,16 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel,statutChantier,onStatu
       <div style={{marginBottom:10}}><label style={S.lbl}>Départ de nos ateliers (date)</label><input type="date" value={data.date_depart||""} onChange={e=>upd("date_depart",e.target.value)} style={{...S.inp,maxWidth:200}}/></div>
       <div style={{marginBottom:0}}><label style={S.lbl}>Descriptif des travaux réalisés</label><textarea value={data.descriptif_travaux||""} onChange={e=>upd("descriptif_travaux",e.target.value)} style={{...S.inp,minHeight:60,resize:"vertical",fontFamily:"inherit"}}/></div>
     </div>
+
+    {dip&&<div style={{...S.card,border:"1.5px solid #1B4F8A"}}>
+      <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Rapport de travaux — pompe DIP</p>
+      <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 12px"}}>Les photos de la fiche (« Vue d'ensemble », « Plaque moteur », « Flasque avant ») sont reprises d'office ; touchez « Photo » ou « Fichier » pour en choisir une autre. Plaque du nouveau moteur : une 2e photo « Plaque moteur » dans la fiche est reprise, sinon ajoutez-la ici.</p>
+      <div style={{display:"flex",flexWrap:"wrap",gap:16,marginBottom:12}}>
+        {RAPPORT_PHOTO_SLOTS.filter(x=>x.dip).map(x=><BlocPhotoRapport key={x.key} slot={x} url={photosResolved[x.key]} ficheId={ficheId} uploading={uploading} onUpload={uploadManuel}/>)}
+      </div>
+      <div style={{marginBottom:10}}><label style={S.lbl}>Texte sous « Pompe »</label><input type="text" value={data.dip_pompe_texte||""} onChange={e=>upd("dip_pompe_texte",e.target.value)} style={S.inp}/></div>
+      <div><label style={S.lbl}>Conclusion (une phrase par ligne)</label><textarea value={data.dip_conclusion||""} onChange={e=>upd("dip_conclusion",e.target.value)} style={{...S.inp,minHeight:130,resize:"vertical",fontFamily:"inherit"}}/></div>
+    </div>}
 
     {!generique&&<>
     <div style={S.card}>
@@ -2939,7 +2982,7 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel,statutChantier,onStatu
       <div style={{marginBottom:0}}><label style={S.lbl}>Date du rapport</label><input type="date" value={data.date||""} onChange={e=>upd("date",e.target.value)} style={{...S.inp,maxWidth:200}}/></div>
     </div>
 
-    <div style={S.card}>
+    {!dip&&<div style={S.card}>
       <p style={{fontSize:13,fontWeight:700,margin:"0 0 4px"}}>Matériel de contrôle utilisé — dates de validité</p>
       <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 10px"}}>Imprimé en fin de rapport, une ligne par appareil. Vérifiez les dates avant chaque envoi.</p>
       <textarea value={data.materiel_controle||""} onChange={e=>upd("materiel_controle",e.target.value)} style={{...S.inp,minHeight:110,resize:"vertical",fontFamily:"inherit"}}/>
@@ -2947,7 +2990,7 @@ function PageRapport({ficheId,techs,onRetour,typeMateriel,statutChantier,onStatu
         <button type="button" style={{...S.p2,fontSize:12,padding:"6px 12px"}} onClick={memoriserMateriel}>💾 Garder cette liste comme liste habituelle</button>
         {modeleOk&&<span style={{fontSize:12,color:"#22863A"}}>✓ Liste mémorisée pour les prochains rapports</span>}
       </div>
-    </div>
+    </div>}
 
     <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:14}}>
       <button style={S.p2} onClick={enregistrer} disabled={saving||!ficheId}>{saving?"💾 ...":"💾 Enregistrer le rapport"}</button>

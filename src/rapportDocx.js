@@ -180,6 +180,7 @@ export async function genRapportDocx(v, data, photos) {
   // chargement des images (une seule fois par URL)
   const cache = new Map();
   const urls = new Set();
+  if (M.couverture.photo) urls.add(M.couverture.photo);
   M.chapitres.forEach((ch) => ch.blocs.forEach((b) => {
     if (b.url) urls.add(b.url);
     if (b.items) b.items.forEach((it) => it.url && urls.add(it.url));
@@ -229,11 +230,13 @@ export async function genRapportDocx(v, data, photos) {
       }),
     ],
   }));
-  couv.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 5200, after: 120 }, children: [run(M.couverture.titre, { bold: true, size: 52, color: TEXTE })] }));
-  couv.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: [run(M.couverture.objet, { bold: true, size: 36, color: BLEU })] }));
+  const photoCouv = M.couverture.photo ? img(M.couverture.photo) : null; // page de garde avec photo (rapport pompe DIP) : titre plus haut, photo au centre
+  couv.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: photoCouv ? 1500 : 5200, after: 120 }, children: [run(M.couverture.titre, { bold: true, size: 52, color: TEXTE })] }));
+  if (M.couverture.objet) couv.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: [run(M.couverture.objet, { bold: true, size: 36, color: BLEU })] }));
   if (M.couverture.serie) couv.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: [run(M.couverture.serie, { size: 26, color: GRIS })] }));
   if (M.couverture.cible) couv.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 0 }, children: [run(M.couverture.cible, { size: 24, color: TEXTE })] }));
-  couv.push(new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { before: 1500, after: 0 }, children: [run(M.couverture.date, { size: 88, color: "1F2937" })] }));
+  if (photoCouv) couv.push(imageParagraph(photoCouv, cm(11), cm(8.5)));
+  couv.push(new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { before: photoCouv ? 500 : 1500, after: 0 }, children: [run(M.couverture.date, { size: 88, color: "1F2937" })] }));
 
   // ── 2. identification + sommaire ──
   const id = [];
@@ -241,7 +244,7 @@ export async function genRapportDocx(v, data, photos) {
   M.societe.adresse.forEach((l) => id.push(new Paragraph({ spacing: { after: 0 }, children: [run(l, { size: 20, color: TEXTE })] })));
   id.push(new Paragraph({ spacing: { after: 0 }, children: [run("Tél : " + M.societe.tel, { size: 20 })] }));
   id.push(new Paragraph({ spacing: { after: 280 }, children: [run(M.societe.mail + "   ·   " + M.societe.site, { size: 20, color: BLEU })] }));
-  id.push(new Paragraph({ spacing: { after: 160 }, border: { bottom: { style: BorderStyle.SINGLE, size: 10, color: VERT, space: 4 } }, children: [run("Rapport d'entretien", { bold: true, size: 34, color: BLEU })] }));
+  id.push(new Paragraph({ spacing: { after: 160 }, border: { bottom: { style: BorderStyle.SINGLE, size: 10, color: VERT, space: 4 } }, children: [run(M.titreIdentite || "Rapport d'entretien", { bold: true, size: 34, color: BLEU })] }));
   if (M.identite.length) { id.push(tableauIdentite(M.identite)); }
   id.push(new Paragraph({ keepNext: true, spacing: { before: 360, after: 120 }, children: [run("Sommaire", { bold: true, size: 26, color: BLEU })] }));
   M.sommaire.forEach((s) => id.push(new Paragraph({ spacing: { after: 70 }, indent: { left: 200 }, children: [run(s, { size: 22 })] })));
@@ -266,7 +269,7 @@ export async function genRapportDocx(v, data, photos) {
       } else if (b.t === "img") {
         const im = img(b.url);
         if (im) {
-          const dim = b.taille === "grande" ? [14, 8.2] : b.taille === "petite" ? [11.5, 6.6] : [13, 8];
+          const dim = b.taille === "grande" ? [14, 8.2] : b.taille === "petite" ? [11.5, 6.6] : b.taille === "mini" ? [9.5, 5.2] : [13, 8];
           corps.push(imageParagraph(im, cm(dim[0]), cm(dim[1]), { legende: b.legende }));
           if (b.legende) corps.push(legende(b.legende));
         }
@@ -287,7 +290,7 @@ export async function genRapportDocx(v, data, photos) {
   const marges = { top: 1560, bottom: 1200, left: MARGE_LR, right: MARGE_LR, header: 520, footer: 480 };
   const doc = new Document({
     creator: "PMV Services",
-    title: "Rapport d'entretien " + (M.de || ""),
+    title: (M.titreIdentite || "Rapport d'entretien") + " " + (M.de || ""),
     styles: { default: { document: { run: { font: FONT, size: 22, color: TEXTE } } } },
     sections: [{
       properties: { titlePage: true, page: { size: { width: 11906, height: 16838 }, margin: marges } },

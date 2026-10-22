@@ -68,6 +68,30 @@ export const ANCRES_GENERIQUE = [
   { id: "conclusion.materiel", titre: "Liste du matériel utilisé et date de validité", niveau: 2 },
 ];
 
+// pompe et ventilateur : tout le contenu vient des blocs ajoutés par la Maintenance ; seule la conclusion (signatures, matériel de contrôle) est prévue
+// Pompe DIP (rapport de travaux, d'après les rapports DE7748 / DE7790 / DE7791 de Veolia) : trois relevés en photo et une conclusion
+export const ANCRES_DIP = [
+  { id: "ancien", titre: "Relevé d'information du moteur à l'arrivée", niveau: 1 },
+  { id: "pompe", titre: "Pompe", niveau: 1 },
+  { id: "nouveau", titre: "Relevé d'information du nouveau moteur", niveau: 1 },
+  { id: "conclusion", titre: "Conclusion", niveau: 1 },
+];
+export const estPompeDip = (v) => String((v && v.famille_pompe) || "").trim().toUpperCase() === "DIP";
+export const DIP_DESCRIPTIF_DEFAUT = "Remplacement du moteur et modification de la roue et du flasque pour adapter une garniture mécanique plus fiable et moins onéreuse";
+export const DIP_POMPE_TEXTE_DEFAUT = "Rénovation de la pompe DIP : rebaguage de la flasque";
+// phrases de conclusion proposées au départ (modifiables) : moteur changé (d'après la fiche), usinage, garniture standard (références prises dans la fiche : type + diamètre), jeu des couteaux
+export function dipConclusionDefaut(v) {
+  v = v || {};
+  const ref = (t, d) => [clean(t), String(d == null ? "" : d).trim()].filter(Boolean).join("");
+  const mobile = ref(v.type_gm_mobile, v.diametre_gm_mobile), fixe = ref(v.type_gm_fixe, v.diametre_gm_fixe);
+  const l = [];
+  if (v.moteur_neuf === "Oui") l.push("Le moteur électrique a été changé.");
+  l.push("Usinage de l'ensemble de la roue et du flasque pour la mise en place d'une garniture mécanique standard.");
+  l.push("Mise en place d'une garniture standard." + (mobile && fixe ? " Réf. : " + mobile + " et " + fixe : (mobile || fixe) ? " Réf. : " + (mobile || fixe) : ""));
+  l.push("Réduction du jeu des couteaux pour éviter le passage de la filasse.");
+  return l.join("\n");
+}
+
 function clean(val) { return (val || "").replace("Autre:", "").trim(); }
 function has(val) { return val !== undefined && val !== null && String(val).trim() !== ""; }
 
@@ -95,7 +119,7 @@ export function construireRapport(v, data, photos) {
   v = v || {}; data = data || {}; photos = photos || {};
   const meta = photos._meta || null;
   const ctxPerso = { v, champs: (meta && meta.champs) || {}, fiche: (meta && meta.fiche) || [] };
-  if (meta && typeGenerique(meta.type)) return construireRapportGenerique(v, data, meta, ctxPerso);
+  if (meta && typeGenerique(meta.type)) return meta.type === "Pompe" && estPompeDip(v) ? construireRapportDip(v, data, photos, meta, ctxPerso) : construireRapportGenerique(v, data, meta, ctxPerso);
   const txt = (id) => clean(v[id]);
   const num = (id, unite) => (has(v[id]) ? String(v[id]).trim() + (unite ? " " + unite : "") : "");
   // valeur d'isolement "346_GΩ" -> "346 GΩ"
@@ -309,6 +333,61 @@ export function construireRapport(v, data, photos) {
     sommaire: chapitres.map((c, i) => (i + 1) + ". " + c.titre),
   };
   return meta && meta.type ? appliquerChapitres(modele, configDuType(meta.type, meta.config), ctxPerso, ANCRES_MOTEUR) : modele;
+}
+
+// Rapport d'une pompe DIP : page de garde avec la photo de l'ensemble, identification, puis relevé du moteur à l'arrivée, pompe, relevé du nouveau moteur et conclusion.
+// photos : dip_vue (couverture), dip_ancien, dip_pompe, dip_nouveau ; textes : data.dip_pompe_texte, data.dip_conclusion (une phrase par ligne)
+function construireRapportDip(v, data, photos, meta, ctxPerso) {
+  const txt = (id) => clean(v[id]);
+  const maintenant = new Date();
+  const moisAnnee = has(data.mois_annee) ? String(data.mois_annee).trim() : String(maintenant.getMonth() + 1).padStart(2, "0") + "/" + maintenant.getFullYear();
+  const fr = (d) => { try { const x = new Date(d); return isNaN(x.getTime()) ? "" : x.toLocaleDateString("fr-FR"); } catch (e) { return ""; } };
+  const dateRapport = data.date ? fr(data.date) : fr(maintenant);
+  const de = txt("de");
+  const couverture = { titre: "Rapport de travaux" + (de ? " " + de : ""), objet: "", serie: "", cible: "", date: moisAnnee, photo: (photos && photos.dip_vue) || null };
+  const identite = [
+    ["Client", txt("client")],
+    ["Référence", txt("materiel_lieu")],
+    ["N° de chantier", de],
+    ["N° de commande", data.commande_achat],
+    ["Date d'intervention", moisAnnee],
+    ["Descriptif des travaux réalisés", data.descriptif_travaux],
+  ].filter((f) => has(f[1])).map((f) => ({ k: f[0], v: String(f[1]).trim() }));
+  const chapitres = [];
+  const ajouter = (id, titre, blocs) => { if (blocs.length) chapitres.push({ id, titre, blocs }); };
+  const photo = (cle) => (photos && photos[cle] ? [{ t: "img", url: photos[cle], taille: "mini" }] : []);
+  ajouter("ancien", "Relevé d'information du moteur à l'arrivée", photo("dip_ancien"));
+  {
+    const b = [];
+    const t = has(data.dip_pompe_texte) ? String(data.dip_pompe_texte).trim() : (photos && photos.dip_pompe ? DIP_POMPE_TEXTE_DEFAUT : "");
+    if (t) b.push({ t: "para", parts: [t] });
+    photo("dip_pompe").forEach((x) => b.push(x));
+    ajouter("pompe", "Pompe", b);
+  }
+  ajouter("nouveau", "Relevé d'information du nouveau moteur", photo("dip_nouveau"));
+  {
+    const b = [];
+    const lignes = String(has(data.dip_conclusion) ? data.dip_conclusion : "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (lignes.length) b.push({ t: "lignes", lignes: lignes.map((s) => [s]) });
+    const sign = [];
+    if (has(data.certifie_par)) sign.push(["Entretien certifié conforme par " + listeEt(data.certifie_par) + " le " + dateRapport]);
+    if (has(data.realise_par)) sign.push(["Rapport réalisé par " + listeEt(data.realise_par) + " le " + dateRapport]);
+    if (sign.length) b.push({ t: "lignes", lignes: sign, espace: true });
+    ajouter("conclusion", "Conclusion", b);
+  }
+  const modele = {
+    objet: "Pompe DIP",
+    de,
+    client: txt("client"),
+    entete: "Rapport de travaux — " + [de, txt("client")].filter(Boolean).join(" — "),
+    titreIdentite: "Rapport de travaux",
+    couverture,
+    societe: SOCIETE,
+    identite,
+    chapitres,
+    sommaire: chapitres.map((c, i) => (i + 1) + ". " + c.titre),
+  };
+  return appliquerChapitres(modele, configDuType(meta.type, meta.config), ctxPerso, ANCRES_DIP);
 }
 
 // Rapport d'une pompe, d'un ventilateur… : couverture, identification et conclusion automatiques, tout le reste vient de la Maintenance

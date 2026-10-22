@@ -291,6 +291,9 @@ export function genRapportHtml(v,data,photos,images,opts){
   ".cover .logo{position:absolute;left:22mm;top:20mm;height:34mm;}"+
   ".cover svg{position:absolute;left:0;bottom:0;width:210mm;height:"+Math.round(210*BANDE.h/BANDE.w)+"mm;}"+
   ".cover .titre{position:absolute;left:0;right:0;top:150mm;text-align:center;}"+
+  ".cover.avecphoto .titre{top:58mm;}"+
+  ".cover .photo{position:absolute;left:0;right:0;top:88mm;text-align:center;}"+
+  ".cover .photo img{max-width:130mm;max-height:100mm;}"+
   ".cover .titre .t1{font-size:26pt;font-weight:700;}"+
   ".cover .titre .t2{font-size:18pt;font-weight:700;color:#1B4F8A;margin-top:3mm;}"+
   ".cover .titre .t3{font-size:13pt;color:#6B7280;margin-top:2mm;}"+
@@ -309,7 +312,7 @@ export function genRapportHtml(v,data,photos,images,opts){
   "ol.som{list-style:none;padding-left:6px;}ol.som li{margin-bottom:4px;}"+
   "figure{margin:6px 0 10px;text-align:center;page-break-inside:avoid;}"+
   "figure img{max-width:100%;display:inline-block;}"+
-  "figure.grande img{max-height:76mm;}figure.moyenne img{max-height:80mm;max-width:135mm;}figure.petite img{max-height:66mm;max-width:115mm;}"+
+  "figure.grande img{max-height:76mm;}figure.moyenne img{max-height:80mm;max-width:135mm;}figure.petite img{max-height:66mm;max-width:115mm;}figure.mini img{max-height:52mm;max-width:95mm;}"+
   "figcaption{font-size:8.5pt;color:#6B7280;font-style:italic;margin-top:2px;}"+
   ".paire{display:flex;gap:6mm;justify-content:center;page-break-inside:avoid;margin-bottom:8px;}"+
   ".paire figure{flex:1;max-width:50%;}.paire figure img{max-height:88mm;}"+
@@ -319,16 +322,16 @@ export function genRapportHtml(v,data,photos,images,opts){
   "@media print{body{background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}"+
     ".page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none;}.cover{margin:0;box-shadow:none;}.topbar{display:none;}}";
 
-  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Rapport d'entretien "+esc(M.de)+"</title><style>"+css+(edition?EDITION_CSS:"")+"</style></head><body>";
+  var html="<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>"+esc(M.titreIdentite?M.titreIdentite:"Rapport d'entretien")+" "+esc(M.de)+"</title><style>"+css+(edition?EDITION_CSS:"")+"</style></head><body>";
 
   // Page de garde
   var svg="<svg viewBox='0 0 "+BANDE.w+" "+BANDE.h+"' preserveAspectRatio='none'>"+BANDE.formes.map(function(f){return "<polygon points='"+f.pts.map(function(p){return p[0]+","+p[1];}).join(" ")+"' fill='"+f.fill+"'/>";}).join("")+"</svg>";
-  html+="<section class='cover'><img class='logo' src='"+LOGO_B64+"'/>"+svg+"<div class='titre'><div class='t1'>"+esc(M.couverture.titre)+"</div><div class='t2'>"+esc(M.couverture.objet)+"</div>"+(M.couverture.serie?"<div class='t3'>"+esc(M.couverture.serie)+"</div>":"")+(M.couverture.cible?"<div class='t4'>"+esc(M.couverture.cible)+"</div>":"")+"</div><div class='date'>"+esc(M.couverture.date)+"</div></section>";
+  html+="<section class='cover"+(M.couverture.photo?" avecphoto":"")+"'><img class='logo' src='"+LOGO_B64+"'/>"+svg+"<div class='titre'><div class='t1'>"+esc(M.couverture.titre)+"</div>"+(M.couverture.objet?"<div class='t2'>"+esc(M.couverture.objet)+"</div>":"")+(M.couverture.serie?"<div class='t3'>"+esc(M.couverture.serie)+"</div>":"")+(M.couverture.cible?"<div class='t4'>"+esc(M.couverture.cible)+"</div>":"")+"</div>"+(M.couverture.photo?"<div class='photo'><img src='"+esc(images[M.couverture.photo]||M.couverture.photo)+"' crossorigin='anonymous'/></div>":"")+"<div class='date'>"+esc(M.couverture.date)+"</div></section>";
 
   // Identification + sommaire
   var s=M.societe;
   html+="<section class='page force'>"+topbar+"<div class='societe'><div class='nom'>PMV <span>Services</span></div>"+s.adresse.map(function(l){return "<div>"+esc(l)+"</div>";}).join("")+"<div>Tél : "+esc(s.tel)+"</div><div class='web'>"+esc(s.mail)+" &nbsp;·&nbsp; "+esc(s.site)+"</div></div>";
-  html+="<h1>Rapport d'entretien</h1>";
+  html+="<h1>"+esc(M.titreIdentite||"Rapport d'entretien")+"</h1>";
   if(M.identite.length)html+="<table class='id'>"+M.identite.map(function(l){return "<tr><td class='k'>"+esc(l.k)+"</td><td>"+esc(l.v).replace(/\n/g,"<br/>")+"</td></tr>";}).join("")+"</table>";
   html+="<h2>Sommaire</h2><ol class='som'>"+M.sommaire.map(function(t){return "<li>"+esc(t)+"</li>";}).join("")+"</ol></section>";
 
@@ -346,7 +349,7 @@ export function genRapportHtml(v,data,photos,images,opts){
       else if(b.t==="sous")page+="<h2>"+esc(b.txt)+"</h2>";
       else if(b.t==="para")page+="<p>"+parts(b.parts)+"</p>";
       else if(b.t==="lignes")page+="<div class='lignes"+(b.espace?" espace":"")+(b.petit?" petit":"")+"'>"+b.lignes.map(function(l){return "<div class='l'>"+parts(l)+"</div>";}).join("")+"</div>";
-      else if(b.t==="img")page+=fig(b.url,b.legende,b.taille==="grande"?"grande":(b.taille==="petite"?"petite":"moyenne"));
+      else if(b.t==="img")page+=fig(b.url,b.legende,b.taille==="grande"?"grande":(b.taille==="petite"?"petite":(b.taille==="mini"?"mini":"moyenne")));
       else if(b.t==="paire")page+="<div class='paire'>"+b.items.map(function(it){return fig(it.url,it.legende,"");}).join("")+"</div>";
       if(edition)page=page.slice(0,debut)+ed(page.slice(debut),courant,b);
     });
@@ -379,6 +382,7 @@ export function reduireImage(url,max,qualite){
 export async function genRapportHtmlLeger(v,data,photos){
   var M=construireRapport(v,data,photos);
   var urls=[];
+  if(M.couverture.photo)urls.push(M.couverture.photo);
   M.chapitres.forEach(function(ch){ch.blocs.forEach(function(b){if(b.url)urls.push(b.url);(b.items||[]).forEach(function(it){if(it.url)urls.push(it.url);});});});
   var map={};
   await Promise.all(urls.filter(function(u,i){return urls.indexOf(u)===i;}).map(function(u){return reduireImage(u,1600,0.8).then(function(d){if(d)map[u]=d;});}));
