@@ -22,6 +22,7 @@ import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT, estPompeDip, DIP_DESCRI
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris, SourcesPhoto} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
 import {CHAMPS_CHEMINEE, ETAPES_CHEMINEE} from "./Cheminee";
+import {ETAPE_QUALITE, champsQualite} from "./controleQualite";
 import {TYPE_CHEMINEE, prefixeNumero, normaliserNumero} from "./railClients";
 import PageStockRail, {synchroniserIsolateursRail, supprimerMouvementsRailFiche, chargerClientsRail} from "./Rail";
 import {appliquerConfig, chargerConfig, surChangementConfig, appliquerStatuts} from "./configFiches";
@@ -229,19 +230,20 @@ const CHAMPS_INFOS_ELECTRIQUES_2=suffixerChamps(
  });
 const CHAMPS_ROTATION_AVANT_2=suffixerChamps(CHAMPS_ROTATION_AVANT.filter(c=>c.id!=="moteur_neuf"),"_2");
 // Moteur neuf annoncé dès les infos électriques : un petit moteur qui ne marche plus est changé directement,
-// la fiche s'arrête après cette étape (rien à mesurer ni à démonter). Ne concerne que le moteur seul / "Autre matériel".
-const CHAMP_MOTEUR_NEUF_DEBUT={id:"moteur_neuf_debut",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,note:"« Oui » = moteur changé directement, la fiche s'arrête après cette étape"};
+// la fiche ne continue qu'avec le contrôle qualité (rien à mesurer ni à démonter). Ne concerne que le moteur seul / "Autre matériel".
+const CHAMP_MOTEUR_NEUF_DEBUT={id:"moteur_neuf_debut",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,note:"« Oui » = moteur changé directement, il ne reste ensuite que le contrôle qualité"};
 // Fiche Moteur seulement (pas la pompe ni le ventilateur) : si le moteur neuf est essayé, la fiche continue avec « Information des essais après remontage » (mêmes champs que d'habitude)
 const CHAMPS_MOTEUR_NEUF_ESSAIS=[
-  {...CHAMP_MOTEUR_NEUF_DEBUT,note:"« Oui » = moteur changé directement ; la fiche s'arrête après cette étape, sauf si on essaie le moteur neuf (question suivante)"},
-  {id:"essais_moteur_neuf",label:"Essais du moteur neuf ?",type:"oui_non",required:true,condition:v=>v.moteur_neuf_debut==="Oui",note:"« Oui » : la fiche continue avec « Information des essais après remontage »"},
+  {...CHAMP_MOTEUR_NEUF_DEBUT,note:"« Oui » = moteur changé directement ; il ne reste ensuite que le contrôle qualité, sauf si on essaie le moteur neuf (question suivante)"},
+  {id:"essais_moteur_neuf",label:"Essais du moteur neuf ?",type:"oui_non",required:true,condition:v=>v.moteur_neuf_debut==="Oui",note:"« Oui » : la fiche continue avec « Information des essais après remontage », puis le contrôle qualité"},
 ];
 const masquerSiMoteurNeufDebut=c=>{
   if(c.id==="tech_elec")return c;
   const cond=c.condition;
   return {...c,condition:v=>v.moteur_neuf_debut!=="Oui"&&champVisible({condition:cond},v)};
 };
-function etapesMoteurPour(v){
+function etapesMoteurPour(v){return [...etapesMoteurAvantQualite(v),ETAPE_QUALITE];} // « Contrôle qualité » (controleQualite.js) : dernière étape de toutes les fiches atelier
+function etapesMoteurAvantQualite(v){
   if(v&&v.moteur_neuf_debut==="Oui")return v.essais_moteur_neuf==="Oui"?[ETAPES[0],ETAPES[1],ETAPES[4]]:[ETAPES[0],ETAPES[1]];
   if(v&&v.essai_vide_avant==="Non"&&(v.moteur_neuf==="Non"||v.moteur_neuf===NE_SAIT_PAS)){
     return [ETAPES[0],ETAPES[1],ETAPES[2],ETAPE_ELEC_2,ETAPE_ROTATION_2,ETAPES[3],ETAPES[4]];
@@ -332,11 +334,11 @@ const CHAMPS={
     {id:"vib_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_ar_apres"},
     {id:"skf_av_rem",label:"Screen SKF avant remontage",type:"photo_skf",categorie:"Screen SKF avant au remontage",required:false},{id:"skf_ar_rem",label:"Screen SKF arrière remontage",type:"photo_skf",categorie:"Screen SKF arrière au remontage",required:false},{id:"resserage_plaque",label:"Resserrage plaque à bornes",type:"text",required:false,dictee:true},{id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
     {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true,dictee:true},
-    {id:"controle_qualite",label:"Contrôle qualité fait",type:"oui_non",required:true},
   ],
+  [ETAPE_QUALITE]:champsQualite("Moteur"),
 }
 
-const ETAPES_POMPE=["Entrée","Infos électriques","Rotation avant démontage moteur","Rotation avant démontage pompe","Matériel au démontage moteur","Mécanique pompe au démontage","Essais après remontage"];
+const ETAPES_POMPE=["Entrée","Infos électriques","Rotation avant démontage moteur","Rotation avant démontage pompe","Matériel au démontage moteur","Mécanique pompe au démontage","Essais après remontage",ETAPE_QUALITE];
 
 const GM_MOBILE_OPTIONS=["NTK","NTKG","NTL","NTLG","NTB","NTBG","Autre"];
 const GM_FIXE_OPTIONS=["CNK","Autre"];
@@ -528,11 +530,11 @@ const CHAMPS_POMPE={
     {id:"vib_p_ar_mms_apres",label:"Vibration arrière — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_p_arriere_apres"},
     {id:"vib_p_ar_ge_apres",label:"Vibration arrière — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_p_arriere_apres"},
     {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true,dictee:true},
-    {id:"controle_qualite",label:"Contrôle qualité fait",type:"oui_non",required:true},
   ],
+  [ETAPE_QUALITE]:champsQualite("Pompe"),
 };;
 
-const ETAPES_REDUCTEUR=["Entrée","Infos électriques","Rotation avant démontage moteur","Rotation avant démontage réducteur","Matériel au démontage moteur","Mécanique réducteur au démontage","Essais après remontage"];
+const ETAPES_REDUCTEUR=["Entrée","Infos électriques","Rotation avant démontage moteur","Rotation avant démontage réducteur","Matériel au démontage moteur","Mécanique réducteur au démontage","Essais après remontage",ETAPE_QUALITE];
 
 const CHAMPS_REDUCTEUR={
   "Entrée":[
@@ -687,8 +689,8 @@ const CHAMPS_REDUCTEUR={
     {id:"vib_r_ar_mms_apres",label:"Vibration arrière réducteur — mm/s",type:"mesure",unite:"mm/s",required:true,groupe:"vib_r_arriere_apres"},
     {id:"vib_r_ar_ge_apres",label:"Vibration arrière réducteur — GE",type:"mesure",unite:"GE",required:true,groupe:"vib_r_arriere_apres"},
     {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true,dictee:true},
-    {id:"controle_qualite",label:"Contrôle qualité fait",type:"oui_non",required:true},
   ],
+  [ETAPE_QUALITE]:champsQualite("Moto-réducteur"),
 };;
 
 // condition d'affichage : fonction, {champ, valeur} (égal à), {champ, sauf} (différent de, y compris si pas encore répondu) ou liste de ces conditions (toutes vraies)
@@ -3337,7 +3339,7 @@ function etapesVentilateurPour(v){
   if(!seul){e.push("Infos électriques");if(!moteurNeuf)e.push("Rotation avant démontage moteur");}
   e.push("Rotation avant démontage ventilateur");
   if(!seul&&!moteurNeuf)e.push("Matériel au démontage moteur");
-  e.push("Ventilateur au démontage","Essais après remontage");
+  e.push("Ventilateur au démontage","Essais après remontage",ETAPE_QUALITE);
   return e;
 }
 
@@ -3516,8 +3518,8 @@ const CHAMPS_VENTILATEUR={
     {id:"debit_apres_v",label:"Débit mesuré",type:"mesure",unite:"m³/h",required:false},
     {id:"tech_essai",label:"Qui a essayé",type:"technicien",required:true},
     {id:"travaux_effectue",label:"Travaux effectué",type:"text",required:true,dictee:true},
-    {id:"controle_qualite",label:"Contrôle qualité fait",type:"oui_non",required:true},
   ],
+  [ETAPE_QUALITE]:champsQualite("Ventilateur"),
 };
 
 // Champs et étapes d'une fiche selon son type (utilisé par la fiche, l'aperçu, le PDF et les exports ZIP)
@@ -3566,6 +3568,12 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const etapesActives=insererEtapeSuiviDevis(etapesPourType(typeMateriel,v),v,typeMateriel||"Moteur");
   const matDefaut=typeMateriel===TYPE_CHEMINEE?"Cheminée":"Moteur";
   const nrMap={};etapesActives.forEach((nomE,iE)=>{if(v[cleNr(nomE)]==="Oui")nrMap[iE]=true;});
+  // fiche terminée avant l'ajout de l'étape « Contrôle qualité » : toutes les autres étapes sont faites, le contrôle compte comme fait (la fiche reste « Terminée »)
+  useEffect(()=>{
+    const iq=etapesActives.indexOf(ETAPE_QUALITE);
+    if(ficheInit?.statut!=="Terminée"||iq<0)return;
+    setValidees(p=>(p.includes(iq)||!etapesActives.every((_,i)=>i===iq||p.includes(i)))?p:[...p,iq]);
+  },[etapesActives.length,ficheInit]);
   const typeRef=useRef(typeMateriel);typeRef.current=typeMateriel;
   const [avisRail,setAvisRail]=useState(null);
   // modifications non enregistrées : on compare l'état courant au dernier état enregistré (pris 1,2 s après le chargement, le temps des préremplissages automatiques)
