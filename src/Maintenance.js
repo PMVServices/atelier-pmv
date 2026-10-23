@@ -141,8 +141,8 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
   function annuler(){setBrouillon(copie(configActuelle()));setEdition(null);setAjoutApres(null);setMessage(null);}
 
   // ── colonnes du planning ──
-  const statuts=statutsAvecConfig(statutsBase,brouillon.statuts).map(s=>({id:s.id,label:s.label,color:s.color}));
-  const majStatuts=fn=>maj(n=>{const l=statutsAvecConfig(statutsBase,n.statuts).map(s=>({id:s.id,label:s.label,color:s.color}));fn(l);n.statuts=l;});
+  const statuts=statutsAvecConfig(statutsBase,brouillon.statuts).map(s=>({id:s.id,label:s.label,color:s.color,...(s.masque?{masque:true}:{})}));
+  const majStatuts=fn=>maj(n=>{const l=statutsAvecConfig(statutsBase,n.statuts).map(s=>({id:s.id,label:s.label,color:s.color,...(s.masque?{masque:true}:{})}));fn(l);n.statuts=l;});
 
   const pastille=(actif)=>({padding:"6px 12px",borderRadius:18,border:"1.5px solid "+(actif?BLEU:"#D1D5DB"),background:actif?BLEU:"#fff",color:actif?"#fff":"#374151",fontSize:12,fontWeight:600,cursor:"pointer"});
 
@@ -227,10 +227,13 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
 
     {onglet==="planning"&&<div style={CARTE}>
       <b style={{fontSize:14}}>Colonnes du planning (statuts des chantiers)</b>
-      <p style={{fontSize:12,color:"#6B7280",margin:"4px 0 10px"}}>Renommez, changez la couleur, réordonnez ou ajoutez une colonne. Une colonne existante ne se supprime pas (des fiches peuvent s'y trouver) : renommez-la plutôt.</p>
+      <p style={{fontSize:12,color:"#6B7280",margin:"4px 0 10px"}}>Renommez, changez la couleur, réordonnez ou ajoutez une colonne. Une colonne existante ne se supprime pas (des fiches peuvent s'y trouver) : renommez-la plutôt. Case « Masquée par défaut » : la colonne n'apparaît plus dans le Planning tant qu'on ne touche pas son bouton « Afficher … » (comme Terminé et Abandonné) ; la recherche retrouve toujours ses fiches.</p>
       {statuts.map((s,i)=>(<div key={s.id} style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",padding:"6px 0",borderTop:i?"1px solid #EEF1F5":"none"}}>
         <input type="color" value={/^#[0-9a-f]{6}$/i.test(s.color)?s.color:"#6B7280"} onChange={e=>majStatuts(l=>{l[i].color=e.target.value;})} aria-label={"Couleur de "+s.label} style={{width:42,height:36,padding:0,border:"1px solid #D1D5DB",borderRadius:6,background:"#fff"}}/>
         <input type="text" value={s.label} onChange={e=>majStatuts(l=>{l[i].label=e.target.value;})} style={{...INP,flex:"1 1 200px",width:"auto"}}/>
+        {(s.id==="Termine"||s.id==="Abandonne")
+          ?<span style={{fontSize:11,color:"#9CA3AF"}}>toujours masquée par défaut</span>
+          :<label style={{display:"flex",gap:6,alignItems:"center",fontSize:12,color:"#4B5563",cursor:"pointer"}}><input type="checkbox" checked={!!s.masque} onChange={e=>majStatuts(l=>{l[i].masque=e.target.checked;})}/> Masquée par défaut</label>}
         <button type="button" style={BTN_P} disabled={i===0} onClick={()=>majStatuts(l=>{const [x]=l.splice(i,1);l.splice(i-1,0,x);})} aria-label="Monter">▲</button>
         <button type="button" style={BTN_P} disabled={i===statuts.length-1} onClick={()=>majStatuts(l=>{const [x]=l.splice(i,1);l.splice(i+1,0,x);})} aria-label="Descendre">▼</button>
       </div>))}

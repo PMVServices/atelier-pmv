@@ -2060,6 +2060,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
 // ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
 function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche,onNouvelleFiche}){
   const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);
+  const [montres,setMontres]=useState({});const [infoMasque,setInfoMasque]=useState(""); // colonnes « masquées par défaut » (Maintenance) affichées à la demande ; message après un rangement dans l'une d'elles
   const [recherche,setRecherche]=useState("");
   const [dragId,setDragId]=useState(null);const [dragOver,setDragOver]=useState(null);
   const [delaisMap,setDelaisMap]=useState({});
@@ -2078,7 +2079,10 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
     catch(e){setErreurLibre("Enregistrement impossible : "+e.message);return false;}
   }
   // une carte « sans fiche » change de colonne dans la liste du planning, une fiche dans la base des fiches
+  const masquesPerso=STATUTS_CHANTIER.filter(x=>x.masque&&x.id!=="Termine"&&x.id!=="Abandonne"); // colonnes cachées par la Maintenance (case « Masquée par défaut »)
   function onStatutChange(id,statut){
+    const cachee=masquesPerso.find(x=>x.id===statut);
+    if(cachee&&!montres[cachee.id]){setInfoMasque("Carte rangée dans « "+cachee.label+" » : cette colonne est masquée, touchez « Afficher "+cachee.label+" » pour la voir.");setTimeout(()=>setInfoMasque(""),8000);}
     if(estIdLibre(id)){const avant=libres;setLibres(l=>l.map(e=>e.id===id?{...e,statut}:e));changerLibres(l=>l.map(e=>e.id===id?{...e,statut}:e)).then(ok=>{if(!ok)setLibres(avant);});}
     else onStatutFiche(id,statut);
   }
@@ -2113,7 +2117,7 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
   // même masqués, pour retrouver un N° de chantier n'importe où. Sans recherche, comportement normal.
   const statuts=rq
     ?STATUTS_CHANTIER.filter(s=>(parStatut[s.id]||[]).length>0)
-    :(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");return s;})();
+    :(()=>{let s=STATUTS_CHANTIER;if(!showTermine)s=s.filter(x=>x.id!=="Termine");if(!showAbandonne)s=s.filter(x=>x.id!=="Abandonne");return s.filter(x=>!masquesPerso.includes(x)||montres[x.id]);})();
   const devisCount=(parStatut["Devis"]||[]).filter(x=>!x.libre).length;
   const techs=[...new Set(fiches.map(f=>f.tech_entree).filter(Boolean))];
 
@@ -2161,8 +2165,10 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
         </select>
         <button onClick={()=>setShowTermine(!showTermine)} style={{...S.p2,fontSize:12,padding:"5px 12px"}}>{showTermine?"Masquer Terminé":"Afficher Terminé"}</button>
         <button onClick={()=>setShowAbandonne(!showAbandonne)} style={{...S.p2,fontSize:12,padding:"5px 12px",color:"#9B59B6",borderColor:"#9B59B6"}}>{showAbandonne?"Masquer Abandonné":"Afficher Abandonné"}</button>
+        {masquesPerso.map(s=><button key={s.id} onClick={()=>setMontres(m=>({...m,[s.id]:!m[s.id]}))} style={{...S.p2,fontSize:12,padding:"5px 12px",color:s.color,borderColor:s.color}}>{montres[s.id]?"Masquer":"Afficher"} {s.label} ({(parStatut[s.id]||[]).length})</button>)}
       </div>
     </div>
+    {infoMasque&&<div role="status" style={{background:"#EEF4FF",border:"1px solid #AFC6E6",color:"#1B4F8A",borderRadius:8,padding:"8px 12px",fontSize:13,marginBottom:10}}>{infoMasque}</div>}
     {!lecture&&<SynchroAgenda agenda={agenda} onChange={setAgenda}/>}
     {programmer&&<ProgrammerAgenda cible={programmer.cible} existant={programmer.existant} nomPersonne={moiP?nomCourt(moiP):""} admin={!!(moiP&&moiP.profil==="admin")} onFermer={()=>setProgrammer(null)} onChange={setAgenda}/>}
     {erreurLibre&&<div style={{...S.alert,marginBottom:10}}>⚠ Chantiers sans fiche : {erreurLibre}</div>}

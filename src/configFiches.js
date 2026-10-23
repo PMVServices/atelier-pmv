@@ -5,7 +5,7 @@
 //                                                                       poser un seuil avec alerte sur une case numérique : seuil = {max, min, msg} (voir seuils.js)
 //       deplace[id] = {apres}                                   → déplacer un champ après un autre (« __debut » = en tête de l'étape)
 //       ajouts      = [{id, etape, apres, def:{type,label,…}}]  → champs ajoutés à un endroit précis
-//   - colonnes du planning (statuts de chantier) : statuts = [{id,label,color}] dans l'ordre voulu
+//   - colonnes du planning (statuts de chantier) : statuts = [{id,label,color,masque?}] dans l'ordre voulu ; masque : colonne cachée du Planning tant qu'on ne touche pas « Afficher … » (comme Terminé et Abandonné)
 // Sans configuration, rien ne change : les définitions du code sont renvoyées telles quelles.
 import {SUPA_URL, H, db} from "./supabase";
 
@@ -162,8 +162,8 @@ export function statutsAvecConfig(base,cfgStatuts){
   const liste=base.map(s=>({...s}));
   if(!Array.isArray(cfgStatuts)||!cfgStatuts.length)return liste;
   const par=new Map(cfgStatuts.map(x=>[x.id,x]));
-  liste.forEach(s=>{const o=par.get(s.id);if(o){if(o.label)s.label=o.label;if(o.color){s.color=o.color;s.bg=teinte(o.color);}}});
-  cfgStatuts.forEach(o=>{if(!liste.find(s=>s.id===o.id))liste.push({id:o.id,label:o.label||"Nouveau statut",color:o.color||"#6B7280",bg:teinte(o.color||"#6B7280")});});
+  liste.forEach(s=>{const o=par.get(s.id);if(o){if(o.label)s.label=o.label;if(o.color){s.color=o.color;s.bg=teinte(o.color);}if(o.masque)s.masque=true;}});
+  cfgStatuts.forEach(o=>{if(!liste.find(s=>s.id===o.id))liste.push({id:o.id,label:o.label||"Nouveau statut",color:o.color||"#6B7280",bg:teinte(o.color||"#6B7280"),...(o.masque?{masque:true}:{})});});
   // un statut ajouté par le code après la publication de la configuration (ex. « Rapport à faire ») se range juste après le statut qui le précède dans le code
   const rangCfg=id=>cfgStatuts.findIndex(x=>x.id===id);
   const rang=id=>{
