@@ -1,8 +1,8 @@
 // Fenêtre « 📅 Programmer » du Planning : choisit le travail (démontage / remontage / peinture), la date, l'heure et l'agenda Google, puis crée (ou déplace, ou supprime)
 // l'événement « Atelier DE7544 POMPE remontage ». Voir googleAgenda.js pour le principe (connexion Google dans le navigateur, aucun serveur).
-import React, {useState, useEffect} from "react";
+import React, {useState, useEffect, useRef} from "react";
 import {TRAVAUX, travailDepuisStatut, titreEvenement, ajouterHeures, lienPreRempli, estConnecte, connecter, listerAgendas, creerEvenement, majEvenement,
-  supprimerEvenement, modifierAgenda, lireClientId, ecrireClientId} from "./googleAgenda";
+  supprimerEvenement, modifierAgenda, lireClientId, ecrireClientId, synchroniserAgenda, enregistrerChangements} from "./googleAgenda";
 
 const BLEU = "#1B4F8A";
 const INP = {width:"100%",padding:"9px 10px",borderRadius:8,border:"1.5px solid #D1D5DB",fontSize:15,boxSizing:"border-box",background:"#fff",fontFamily:"inherit"};
@@ -18,8 +18,8 @@ export default function ProgrammerAgenda({cible, existant, nomPersonne, admin, o
   const [agendas, setAgendas] = useState(null);
   const [travail, setTravail] = useState(existant ? existant.travail : travailDepuisStatut(cible.statut));
   const [jour, setJour] = useState(existant ? existant.jour : aujourdhui());
-  const [debut, setDebut] = useState(existant ? existant.debut : "08:00");
-  const [fin, setFin] = useState(existant ? existant.fin : "10:00");
+  const [debut, setDebut] = useState(existant ? existant.debut || "08:00" : "08:00");
+  const [fin, setFin] = useState(existant ? existant.fin || "10:00" : "10:00");
   const [calId, setCalId] = useState(existant ? existant.calId : "");
   const [invites, setInvites] = useState("");
   const [occupe, setOccupe] = useState(false);
@@ -58,10 +58,11 @@ export default function ProgrammerAgenda({cible, existant, nomPersonne, admin, o
     const evt = {titre, jour, debut, fin, details, invites: invites.trim()};
     try {
       let e, ancien = null;
-      if (existant && existant.calId === calId) e = await majEvenement(calId, existant.id, evt);
-      else { e = await creerEvenement(calId, evt); if (existant) ancien = existant; }
+      const garde = existant && !existant.supprime && existant.calId === calId; // supprimé dans Google : on en crée un nouveau
+      if (garde) e = await majEvenement(calId, existant.id, evt);
+      else { e = await creerEvenement(calId, evt); if (existant && !existant.supprime) ancien = existant; }
       if (ancien) { try { await supprimerEvenement(ancien.calId, ancien.id); } catch (x) { /* l'ancien événement reste à supprimer à la main dans Google */ } }
-      const entree = {id: existant && existant.calId === calId ? existant.id : e.id, calId, calNom: nomAgenda(calId), travail, jour, debut, fin, titre, lien: e.htmlLink || "", par: nomPersonne || "", cree: new Date().toISOString()};
+      const entree = {id: garde ? existant.id : e.id, calId, calNom: nomAgenda(calId), travail, jour, debut, fin, titre, lien: e.htmlLink || "", par: nomPersonne || "", cree: new Date().toISOString()};
       const nouveau = await modifierAgenda(a => { const l = (a[cible.id] || []).filter(x => x.id !== (existant ? existant.id : entree.id) && x.id !== entree.id); l.push(entree); return {...a, [cible.id]: l}; });
       onChange(nouveau); onFermer();
     } catch (e) {
@@ -83,7 +84,7 @@ export default function ProgrammerAgenda({cible, existant, nomPersonne, admin, o
   return (<div style={{position: "fixed", inset: 0, background: "rgba(15,23,42,.55)", zIndex: 400, display: "flex", alignItems: "flex-start", justifyContent: "center", padding: "12px", overflowY: "auto"}} onClick={e => { if (e.target === e.currentTarget && !occupe) onFermer(); }}>
     <div role="dialog" aria-label="Programmer dans l'agenda" style={{background: "#fff", borderRadius: 14, width: "100%", maxWidth: 520, padding: "16px 18px 20px", boxShadow: "0 12px 40px rgba(0,0,0,.3)", margin: "auto 0"}}>
       <div style={{display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10}}>
-        <h2 style={{fontSize: 18, margin: 0}}>📅 {existant ? "Modifier l'événement" : "Programmer dans l'agenda"}</h2>
+        <h2 style={{fontSize: 18, margin: 0}}>📅 {existant ? (existant.supprime ? "Reprogrammer l'événement" : "Modifier l'événement") : "Programmer dans l'agenda"}</h2>
         <button type="button" onClick={onFermer} aria-label="Fermer" style={{background: "#F3F4F6", border: 0, borderRadius: 10, width: 44, height: 44, fontSize: 18, cursor: "pointer"}}>✕</button>
       </div>
       <p style={{margin: "8px 0 0", fontSize: 14, fontWeight: 700, color: BLEU, overflowWrap: "anywhere"}} data-testid="titre-evenement">{titre}</p>
@@ -153,5 +154,53 @@ export default function ProgrammerAgenda({cible, existant, nomPersonne, admin, o
         </div>
       </div>}
     </div>
+  </div>);
+}
+
+// Bouton « 🔄 Synchroniser avec l'agenda » du Planning : relit dans Google les événements programmés depuis l'appli et met les cartes à jour (jour, heures, titre, événement supprimé).
+// Se lance seul à l'ouverture du Planning si la personne est déjà connectée à Google ; sinon le clic ouvre d'abord la connexion.
+const BTN_SYNCHRO = {fontSize: 12, padding: "5px 12px", borderRadius: 8, border: "1.5px solid " + BLEU, background: "#fff", color: BLEU, cursor: "pointer", fontWeight: 600, minHeight: 34};
+const pluriel = (n, un, plus) => n + " " + (n > 1 ? plus : un);
+function phraseSynchro(r) {
+  const l = [];
+  if (r.deplaces) l.push(pluriel(r.deplaces, "déplacé", "déplacés"));
+  if (r.supprimes) l.push(pluriel(r.supprimes, "supprimé dans Google", "supprimés dans Google"));
+  if (r.renommes) l.push(pluriel(r.renommes, "renommé", "renommés"));
+  const h = new Date().toLocaleTimeString("fr-FR", {hour: "2-digit", minute: "2-digit"});
+  let t = "✓ Synchronisé à " + h + " : " + (l.length ? l.join(", ") : "rien n'a changé") + " (" + pluriel(r.verifies, "événement vérifié", "événements vérifiés") + ")";
+  if (r.ignores) t += " · " + pluriel(r.ignores, "événement non vérifié", "événements non vérifiés") + " : agenda non accessible avec ce compte Google";
+  if (r.echecs) t += " · " + pluriel(r.echecs, "événement non lu", "événements non lus") + " (erreur Google)";
+  return t;
+}
+export function SynchroAgenda({agenda, onChange}) {
+  const nb = Object.keys(agenda || {}).reduce((n, k) => n + (agenda[k] || []).length, 0);
+  const [clientId, setClientId] = useState("");
+  const [connecte, setConnecte] = useState(estConnecte());
+  const [etat, setEtat] = useState(null); // {occupe} | {ok, txt}
+  const dejaFait = useRef(false);
+  useEffect(() => { let v = true; lireClientId().then(i => { if (v) setClientId(i); }); return () => { v = false; }; }, []);
+  async function lancer() {
+    setEtat({occupe: true});
+    try {
+      const r = await synchroniserAgenda(agenda);
+      if (Object.keys(r.changements).length) onChange(await enregistrerChangements(r.changements));
+      setEtat({ok: true, txt: phraseSynchro(r)});
+    } catch (e) { if (e.statut === 401) setConnecte(false); setEtat({ok: false, txt: e.message}); }
+  }
+  async function cliquer() {
+    if (!connecte) {
+      if (!clientId) { setEtat({ok: false, txt: "Google Agenda n'est pas encore relié : l'administrateur doit le régler une fois (fenêtre « Programmer »)."}); return; }
+      setEtat({occupe: true});
+      try { await connecter(clientId); setConnecte(true); } catch (e) { setEtat({ok: false, txt: e.message}); return; }
+    }
+    await lancer();
+  }
+  // à l'ouverture du Planning : synchronisation automatique si la personne est déjà connectée à Google (la table des événements arrive après l'ouverture)
+  useEffect(() => { if (nb > 0 && connecte && !dejaFait.current) { dejaFait.current = true; lancer(); } }, [nb > 0]);
+  if (nb === 0) return null;
+  const occupe = !!(etat && etat.occupe);
+  return (<div style={{display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "0 0 10px"}}>
+    <button type="button" disabled={occupe} onClick={cliquer} style={{...BTN_SYNCHRO, opacity: occupe ? .6 : 1}}>{occupe ? "⏳ Synchronisation…" : connecte ? "🔄 Synchroniser avec l'agenda" : "🔄 Se connecter à Google et synchroniser"}</button>
+    {etat && !etat.occupe && <span role="status" style={{fontSize: 12, color: etat.ok ? "#22863A" : "#B42318", flex: "1 1 220px", minWidth: 0, overflowWrap: "anywhere"}}>{etat.txt}</span>}
   </div>);
 }

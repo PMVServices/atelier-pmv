@@ -3,6 +3,9 @@
 // jeton valable une heure) et l'appli appelle l'API Google Agenda avec ce jeton. L'identifiant client OAuth (public) est réglé une fois par l'administrateur
 // (parametres_app, clé « google_client_id »). Les événements créés sont rangés dans parametres_app (clé « planning_agenda ») pour pouvoir les déplacer ou les supprimer.
 // Sans connexion possible, un lien « Ouvrir dans Google Agenda » ouvre l'événement pré-rempli (il suffit d'enregistrer).
+// Sens inverse (demande du 23/10/2026) : « 🔄 Synchroniser » relit dans Google les événements créés par l'appli et reporte sur les cartes du Planning le nouveau jour / les nouvelles heures,
+// le nouveau titre, ou l'événement supprimé (voir synchroniserAgenda). Pas en temps réel : Google ne peut pas prévenir l'appli (pas de serveur), la relecture se fait à l'ouverture du Planning
+// (si la personne est déjà connectée à Google) ou au clic sur le bouton.
 import {SUPA_URL, H, db} from "./supabase";
 
 export const CLE_AGENDA = "planning_agenda";
@@ -142,3 +145,60 @@ export async function lireClientId() {
 export async function ecrireClientId(id) {
   await db.upsert("parametres_app", [{ cle: CLE_CLIENT_ID, valeur: String(id || "").trim() }], "cle");
 }
+
+// ── synchronisation Google -> appli ──
+const enc = encodeURIComponent;
+// l'heure est demandée à Google en heure de Paris : « 2026-10-27T14:00:00+01:00 » se lit directement (jour = 10 premiers caractères, heure = 11 à 16)
+export const lireEvenement = (calId, eventId) => appeler("GET", "/calendars/" + enc(calId) + "/events/" + enc(eventId) + "?timeZone=" + enc(FUSEAU));
+// compare l'événement lu dans Google (null ou « cancelled » = supprimé) à l'entrée enregistrée ; renvoie les champs à changer, ou null si rien n'a bougé
+export function ecartEvenement(entree, g) {
+  if (!g || g.status === "cancelled") return entree.supprime ? null : { supprime: true };
+  const s = g.start || {}, e = g.end || {};
+  const jour = String(s.dateTime || s.date || "").slice(0, 10);
+  const journee = !s.dateTime;
+  const debut = journee ? "" : String(s.dateTime).slice(11, 16);
+  const memeJour = !e.dateTime || String(e.dateTime).slice(0, 10) === jour;
+  const fin = journee ? "" : (memeJour ? String(e.dateTime || "").slice(11, 16) : "23:59");
+  const ch = {};
+  if (jour && jour !== entree.jour) ch.jour = jour;
+  if (jour && debut !== (entree.debut || "")) ch.debut = debut;
+  if (jour && fin !== (entree.fin || "")) ch.fin = fin;
+  if (g.summary && g.summary !== entree.titre) ch.titre = g.summary;
+  if (entree.supprime) ch.supprime = false;
+  return Object.keys(ch).length ? ch : null;
+}
+const classer = (ch) => (ch.supprime === true ? "supprimes" : (ch.jour !== undefined || ch.debut !== undefined || ch.fin !== undefined || ch.supprime === false) ? "deplaces" : "renommes");
+// relit dans Google les événements de la table (agendas accessibles avec ce compte seulement : un agenda qu'on ne voit pas ne doit pas faire croire à une suppression ;
+// événements passés depuis plus d'une semaine ignorés). Ne modifie rien : renvoie {changements: {id d'événement: champs à changer}, verifies, ignores, echecs, deplaces, supprimes, renommes}
+export async function synchroniserAgenda(table) {
+  const accessibles = new Set((await listerAgendas()).map((a) => a.id));
+  const d = new Date(); d.setDate(d.getDate() - 7);
+  const limite = d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate());
+  const aVerifier = []; let ignores = 0;
+  Object.keys(table || {}).forEach((carte) => (table[carte] || []).forEach((x) => {
+    if (!x || !x.id || !x.calId || String(x.jour || "") < limite) return;
+    if (accessibles.has(x.calId)) aVerifier.push(x); else ignores++;
+  }));
+  const changements = {}; let echecs = 0, i = 0;
+  const travailleur = async () => {
+    while (i < aVerifier.length) {
+      const x = aVerifier[i++];
+      try { const c = ecartEvenement(x, await lireEvenement(x.calId, x.id)); if (c) changements[x.id] = c; }
+      catch (e) {
+        if (e.statut === 404 || e.statut === 410) { const c = ecartEvenement(x, null); if (c) changements[x.id] = c; }
+        else if (e.statut === 401) throw e;
+        else echecs++;
+      }
+    }
+  };
+  await Promise.all([travailleur(), travailleur(), travailleur(), travailleur()]);
+  const bilan = { deplaces: 0, supprimes: 0, renommes: 0 };
+  Object.keys(changements).forEach((id) => { bilan[classer(changements[id])]++; });
+  return { changements, verifies: aVerifier.length - echecs, ignores, echecs, ...bilan };
+}
+// écrit les changements dans la table de la base (relue d'abord : on ne touche qu'aux événements concernés)
+export const enregistrerChangements = (changements) => modifierAgenda((a) => {
+  const maj = new Date().toISOString(), o = {};
+  Object.keys(a).forEach((carte) => { o[carte] = (a[carte] || []).map((x) => (changements[x.id] ? { ...x, ...changements[x.id], majGoogle: maj } : x)); });
+  return o;
+});
