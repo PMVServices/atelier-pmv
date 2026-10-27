@@ -212,7 +212,7 @@ const CHAMPS_ROTATION_AVANT=[
     {id:"nettoyage_hp",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true,groupe:"hp_etuvage"},
     {id:"etuvage_stator",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true,groupe:"hp_etuvage"},
     {id:"isol_masse_hp",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator",valeur:"Oui"}},
-    {id:"isol_enroul_min",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true,groupe:"isol_enroul_pair"},{id:"isol_enroul_min_dar",label:"DAR enroulements",type:"number",unite:"DAR",required:false,groupe:"isol_enroul_pair"},
+    {id:"isol_enroul_min",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true,groupe:"isol_enroul_pair",condition:{champ:"etuvage_stator",valeur:"Oui"}},{id:"isol_enroul_min_dar",label:"DAR enroulements",type:"number",unite:"DAR",required:false,groupe:"isol_enroul_pair",condition:{champ:"etuvage_stator",valeur:"Oui"}},
     {id:"tech_mesure_avant",label:"Qui a mesuré",type:"technicien",required:true},
 ];
 const ETAPE_ELEC_2="Infos électriques (2e passage)";
