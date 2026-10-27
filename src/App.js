@@ -127,14 +127,17 @@ function champsCirclips(){
   out.push({id:"circlips_arriere",label:"Circlips arrière (ancienne saisie)",type:"text",required:false,groupe:"circlips",condition:v=>siAncien(v)&&!!String(v.circlips_arriere||"").trim()});
   return out;
 }
-// Accouplement et poulie (demande du 27/10/2026) : présence Oui / Non, puis le type et les dimensions. Sous le côté arrière, dans le matériel au démontage du moteur.
-function champsAccouplementPoulie(){
+// Accouplement et poulie (demande du 27/10/2026) : présence Oui / Non, puis le type et les dimensions, puis « à changer ? » (Oui : la pièce part dans le matériel à commander, voir detecterPieces).
+// Sous le côté arrière dans le matériel au démontage du moteur (sfx "", quand siAncien) ; et dans « Mécanique réducteur au démontage » (sfx "_r", lieu "réducteur", quand siReducteurAncien).
+function champsAccouplementPoulie(sfx="",quand=siAncien,lieu=""){
   const out=[];
-  [["accoup","accouplement","Présence d'un accouplement","Accouplement","Ø extérieur, alésage, longueur…"],["poulie","poulie","Présence d'une poulie","Poulie","Ø, alésage, largeur, nombre de gorges…"]].forEach(([p,g,question,nom,aide])=>{
-    const si=v=>siAncien(v)&&v[p+"_present"]==="Oui";
-    out.push({id:p+"_present",label:question,type:"oui_non",required:true,condition:siAncien});
-    out.push({id:p+"_type",label:nom+" — type",type:"text",required:true,groupe:g+"_dem_pair",condition:si});
-    out.push({id:p+"_dim",label:nom+" — dimensions",type:"text",required:true,groupe:g+"_dem_pair",note:aide,condition:si});
+  [["accoup","accouplement","d'un accouplement","Accouplement","Ø extérieur, alésage, longueur…"],["poulie","poulie","d'une poulie","Poulie","Ø, alésage, largeur, nombre de gorges…"]].forEach(([p,g,question,nom,aide])=>{
+    const si=v=>quand(v)&&v[p+"_present"+sfx]==="Oui";
+    const n=nom+(lieu?" "+lieu:"");
+    out.push({id:p+"_present"+sfx,label:"Présence "+question+(lieu?" sur le "+lieu:""),type:"oui_non",required:true,condition:quand});
+    out.push({id:p+"_type"+sfx,label:n+" — type",type:"text",required:true,groupe:g+"_dem_pair"+sfx,condition:si});
+    out.push({id:p+"_dim"+sfx,label:n+" — dimensions",type:"text",required:true,groupe:g+"_dem_pair"+sfx,note:aide,condition:si});
+    out.push({id:p+"_change"+sfx,label:n+" — à changer ?",type:"oui_non",required:true,note:"« Oui » : ajouté au matériel à commander, avec le type et les dimensions",condition:si});
   });
   return out;
 }
@@ -690,6 +693,7 @@ const CHAMPS_REDUCTEUR={
     {id:"etat_roulement_ar_r",label:"État roulement arrière réducteur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_ar_r_pair",condition:siReducteurAncien},{id:"roulement_ar_r_change",label:"Roulement arrière réducteur changé",type:"oui_non",required:false,groupe:"roulement_ar_r_pair",condition:siReducteurAncien},
     {id:"joint_ar_r",label:"Joints arrière réducteur",type:"joints",required:false,groupe:"joint_ar_r",condition:siReducteurAncien},
     {id:"roulements_autres",label:"Autres roulements",type:"roulements_liste",required:false,condition:siReducteurAncien},
+    ...champsAccouplementPoulie("_r",siReducteurAncien,"réducteur"), // accouplement et poulie du réducteur : présence, type, dimensions, à changer ?
     {id:"tech_demontage_r",label:"Qui a démonté le réducteur",type:"technicien",required:true,condition:siReducteurAncien},
     {id:"marque_reducteur_neuf",label:"Marque du réducteur",type:"select",options:MARQUES_REDUCTEUR,required:false,autreTexte:true,condition:siReducteurNeuf,groupe:"rneuve_marque_puiss"},
     {id:"puissance_reducteur_neuf",label:"Puissance",type:"text",unite:"kW",unitesChoix:UNITES_PUISSANCE,required:false,condition:siReducteurNeuf,groupe:"rneuve_marque_puiss"},
@@ -803,6 +807,12 @@ function detecterPieces(v,typeMat){
   ajouterJoints("joint_av","Joint à lèvres avant moteur");
   ajouterJoints("joint_ar","Joint à lèvres arrière moteur");
   if(v.etat_ventilateur&&mauvais.includes(v.etat_ventilateur))pieces.push({designation:typeMat==="Ventilateur"?"Ventilateur de refroidissement du moteur":"Ventilateur",reference:v.taille_ventilateur||""});
+  // accouplement et poulie à changer (type et dimensions saisis au démontage) : moteur, puis réducteur
+  const refTransmission=(p,sfx)=>[v[p+"_type"+sfx],v[p+"_dim"+sfx]].map(x=>String(x||"").trim()).filter(Boolean).join(" — ");
+  [["accoup","Accouplement"],["poulie","Poulie"]].forEach(([p,nom])=>{
+    if(v.moteur_neuf!=="Oui"&&v[p+"_present"]==="Oui"&&v[p+"_change"]==="Oui")pieces.push({designation:nom+" moteur",reference:refTransmission(p,"")});
+    if(typeMat==="Moto-réducteur"&&v.reducteur_neuf!=="Oui"&&v[p+"_present_r"]==="Oui"&&v[p+"_change_r"]==="Oui")pieces.push({designation:nom+" réducteur",reference:refTransmission(p,"_r")});
+  });
   if(v.etat_bobinage&&mauvais.includes(v.etat_bobinage))pieces.push({designation:"Bobinage stator",reference:""});
   if(v.etat_rotor&&mauvais.includes(v.etat_rotor))pieces.push({designation:"Rotor",reference:""});
   // Spécifique pompe
@@ -1284,7 +1294,7 @@ const INTERTITRES_TRAME=(()=>{
     // Rotation avant démontage
     int_p1_avant:"Intensités",vib_av_mms_avant:"Vibrations",int_560_p1_avant:"Intensités à 560 V",nettoyage_hp:"Nettoyage et isolement",pression_essai_avant:"Essai en eau / air et pressions",
     // Matériel au démontage moteur
-    circlips_av_present:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",accoup_present:"Accouplement et poulie",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",essais_moteur_seul:"Essais du moteur seul",
+    circlips_av_present:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",accoup_present:"Accouplement et poulie",accoup_present_r:"Accouplement et poulie du réducteur",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",essais_moteur_seul:"Essais du moteur seul",
     // Mécanique pompe au démontage
     diametre_nez_roue:"Roue et volute",etat_jc:"Joint de corps",type_gm_fixe:"Garniture mécanique",roulement_av_p_present:"Roulement avant de la pompe",roulement_ar_p_present:"Roulement arrière de la pompe",marque_pompe_neuve:"Pompe neuve",
     // Essais après remontage (et essais du moteur seul : mêmes sections)
