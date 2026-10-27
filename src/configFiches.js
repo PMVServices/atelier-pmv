@@ -85,7 +85,7 @@ export function champDepuisAjout(a){
 function construire(map,cle,cfgGlobale,garderMasques){
   const cfg=cfgGlobale.fiches&&cfgGlobale.fiches[cle];
   if(!cfg)return map;
-  const champs=cfg.champs||{};const deplace=cfg.deplace||{};const ajouts=cfg.ajouts||[];
+  const champs=cfg.champs||{};const deplace={...(cfg.deplace||{})};const ajouts=cfg.ajouts||[];
   const out={};
   const transforme=c=>{
     const o=champs[c.id];
@@ -101,6 +101,8 @@ function construire(map,cle,cfgGlobale,garderMasques){
   };
   // champs du code envoyés dans une autre étape (deplace[id].etape) : id → étape d'arrivée ; ils quittent leur étape du code
   const origine={},nb={};Object.keys(map).forEach(e=>map[e].forEach(c=>{origine[c.id]=e;nb[c.id]=(nb[c.id]||0)+1;}));
+  // un déplacement d'étape (↪) vers l'étape qui est devenue celle du champ dans le code (le code a repris ce déplacement) n'a plus d'objet : on suit l'ordre du code
+  Object.keys(deplace).forEach(id=>{const d=deplace[id];if(d&&d.etape&&origine[id]===d.etape)delete deplace[id];});
   const vers={};
   Object.keys(deplace).forEach(id=>{const t=deplace[id]&&deplace[id].etape;if(t&&origine[id]&&nb[id]===1&&origine[id]!==t&&map[t])vers[id]=t;});
   const arrivees={};

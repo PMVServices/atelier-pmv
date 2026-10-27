@@ -23,6 +23,7 @@ import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerS
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
 import {CHAMPS_CHEMINEE, ETAPES_CHEMINEE} from "./Cheminee";
 import {ETAPE_QUALITE, champsQualite} from "./controleQualite";
+import {champsHpEtuvage} from "./etuvage";
 import {TYPE_CHEMINEE, prefixeNumero, normaliserNumero} from "./railClients";
 import PageStockRail, {synchroniserIsolateursRail, supprimerMouvementsRailFiche, chargerClientsRail} from "./Rail";
 import {appliquerConfig, chargerConfig, surChangementConfig, appliquerStatuts} from "./configFiches";
@@ -229,6 +230,9 @@ const CHAMPS_INFOS_ELECTRIQUES_2=suffixerChamps(
    return c;
  });
 const CHAMPS_ROTATION_AVANT_2=suffixerChamps(CHAMPS_ROTATION_AVANT.filter(c=>c.id!=="moteur_neuf"),"_2");
+// moteur : le nettoyage HP et les mesures qui suivent ne restent dans l'étape de rotation que si l'essai à vide est impossible (ils précèdent alors le 2e passage) ; sinon ils sont dans le matériel au démontage
+const IDS_HP_MOTEUR=["nettoyage_hp","etuvage_stator","isol_masse_hp","isol_enroul_min","isol_enroul_min_dar"];
+const CHAMPS_ROTATION_AVANT_1=CHAMPS_ROTATION_AVANT.map(c=>IDS_HP_MOTEUR.includes(c.id)?{...c,condition:v=>v.essai_vide_avant==="Non"&&champVisible({condition:c.condition},v)}:c);
 // Moteur neuf annoncé dès les infos électriques : un petit moteur qui ne marche plus est changé directement,
 // la fiche ne continue qu'avec le contrôle qualité (rien à mesurer ni à démonter). Ne concerne que le moteur seul / "Autre matériel".
 const CHAMP_MOTEUR_NEUF_DEBUT={id:"moteur_neuf_debut",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,note:"« Oui » = moteur changé directement, il ne reste ensuite que le contrôle qualité"};
@@ -280,10 +284,11 @@ const CHAMPS={
     {id:"conseil_petit_moteur",type:"conseil",condition:v=>{const p=puissanceKw(v);return p!==null&&p<=PETIT_MOTEUR_KW;},texte:v=>"Petit moteur ("+Math.round(puissanceKw(v)*100)/100+" kW, donc "+PETIT_MOTEUR_KW+" kW ou moins) : si le moteur est « basique » (standard, sans particularité), pensez à proposer au client un moteur neuf plutôt que l'entretien."},
   ],
   "Infos électriques":[...CHAMPS_MOTEUR_NEUF_ESSAIS,...CHAMPS_INFOS_ELECTRIQUES.map(masquerSiMoteurNeufDebut)],
-  "Information rotation avant démontage":CHAMPS_ROTATION_AVANT,
+  "Information rotation avant démontage":CHAMPS_ROTATION_AVANT_1,
   [ETAPE_ELEC_2]:CHAMPS_INFOS_ELECTRIQUES_2,
   [ETAPE_ROTATION_2]:CHAMPS_ROTATION_AVANT_2,
   "Information matériel au démontage":[
+    ...champsHpEtuvage("",v=>v.essai_vide_avant!=="Non"), // nettoyage HP, mesures, étuvage (etuvage.js) puis la question « Moteur neuf »
     {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,condition:v=>v.essai_vide_avant!=="Non"},
     {id:"ventilateur_present",label:"Présence d'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     ...champsCirclips(),
@@ -410,10 +415,6 @@ const CHAMPS_POMPE={
     {id:"int_560_p1_avant_m",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
     {id:"int_560_p2_avant_m",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
     {id:"int_560_p3_avant_m",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
-    {id:"nettoyage_hp_m",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true},
-    {id:"etuvage_stator_m",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true},
-    {id:"isol_masse_hp_m",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator_m",valeur:"Oui"}},
-    {id:"isol_enroul_min_m",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true,groupe:"isol_enroul_pair_m"},{id:"isol_enroul_min_m_dar",label:"DAR enroulements",type:"number",unite:"DAR",required:false,groupe:"isol_enroul_pair_m"},
     {id:"tech_mesure_avant_m",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Rotation avant démontage pompe":[
@@ -435,6 +436,7 @@ const CHAMPS_POMPE={
     {id:"tech_mesure_avant_p",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Matériel au démontage moteur":[
+    ...champsHpEtuvage("_m"), // nettoyage HP, mesures, étuvage (etuvage.js) puis la question « Moteur neuf »
     {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true},
     {id:"ventilateur_present",label:"Présence d\'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     ...champsCirclips(),
@@ -601,10 +603,6 @@ const CHAMPS_REDUCTEUR={
     {id:"int_560_p1_avant_m",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
     {id:"int_560_p2_avant_m",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
     {id:"int_560_p3_avant_m",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_m"},
-    {id:"nettoyage_hp_m",label:"Nettoyage HP",type:"select",options:["Oui","Non"],required:true},
-    {id:"etuvage_stator_m",label:"Étuvage du stator",type:"select",options:["Oui","Non"],required:true},
-    {id:"isol_masse_hp_m",label:"Mesure isolement masse (suite HP)",type:"ohm",required:true,condition:{champ:"etuvage_stator_m",valeur:"Oui"}},
-    {id:"isol_enroul_min_m",label:"Isolement enroulements — plus petite valeur",type:"ohm",required:true,groupe:"isol_enroul_pair_m"},{id:"isol_enroul_min_m_dar",label:"DAR enroulements",type:"number",unite:"DAR",required:false,groupe:"isol_enroul_pair_m"},
     {id:"tech_mesure_avant_m",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Rotation avant démontage réducteur":[
@@ -619,6 +617,7 @@ const CHAMPS_REDUCTEUR={
     {id:"tech_mesure_avant_r",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Matériel au démontage moteur":[
+    ...champsHpEtuvage("_m"), // nettoyage HP, mesures, étuvage (etuvage.js) puis la question « Moteur neuf »
     {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true},
     {id:"ventilateur_present",label:"Présence d\'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     ...champsCirclips(),

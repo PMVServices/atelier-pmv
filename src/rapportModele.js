@@ -15,6 +15,7 @@
 import { configDuType } from "./configRapports";
 import { appliquerChapitres, typeGenerique } from "./rapportPerso";
 import { conclusionVibrations, lignesGeMoteur } from "./vibrations";
+import { derniereSerie } from "./etuvage";
 
 export const SOCIETE = {
   nom: "PMV Services",
@@ -257,7 +258,8 @@ export function construireRapport(v, data, photos) {
     if (isol("isol_wu")) lignes.push(["W / U = " + isol("isol_wu") + " / 1000 V" + dar("isol_wu_dar")]);
     const vBob = verdict("verdict_bobinage");
     if (vBob) lignes.unshift(["Les valeurs d'isolement entre enroulements sont ", vBob, lignes.length ? " :" : "."]);
-    if (isol("isol_enroul_min")) lignes.push(["Isolement entre enroulements, plus petite valeur : " + isol("isol_enroul_min") + dar("isol_enroul_min_dar")]);
+    const serieEt = derniereSerie(v, ""); // dernière série de mesures de l'étuvage (etuvage.js) : ce sont les valeurs finales
+    if (isol("isol_enroul_min" + serieEt)) lignes.push(["Isolement entre enroulements, plus petite valeur : " + isol("isol_enroul_min" + serieEt) + dar("isol_enroul_min" + serieEt + "_dar")]);
     const vMasse = verdict("verdict_masse");
     if (isol("isol_masse")) lignes.push(vMasse ? ["L'isolement à la masse est ", vMasse, " : " + isol("isol_masse") + dar("isol_masse_dar")] : ["Isolement à la masse : " + isol("isol_masse") + dar("isol_masse_dar")]);
     else if (vMasse) lignes.push(["L'isolement à la masse est ", vMasse, "."]);
