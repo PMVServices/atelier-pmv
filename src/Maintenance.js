@@ -2,7 +2,7 @@
 // Les modifications sont préparées en brouillon, puis publiées d'un coup ; elles sont enregistrées en base (config_fiches) et gardées dans un historique.
 import React, {useState, useEffect, useRef} from "react";
 import EditeurRapports from "./EditeurRapports";
-import {configActuelle, surChangementConfig, appliquerConfigEditeur, publierConfig, lireHistorique, statutsAvecConfig, TYPES_AJOUT} from "./configFiches";
+import {configActuelle, surChangementConfig, appliquerConfigEditeur, publierConfig, lireHistorique, statutsAvecConfig, TYPES_AJOUT, OPERATEURS_SI} from "./configFiches";
 import {lireSeuil, resumeSeuil, seuilDepuisSaisie} from "./seuils";
 
 const BLEU="#1B4F8A";
@@ -20,6 +20,13 @@ const SANS_OBLIGATOIRE=["titre","conseil","illustration","verdict","calcul"];
 
 const copie=o=>JSON.parse(JSON.stringify(o));
 const nouvelId=()=>"x_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+// « Afficher seulement si… » : les champs qu'on peut prendre comme point de départ (ceux qui gardent une réponse), leurs réponses possibles, et la phrase qui résume la condition
+const SANS_VALEUR_SI=["photo_requise","photo","photo_skf","titre","conseil","illustration","verdict","calcul","info","technicien","client","contact"];
+const reponsesPossibles=c=>c.type==="oui_non"?["Oui","Non"]:c.type==="fait"?["Oui"]:Array.isArray(c.options)&&c.options.length?c.options.filter(o=>!(c.autreTexte&&o==="Autre")):null;
+const sourcesSi=vue=>{const out=[];Object.keys(vue).forEach(e=>(vue[e]||[]).forEach(c=>{if(c._masque||!c.label||SANS_VALEUR_SI.includes(c.type))return;out.push({id:c.id,label:c.label,etape:e,reponses:reponsesPossibles(c),depend:(c._si||[]).map(x=>x.champ)});}));return out;};
+const LIB_OP=Object.fromEntries(OPERATEURS_SI);
+const texteSi=(si,sources)=>(si||[]).map(x=>{const src=sources.find(s=>s.id===x.champ);return (src?"« "+src.label+" »":"⚠ champ introuvable")+" "+(LIB_OP[x.op]||x.op)+((x.op==="egal"||x.op==="different")?" « "+(x.valeur||"")+" »":"");}).join(" et ");
+const siComplet=si=>si.every(x=>x.champ&&(x.op==="rempli"||x.op==="vide"||String(x.valeur||"").trim()));
 const resume=c=>c.type==="conseil"?"Message : "+String(typeof c.texte==="function"?"(texte calculé)":c.texte||"").slice(0,70):(c.label||c.id);
 
 export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,rapports}){
@@ -44,6 +51,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
   const etapeCourante=etapes.includes(etape)?etape:etapes[0];
   const vue=onglet==="atelier"||onglet==="chantier"?appliquerConfigEditeur(base,typeCourant.cle,brouillon):{};
   const liste=(vue[etapeCourante]||[]);
+  const sources=sourcesSi(vue);
   const c0=(n)=>{n.fiches=n.fiches||{};n.fiches[typeCourant.cle]=n.fiches[typeCourant.cle]||{};return n.fiches[typeCourant.cle];};
 
   // la configuration en base peut arriver après l'ouverture de la page : sans modification en cours, le brouillon suit (jamais de publication « à vide » par accident)
@@ -183,7 +191,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
           ↪ Envoyé{sortis.length>1?"s":""} dans une autre étape : {sortis.map((s,k)=><span key={s.id}>{k>0?" · ":""}<b>{s.label}</b> → <button type="button" onClick={()=>setEtape(s.vers)} style={{background:"none",border:"none",padding:0,color:BLEU,fontWeight:700,fontSize:12,cursor:"pointer",textDecoration:"underline",textAlign:"left"}}>{s.vers}</button></span>)}
         </div>}
 
-        {ajoutApres==="__debut"&&<FormulaireAjout onAjouter={ajouter} onAnnuler={()=>setAjoutApres(null)}/>}
+        {ajoutApres==="__debut"&&<FormulaireAjout onAjouter={ajouter} onAnnuler={()=>setAjoutApres(null)} sources={sources}/>}
 
         {liste.map((c,i)=>{
           const modeEdition=edition===c.id;
@@ -195,6 +203,7 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
                 <div style={{fontSize:11,color:"#9CA3AF"}}>{LIBELLE_TYPE[c.type]||c.type}{c.ajoute&&<span style={{color:"#22863A",fontWeight:700}}> · ajouté</span>}{masque&&<span style={{color:"#6B7280",fontWeight:700}}> · masqué</span>}{c._depuis&&<span style={{color:BLEU,fontWeight:700}}> · ↪ vient de « {c._depuis} »</span>}</div>
                 <div style={{fontSize:14,fontWeight:c.type==="titre"?700:500,color:c.type==="titre"?BLEU:"#1A1A2E",overflowWrap:"anywhere"}}>{resume(c)}{c.required===true&&<span style={{color:"#D73A49"}}> *</span>}{c.unite&&<span style={{color:"#9CA3AF"}}> ({c.unite})</span>}</div>
                 {Array.isArray(c.options)&&<div style={{fontSize:11,color:"#6B7280"}}>Choix : {c.options.join(" · ")}</div>}
+                {c._si&&c._si.length>0&&<div style={{fontSize:11,color:BLEU,fontWeight:600}}>↳ Affiché seulement si {texteSi(c._si,sources)}</div>}
                 {lireSeuil(c)&&<div style={{fontSize:11,color:"#B45309",fontWeight:600}}>⚠ {resumeSeuil(c)}{lireSeuil(c).msg?" — « "+lireSeuil(c).msg+" »":""}</div>}
               </div>
               <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end"}}>
@@ -210,8 +219,8 @@ export default function PageMaintenance({catalogue,statutsBase,rendreApercu,nom,
               </div>
             </div>
             {deplaceId===c.id&&<FormulaireDeplacement c={c} etapes={etapes.filter(e=>e!==premiere&&e!==etapeCourante)} vue={vue} variantes={variantesEtapes} etapeCourante={etapeCourante} partenaires={partenaires(c)} onOk={(dest,apres,avec)=>deplacerVers(c,dest,apres,avec)} onAnnuler={()=>setDeplaceId(null)}/>}
-            {modeEdition&&<FormulaireModif c={c} onChange={patch=>majChamp(c.id,c.ajoute?{def:patch.def||patch}:patch)} onFermer={()=>setEdition(null)} ajoute={!!c.ajoute} base={baseDe(c.id)}/>}
-            {ajoutApres===c.id&&<FormulaireAjout onAjouter={ajouter} onAnnuler={()=>setAjoutApres(null)}/>}
+            {modeEdition&&<FormulaireModif c={c} onChange={patch=>majChamp(c.id,c.ajoute?{def:patch.def||patch}:patch)} onFermer={()=>setEdition(null)} ajoute={!!c.ajoute} base={baseDe(c.id)} sources={sources}/>}
+            {ajoutApres===c.id&&<FormulaireAjout onAjouter={ajouter} onAnnuler={()=>setAjoutApres(null)} sources={sources}/>}
           </div>);
         })}
         {liste.length===0&&<p style={{fontSize:13,color:"#9CA3AF"}}>Aucun champ dans cette étape.</p>}
@@ -290,7 +299,7 @@ function FormulaireDeplacement({c,etapes,vue,variantes,etapeCourante,partenaires
   </div>);
 }
 
-function FormulaireModif({c,onChange,onFermer,ajoute,base}){
+function FormulaireModif({c,onChange,onFermer,ajoute,base,sources}){
   const [label,setLabel]=useState(c.label||"");
   const [note,setNote]=useState(c.note||"");
   const [unite,setUnite]=useState(c.unite||"");
@@ -301,6 +310,8 @@ function FormulaireModif({c,onChange,onFermer,ajoute,base}){
   const aOptions=Array.isArray(c.options);
   const aUnite=c.type==="number"||(ajoute&&c.unite!==undefined);
   const aSeuil=c.type==="number"||c.type==="mesure"; // seuil avec alerte : cases numériques seulement
+  const [si,setSi]=useState(()=>(c._si||[]).map(x=>({...x})));
+  const regleCode=!!(base&&base.condition); // le champ suit déjà une règle écrite dans le code : elle reste, la condition ci-dessous s'y ajoute
   const s0=lireSeuil(c)||{};
   const [seuilMax,setSeuilMax]=useState(s0.max==null?"":String(s0.max));
   const [seuilMin,setSeuilMin]=useState(s0.min==null?"":String(s0.min));
@@ -308,13 +319,14 @@ function FormulaireModif({c,onChange,onFermer,ajoute,base}){
   function valider(){
     const opts=choix.split("\n").map(x=>x.trim()).filter(Boolean);
     if(ajoute){
-      onChange({def:{label:label.trim()||c.label,note:note.trim(),unite:unite.trim()||undefined,required:oblig,...(aSeuil?{seuil:seuilDepuisSaisie(seuilMax,seuilMin,seuilMsg)}:{}),...(aOptions?{options:opts,autre}:{})}});
+      onChange({def:{label:label.trim()||c.label,note:note.trim(),unite:unite.trim()||undefined,required:oblig,...(aSeuil?{seuil:seuilDepuisSaisie(seuilMax,seuilMin,seuilMsg)}:{}),...(aOptions?{options:opts,autre}:{}),si:si.length?si:undefined}});
     }else{
       const p={label:label.trim()||(base&&base.label)||c.label};
       if(note.trim()!==(c.note||""))p.note=note.trim()||" ";
       if(!SANS_OBLIGATOIRE.includes(c.type)&&!requisCode&&oblig!==(c.required===true))p.required=oblig;
       if(aOptions&&opts.length)p.options=opts.includes("Autre")||!c.options.includes("Autre")?opts:opts.concat(["Autre"]);
       if(aSeuil)p.seuil=seuilDepuisSaisie(seuilMax,seuilMin,seuilMsg)||null; // null : seuil retiré
+      p.si=si.length?si:null; // null : condition retirée
       onChange(p);
     }
     onFermer();
@@ -331,10 +343,43 @@ function FormulaireModif({c,onChange,onFermer,ajoute,base}){
     {!SANS_OBLIGATOIRE.includes(c.type)&&!requisCode&&<label style={{display:"flex",gap:6,alignItems:"center",fontSize:13,marginTop:8}}><input type="checkbox" checked={oblig} onChange={e=>setOblig(e.target.checked)}/> Champ obligatoire (on ne peut pas valider l'étape sans lui)</label>}
     {requisCode&&<p style={{fontSize:11,color:"#9CA3AF",margin:"8px 0 0"}}>Ce champ est obligatoire seulement dans certains cas (règle écrite dans le code) : pour la changer, demandez-le moi.</p>}
     {aSeuil&&<ZoneSeuil unite={c.unite} max={seuilMax} min={seuilMin} msg={seuilMsg} setMax={setSeuilMax} setMin={setSeuilMin} setMsg={setSeuilMsg}/>}
+    <ZoneSi si={si} setSi={setSi} sources={sources.filter(x=>x.id!==c.id&&!x.depend.includes(c.id))} regleCode={regleCode}/>
     <div style={{display:"flex",gap:8,marginTop:10}}>
-      <button type="button" style={BTN} onClick={valider}>OK</button>
+      <button type="button" style={{...BTN,opacity:siComplet(si)?1:0.5}} disabled={!siComplet(si)} onClick={valider}>OK</button>
       <button type="button" style={BTN_O} onClick={onFermer}>Annuler</button>
     </div>
+  </div>);
+}
+
+// « Afficher ce champ seulement si… » : une ou plusieurs conditions sur les réponses d'autres champs de la même fiche (toutes doivent être vraies)
+function ZoneSi({si,setSi,sources,regleCode}){
+  const actif=si.length>0;
+  const maj=(i,patch)=>setSi(si.map((x,k)=>k===i?{...x,...patch}:x));
+  const parEtape=[];sources.forEach(s=>{let g=parEtape.find(x=>x.etape===s.etape);if(!g){g={etape:s.etape,liste:[]};parEtape.push(g);}g.liste.push(s);});
+  return(<div style={{background:"#EEF4FF",border:"1px solid "+BLEU,borderRadius:8,padding:"8px 10px",marginTop:10}}>
+    <label style={{display:"flex",gap:6,alignItems:"center",fontSize:13,fontWeight:700,color:BLEU}}><input type="checkbox" checked={actif} onChange={e=>setSi(e.target.checked?[{champ:"",op:"egal",valeur:""}]:[])}/> Afficher ce champ seulement si…</label>
+    {actif&&<>
+      {si.map((x,i)=>{
+        const src=sources.find(s=>s.id===x.champ);
+        const aValeur=x.op==="egal"||x.op==="different";
+        return(<div key={i} style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginTop:6}}>
+          <span style={{fontSize:12,color:"#6B7280",width:22}}>{i===0?"si":"et"}</span>
+          <select value={x.champ} onChange={e=>{const ns=sources.find(s=>s.id===e.target.value);maj(i,{champ:e.target.value,valeur:ns&&ns.reponses?ns.reponses[0]:""});}} style={{...INP,width:"auto",maxWidth:"100%",flex:"1 1 200px"}}>
+            <option value="">— choisir un champ de la fiche —</option>
+            {x.champ&&!src&&<option value={x.champ}>⚠ champ introuvable ({x.champ})</option>}
+            {parEtape.map(g=><optgroup key={g.etape} label={g.etape}>{g.liste.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>)}
+          </select>
+          <select value={x.op} onChange={e=>maj(i,{op:e.target.value})} style={{...INP,width:"auto"}}>{OPERATEURS_SI.map(([k,l])=><option key={k} value={k}>{l}</option>)}</select>
+          {aValeur&&(src&&src.reponses
+            ?<select value={x.valeur||""} onChange={e=>maj(i,{valeur:e.target.value})} style={{...INP,width:"auto"}}>{src.reponses.map(r=><option key={r} value={r}>{r}</option>)}</select>
+            :<input type="text" value={x.valeur||""} onChange={e=>maj(i,{valeur:e.target.value})} placeholder="valeur exacte" style={{...INP,width:150}}/>)}
+          <button type="button" style={{...BTN_P,color:"#D73A49",borderColor:"#D73A49"}} onClick={()=>setSi(si.filter((_,k)=>k!==i))} aria-label="Retirer cette condition">✕</button>
+        </div>);
+      })}
+      <button type="button" style={{...BTN_P,marginTop:8}} onClick={()=>setSi([...si,{champ:"",op:"egal",valeur:""}])}>＋ Et aussi si…</button>
+      <p style={{fontSize:11,color:"#6B7280",margin:"6px 0 0"}}>Plusieurs conditions : elles doivent toutes être vraies. Tant qu'elles ne le sont pas, le champ n'apparaît pas dans la fiche et n'est jamais obligatoire. Les réponses déjà saisies sont conservées.</p>
+    </>}
+    {regleCode&&<p style={{fontSize:11,color:"#9CA3AF",margin:"6px 0 0"}}>Ce champ suit déjà une règle écrite dans le code (par exemple « seulement si le moteur n'est pas neuf ») : elle reste appliquée, votre condition s'y ajoute. Pour changer la règle du code, demandez-le moi.</p>}
   </div>);
 }
 
@@ -353,7 +398,7 @@ function ZoneSeuil({unite,max,min,msg,setMax,setMin,setMsg}){
   </div>);
 }
 
-function FormulaireAjout({onAjouter,onAnnuler}){
+function FormulaireAjout({onAjouter,onAnnuler,sources}){
   const [type,setType]=useState("text");
   const [label,setLabel]=useState("");
   const [unite,setUnite]=useState("");
@@ -362,11 +407,13 @@ function FormulaireAjout({onAjouter,onAnnuler}){
   const [oblig,setOblig]=useState(false);
   const [note,setNote]=useState("");
   const [seuilMax,setSeuilMax]=useState("");const [seuilMin,setSeuilMin]=useState("");const [seuilMsg,setSeuilMsg]=useState("");
-  const ok=label.trim().length>0&&(type!=="select"||choix.split("\n").some(x=>x.trim()));
+  const [si,setSi]=useState([]);
+  const ok=label.trim().length>0&&(type!=="select"||choix.split("\n").some(x=>x.trim()))&&siComplet(si);
   function valider(){
     const def={type,label:label.trim(),note:note.trim()||undefined,required:oblig};
     if(type==="number"){def.unite=unite.trim()||undefined;def.seuil=seuilDepuisSaisie(seuilMax,seuilMin,seuilMsg);}
     if(type==="select"){def.options=choix.split("\n").map(x=>x.trim()).filter(Boolean);def.autre=autre;}
+    if(si.length)def.si=si;
     onAjouter(def);
   }
   return(<div style={{background:"#F0FFF4",border:"1px solid #22863A",borderRadius:8,padding:"10px 12px",margin:"6px 0 10px"}}>
@@ -381,6 +428,7 @@ function FormulaireAjout({onAjouter,onAnnuler}){
       <label style={{display:"flex",gap:6,alignItems:"center",fontSize:13,marginTop:6}}><input type="checkbox" checked={autre} onChange={e=>setAutre(e.target.checked)}/> Proposer aussi « Autre » (saisie libre)</label></>}
     {type!=="titre"&&<><label style={LBL}>Note (petit texte à côté de l'intitulé, facultatif)</label><input type="text" value={note} onChange={e=>setNote(e.target.value)} style={INP}/>
       <label style={{display:"flex",gap:6,alignItems:"center",fontSize:13,marginTop:8}}><input type="checkbox" checked={oblig} onChange={e=>setOblig(e.target.checked)}/> Champ obligatoire</label></>}
+    <ZoneSi si={si} setSi={setSi} sources={sources} regleCode={false}/>
     <div style={{display:"flex",gap:8,marginTop:10}}>
       <button type="button" style={{...BTN,opacity:ok?1:0.5}} disabled={!ok} onClick={valider}>Ajouter</button>
       <button type="button" style={BTN_O} onClick={onAnnuler}>Annuler</button>

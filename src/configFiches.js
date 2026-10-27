@@ -3,6 +3,7 @@
 //   - champs d'une fiche (atelier : un jeu par type de matériel ; chantier : un jeu par type d'équipement, clé « ch:<type> ») :
 //       champs[id] = {label, required, options, note, masque, seuil}  → renommer, rendre (non) obligatoire, changer les choix, masquer (les données restent en base),
 //                                                                       poser un seuil avec alerte sur une case numérique : seuil = {max, min, msg} (voir seuils.js)
+//                                                                       si = [{champ,op,valeur}] → champ affiché seulement si… (s'ajoute à la règle écrite dans le code)
 //       deplace[id] = {apres}                                   → déplacer un champ après un autre (« __debut » = en tête de l'étape)
 //       ajouts      = [{id, etape, apres, def:{type,label,…}}]  → champs ajoutés à un endroit précis
 //   - colonnes du planning (statuts de chantier) : statuts = [{id,label,color,masque?}] dans l'ordre voulu ; masque : colonne cachée du Planning tant qu'on ne touche pas « Afficher … » (comme Terminé et Abandonné)
@@ -65,9 +66,35 @@ export const TYPES_AJOUT=[
   ["text","Texte court"],["texte_long","Texte long (avec dictée vocale)"],["number","Nombre (avec unité)"],["select","Liste de choix"],
   ["oui_non","Oui / Non"],["date","Date"],["photo","Photo (au moins une)"],["titre","Intertitre"]
 ];
+// ── conditions d'affichage (« afficher seulement si… ») posées par la Maintenance ──
+// si = [{champ, op, valeur}] : op = egal (est), different (n'est pas), rempli, vide ; toutes doivent être vraies (ET). Elles s'ajoutent à la règle écrite dans le code (jamais à la place).
+// La valeur d'un champ masqué ou jamais rempli est celle de la fiche (vide si rien) : la condition se lit toujours sur les réponses enregistrées.
+export const OPERATEURS_SI=[["egal","est"],["different","n'est pas"],["rempli","est rempli"],["vide","est vide"]];
+export function siVrai(x,v){
+  const val=v&&v[x.champ];const t=val===undefined||val===null?"":String(val).trim();
+  switch(x.op){
+    case "rempli":return t!=="";
+    case "vide":return t==="";
+    case "egal":return t===String(x.valeur===undefined||x.valeur===null?"":x.valeur).trim();
+    case "different":return t!==String(x.valeur===undefined||x.valeur===null?"":x.valeur).trim();
+    default:return true;
+  }
+}
+// règle du code (fonction, objet {champ,valeur|sauf} ou tableau) évaluée comme le fait l'application
+function regleCode(cd,v){
+  if(!cd)return true;
+  if(typeof cd==="function")return cd(v);
+  if(Array.isArray(cd))return cd.every(x=>regleCode(x,v));
+  return cd.sauf!==undefined?v[cd.champ]!==cd.sauf:v[cd.champ]===cd.valeur;
+}
+function conditionAvecSi(condCode,si){
+  const liste=Array.isArray(si)?si.filter(x=>x&&x.champ):[];
+  if(!liste.length)return condCode;
+  return v=>regleCode(condCode,v)&&liste.every(x=>siVrai(x,v));
+}
 export function champDepuisAjout(a){
   const d=a.def||{};
-  const base={id:a.id,label:d.label||"Nouveau champ",note:d.note||undefined,ajoute:true};
+  const base={id:a.id,label:d.label||"Nouveau champ",note:d.note||undefined,ajoute:true,...(Array.isArray(d.si)&&d.si.some(x=>x&&x.champ)?{condition:conditionAvecSi(undefined,d.si),_si:d.si}:{})};
   switch(d.type){
     case "texte_long":return {...base,type:"text",dictee:true,required:!!d.required};
     case "number":return {...base,type:"number",unite:d.unite||undefined,required:!!d.required,seuil:d.seuil||undefined};
@@ -97,6 +124,7 @@ function construire(map,cle,cfgGlobale,garderMasques){
     if(o.note!==undefined)n.note=(String(o.note).trim())||undefined;
     if(o.masque)n._masque=true;
     if(o.seuil)n.seuil=o.seuil;
+    if(Array.isArray(o.si)&&o.si.some(x=>x&&x.champ)){n.condition=conditionAvecSi(c.condition,o.si);n._si=o.si;} // « afficher seulement si… » de la Maintenance, en plus de la règle du code
     return n;
   };
   // champs du code envoyés dans une autre étape (deplace[id].etape) : id → étape d'arrivée ; ils quittent leur étape du code
