@@ -127,6 +127,17 @@ function champsCirclips(){
   out.push({id:"circlips_arriere",label:"Circlips arrière (ancienne saisie)",type:"text",required:false,groupe:"circlips",condition:v=>siAncien(v)&&!!String(v.circlips_arriere||"").trim()});
   return out;
 }
+// Accouplement et poulie (demande du 27/10/2026) : présence Oui / Non, puis le type et les dimensions. Sous le côté arrière, dans le matériel au démontage du moteur.
+function champsAccouplementPoulie(){
+  const out=[];
+  [["accoup","accouplement","Présence d'un accouplement","Accouplement","Ø extérieur, alésage, longueur…"],["poulie","poulie","Présence d'une poulie","Poulie","Ø, alésage, largeur, nombre de gorges…"]].forEach(([p,g,question,nom,aide])=>{
+    const si=v=>siAncien(v)&&v[p+"_present"]==="Oui";
+    out.push({id:p+"_present",label:question,type:"oui_non",required:true,condition:siAncien});
+    out.push({id:p+"_type",label:nom+" — type",type:"text",required:true,groupe:g+"_dem_pair",condition:si});
+    out.push({id:p+"_dim",label:nom+" — dimensions",type:"text",required:true,groupe:g+"_dem_pair",note:aide,condition:si});
+  });
+  return out;
+}
 const siPompeNeuve=v=>v.pompe_neuve==="Oui";
 const siPompeAncienne=v=>v.pompe_neuve!=="Oui";
 // roulements de la pompe : question « Roulement avant / arrière pompe » Oui / Non ; avec « Non », tout ce qui concerne ce roulement disparaît (sans réponse, il reste affiché)
@@ -311,6 +322,7 @@ const CHAMPS={
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar",condition:siAncien},
+    ...champsAccouplementPoulie(), // accouplement et poulie : présence, type, dimensions
     {id:"peinture",label:"Peinture à faire",type:"oui_non",required:true,condition:siAncien},
     {id:"etat_bobinage",label:"État visuel bobinage",type:"select",options:["RAS","Cuit","Sale","Vieux","HS"],required:true,groupe:"bob_rotor",condition:siAncien},
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
@@ -459,6 +471,7 @@ const CHAMPS_POMPE={
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar",condition:siAncien},
+    ...champsAccouplementPoulie(), // accouplement et poulie : présence, type, dimensions
     {id:"peinture",label:"Peinture à faire",type:"oui_non",required:true,condition:siAncien},
     {id:"etat_bobinage",label:"État visuel bobinage",type:"select",options:["RAS","Cuit","Sale","Vieux","HS"],required:true,groupe:"bob_rotor",condition:siAncien},
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
@@ -640,6 +653,7 @@ const CHAMPS_REDUCTEUR={
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar",condition:siAncien},
+    ...champsAccouplementPoulie(), // accouplement et poulie : présence, type, dimensions
     {id:"peinture",label:"Peinture à faire",type:"oui_non",required:true,condition:siAncien},
     {id:"etat_bobinage",label:"État visuel bobinage",type:"select",options:["RAS","Cuit","Sale","Vieux","HS"],required:true,groupe:"bob_rotor",condition:siAncien},
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
@@ -1253,7 +1267,7 @@ const INTERTITRES_TRAME=(()=>{
     // Rotation avant démontage
     int_p1_avant:"Intensités",vib_av_mms_avant:"Vibrations",int_560_p1_avant:"Intensités à 560 V",nettoyage_hp:"Nettoyage et isolement",pression_essai_avant:"Essai en eau / air et pressions",
     // Matériel au démontage moteur
-    circlips_av_present:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",
+    circlips_av_present:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",accoup_present:"Accouplement et poulie",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",
     // Mécanique pompe au démontage
     diametre_nez_roue:"Roue et volute",etat_jc:"Joint de corps",type_gm_fixe:"Garniture mécanique",roulement_av_p_present:"Roulement avant de la pompe",roulement_ar_p_present:"Roulement arrière de la pompe",marque_pompe_neuve:"Pompe neuve",
     // Essais après remontage
