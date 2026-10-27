@@ -3932,9 +3932,11 @@ function ChampMarque({valeur,onChange,marques}){
 // Étape de fiche atelier : la personne qui a ouvert l'appli est cochée d'office. Si on décoche son nom, l'appli demande
 // qui utilise l'application ; la personne choisie devient celle qui a ouvert (en-tête) et se coche à sa place.
 // Cocher un deuxième technicien ne pose aucune question.
+// Profil Admin : aucune case cochée d'office et aucune question, on coche et décoche les techniciens comme on veut (demande du 27/10/2026).
 function ChampTechnicienAuto({valeur,onChange,techs}){
   const ctx=React.useContext(PersonneCtx);
-  const ini=ctx&&ctx.moi&&ctx.moi.initiales?String(ctx.moi.initiales):"";
+  const estAdmin=!!(ctx&&ctx.moi&&ctx.moi.profil==="admin");
+  const ini=!estAdmin&&ctx&&ctx.moi&&ctx.moi.initiales?String(ctx.moi.initiales):"";
   const dernier=useRef(valeur);dernier.current=valeur;
   const liste=t=>String(t||"").split(",").map(x=>x.trim()).filter(Boolean);
   useEffect(()=>{if(ini&&!String(dernier.current||"").trim())onChange(ini);},[ini]);
