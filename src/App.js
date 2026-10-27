@@ -355,6 +355,19 @@ const CHAMPS={
   [ETAPE_QUALITE]:champsQualite("Moteur"),
 }
 
+// Essais du moteur seul, sans la pompe ni le réducteur (demande du 27/10/2026) : une question à la fin de « Matériel au démontage moteur » ;
+// avec « Oui », l'étape ci-dessous s'ajoute juste après, avant le démontage de la pompe ou du réducteur. Mêmes champs que l'étape d'essais du moteur
+// (identifiants suffixés _ms ; les captures SKF ont leur propre catégorie pour ne pas se mélanger à celles de l'étape finale).
+const ETAPE_ESSAIS_MOTEUR_SEUL="Essais après remontage moteur seul";
+const CHAMPS_ESSAIS_MOTEUR_SEUL=suffixerChamps(CHAMPS["Information des essais après remontage"],"_ms").map(c=>c.type==="photo_skf"?{...c,categorie:c.categorie+" (moteur seul)"}:c);
+function champEssaisMoteurSeul(sans,demontage){
+  return {id:"essais_moteur_seul",label:"Essais moteur seul sans "+sans,type:"oui_non",required:true,note:"« Non » : rien ne change ; « Oui » : l'étape « "+ETAPE_ESSAIS_MOTEUR_SEUL+" » s'ajoute juste après, avant le démontage "+demontage};
+}
+function avecEssaisMoteurSeul(etapes,v){
+  if(!v||v.essais_moteur_seul!=="Oui")return etapes;
+  const i=etapes.indexOf("Matériel au démontage moteur");
+  return i<0?etapes:[...etapes.slice(0,i+1),ETAPE_ESSAIS_MOTEUR_SEUL,...etapes.slice(i+1)];
+}
 const ETAPES_POMPE=["Entrée","Infos électriques","Rotation avant démontage moteur","Rotation avant démontage pompe","Matériel au démontage moteur","Mécanique pompe au démontage","Essais après remontage",ETAPE_QUALITE];
 
 const GM_MOBILE_OPTIONS=["NTK","NTKG","NTL","NTLG","NTB","NTBG","Autre"];
@@ -481,7 +494,9 @@ const CHAMPS_POMPE={
     {id:"vitesse_moteur_neuf",label:"Vitesse du moteur",type:"text",unite:"tr/mn",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"type_moteur_neuf",label:"Type du moteur",type:"text",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"numero_serie_moteur_neuf",label:"N° de série",type:"text",required:false,condition:siNeuf},
+    champEssaisMoteurSeul("la pompe","de la pompe"),
   ],
+  [ETAPE_ESSAIS_MOTEUR_SEUL]:CHAMPS_ESSAIS_MOTEUR_SEUL,
   "Mécanique pompe au démontage":[
     {id:"pompe_neuve",label:"Pompe neuve",type:"oui_non",required:true},
     {id:"diametre_nez_roue",label:"Diamètre nez de roue",type:"mesure",unite:"mm",required:true,groupe:"dim_roue"},
@@ -663,7 +678,9 @@ const CHAMPS_REDUCTEUR={
     {id:"vitesse_moteur_neuf",label:"Vitesse du moteur",type:"text",unite:"tr/mn",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"type_moteur_neuf",label:"Type du moteur",type:"text",required:false,condition:siNeuf,groupe:"neuf_vit_type"},
     {id:"numero_serie_moteur_neuf",label:"N° de série",type:"text",required:false,condition:siNeuf},
+    champEssaisMoteurSeul("le réducteur","du réducteur"),
   ],
+  [ETAPE_ESSAIS_MOTEUR_SEUL]:CHAMPS_ESSAIS_MOTEUR_SEUL,
   "Mécanique réducteur au démontage":[
     {id:"reducteur_neuf",label:"Réducteur neuf",type:"oui_non",required:true},
     {id:"type_roulement_av_r",label:"Type roulement avant réducteur",type:"roulement",required:true,condition:siReducteurAncien},
@@ -1267,10 +1284,11 @@ const INTERTITRES_TRAME=(()=>{
     // Rotation avant démontage
     int_p1_avant:"Intensités",vib_av_mms_avant:"Vibrations",int_560_p1_avant:"Intensités à 560 V",nettoyage_hp:"Nettoyage et isolement",pression_essai_avant:"Essai en eau / air et pressions",
     // Matériel au démontage moteur
-    circlips_av_present:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",accoup_present:"Accouplement et poulie",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",
+    circlips_av_present:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",accoup_present:"Accouplement et poulie",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",essais_moteur_seul:"Essais du moteur seul",
     // Mécanique pompe au démontage
     diametre_nez_roue:"Roue et volute",etat_jc:"Joint de corps",type_gm_fixe:"Garniture mécanique",roulement_av_p_present:"Roulement avant de la pompe",roulement_ar_p_present:"Roulement arrière de la pompe",marque_pompe_neuve:"Pompe neuve",
-    // Essais après remontage
+    // Essais après remontage (et essais du moteur seul : mêmes sections)
+    int_p1_apres_ms:"Intensités",vib_av_mms_apres_ms:"Vibrations",int_560_p1_apres_ms:"Intensités à 560 V",
     int_p1_apres:"Intensités",vib_av_mms_apres:"Vibrations",int_560_p1_apres:"Intensités à 560 V",pression_essai_apres:"Essai en eau / air et pressions",vib_p_av_mms_apres:"Vibrations de la pompe",
   };
   const out={};
@@ -3467,7 +3485,7 @@ const CHAMPS_VENTILATEUR={
     {id:"debit_avant_v",label:"Débit mesuré",type:"mesure",unite:"m³/h",required:false,condition:siVentEssaiAvant},
     {id:"tech_mesure_avant_v",label:"Qui a mesuré",type:"technicien",required:true},
   ],
-  "Matériel au démontage moteur":CHAMPS_POMPE["Matériel au démontage moteur"].map(c=>
+  "Matériel au démontage moteur":CHAMPS_POMPE["Matériel au démontage moteur"].filter(c=>c.id!=="essais_moteur_seul").map(c=>
     c.id==="ventilateur_present"?{...c,label:"Ventilateur de refroidissement du moteur — présence"}
     :c.id==="etat_ventilateur"?{...c,label:"État ventilateur de refroidissement"}
     :c.id==="taille_ventilateur"?{...c,label:"Taille ventilateur de refroidissement"}:c),
@@ -3572,12 +3590,13 @@ const cleAtelier=type=>(type===TYPE_CHEMINEE||type==="Pompe"||type==="Moto-rédu
 function champsPourType(type){return appliquerConfig(champsPourTypeBase(type),cleAtelier(type));}
 function etapesPourType(type,v){
   if(type===TYPE_CHEMINEE)return ETAPES_CHEMINEE;
-  return type==="Pompe"?ETAPES_POMPE:type==="Moto-réducteur"?ETAPES_REDUCTEUR:type==="Ventilateur"?etapesVentilateurPour(v):etapesMoteurPour(v);
+  return type==="Pompe"?avecEssaisMoteurSeul(ETAPES_POMPE,v):type==="Moto-réducteur"?avecEssaisMoteurSeul(ETAPES_REDUCTEUR,v):type==="Ventilateur"?etapesVentilateurPour(v):etapesMoteurPour(v);
 }
 // listes d'étapes possibles selon les réponses (moteur neuf, ventilateur seul…) : la Maintenance s'en sert pour avertir qu'une étape d'arrivée n'apparaît pas toujours
 function variantesEtapesPourType(type){
   const vs=type==="Ventilateur"?[{},{recu_ventilateur:"Ventilateur seul"},{moteur_neuf_debut:"Oui"}]
     :(type==="Moteur"||type==="Autre")?[{},{moteur_neuf_debut:"Oui"},{moteur_neuf_debut:"Oui",essais_moteur_neuf:"Oui"},{essai_vide_avant:"Non",moteur_neuf:"Non"}]
+    :(type==="Pompe"||type==="Moto-réducteur")?[{},{essais_moteur_seul:"Oui"}]
     :[{}];
   return vs.map(v=>etapesPourType(type,v));
 }

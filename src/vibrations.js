@@ -36,7 +36,7 @@ const COTES = {
 const ORDRE_ORGANES = ["m", "p", "r", "v"];
 
 // Nom des cases de la fiche : vib_av_mms_avant, vib_ar_ge_apres, vib_av_mms_avant_m (moteur d'une pompe), vib_p_av_mms_apres (pompe), vib_r_… (réducteur), vib_v_… (ventilateur)
-const RE_ID = /^vib_(?:([prv])_)?(av|ar)_(mms|ge)_(avant|apres)(_m)?$/;
+const RE_ID = /^vib_(?:([prv])_)?(av|ar)_(mms|ge)_(avant|apres)(_m|_ms)?$/;
 export function decrireCase(id) {
   const m = RE_ID.exec(String(id || ""));
   if (!m) return null;
