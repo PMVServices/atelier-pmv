@@ -165,6 +165,37 @@ async function majFamilles(modifs){
   MAP_FAMILLES=carte;
   return true;
 }
+// ── Commandes en cours (demande du 28/10/2026) ──────────────────────────────────────────────────────────────────────────────────
+// Après l'alerte « à renouveler », l'administrateur marque l'article « Commandé » (quantité, date, opérateur) : on voit alors « en commande · stock prévu N », le lendemain aussi.
+// Rien à cliquer à la réception : la quantité reçue se calcule à partir des ENTRÉES enregistrées depuis la date de commande (poste douchette, session d'entrée ou saisie à la main) ;
+// la commande se solde toute seule (réception partielle : « il en reste N »). Rangée dans parametres_app « stock_commandes » : {id de l'article principal : {ids, ref, qte, le, par}}.
+const CLE_COMMANDES="stock_commandes";
+const JOURS_RETARD_COMMANDE=7; // sans réception complète au bout de 7 jours, la commande est signalée en retard
+async function lireCommandes(){
+  const r=await appel("GET","parametres_app?select=valeur&cle=eq."+CLE_COMMANDES);
+  if(!r.ok||!Array.isArray(r.data))return {ok:false,carte:{}};
+  let carte={};
+  if(r.data[0]&&r.data[0].valeur){try{carte=JSON.parse(r.data[0].valeur)||{};}catch(e){carte={};}}
+  return {ok:true,carte};
+}
+// relit la table juste avant d'écrire (comme majFamilles) pour ne pas écraser un changement fait entre-temps ; modif(carte) renvoie la nouvelle table
+async function majCommandes(modif){
+  const l=await lireCommandes();
+  if(!l.ok)return {ok:false,carte:{}};
+  const carte=modif({...l.carte})||{};
+  const r=await appel("POST","parametres_app?on_conflict=cle",[{cle:CLE_COMMANDES,valeur:JSON.stringify(carte)}],"resolution=merge-duplicates,return=minimal");
+  return {ok:r.ok,carte:r.ok?carte:l.carte};
+}
+// entrées et annulations enregistrées depuis la plus ancienne commande ; null si la lecture échoue
+async function lireEntreesDepuis(carte){
+  const dates=Object.values(carte).map(o=>o.le).filter(Boolean).sort();
+  if(!dates.length)return [];
+  const r=await appel("GET","stock_mouvements?select=article_id,type,delta,created_at&type=in.(entree,annulation)&created_at=gte."+encodeURIComponent(dates[0])+"&limit=5000");
+  return r.ok&&Array.isArray(r.data)?r.data:null;
+}
+// quantité reçue : entrées sur les articles de la commande depuis sa date, moins les annulations d'entrées (une annulation négative ; celle d'une sortie est positive et ne compte pas)
+const recuCommande=(o,mouvements)=>Math.max(0,(mouvements||[]).filter(m=>(o.ids||[]).includes(m.article_id)&&new Date(m.created_at)>=new Date(o.le)).reduce((n,m)=>n+(m.type==="entree"?m.delta:m.type==="annulation"?Math.min(0,m.delta):0),0));
+const dateCourte=iso=>{const d=new Date(iso);return isNaN(d.getTime())?"":d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"});};
 // Enregistre des changements d'articles faits dans la liste : un remplacement par article ; puis, pour les articles renommés, une seule écriture de la table des familles
 // (le nom change, la catégorie suit) et l'ancien nom gardé comme code associé (les étiquettes déjà collées restent reconnues).
 // changes : [{article, corps:{reference,dimensions,emplacement,stock_mini,stock_maxi}}] -> {faits, echecs:[{article,motif}], familleOk}
@@ -1797,10 +1828,10 @@ function PosteDouchette({articles,techs,quiInit,setQui,modePoste,onFermer,onChan
 // ─── Liste des articles (administrateur) ─────────────────────────────────────────────────────────
 // Une ligne par article. Lecture : toucher la ligne ouvre la fiche de l'article (mouvements, étiquette, suppression…). Modification : chaque ligne devient des cases
 // (nom, dimensions, emplacement, mini, maxi) ; la quantité se change par Entrée, Sortie ou Inventaire, jamais ici.
-function LigneLecture({a,onOuvrir}){
+function LigneLecture({a,onOuvrir,cmd}){
   const tot=qteEff(a),r=aRecommander(a),etat=tot<=0?"vide":r?"bas":"";
   return(<button type="button" className={"stk-lr "+etat} onClick={()=>onOuvrir(a.id)}>
-    <div className="c-ref"><span className="stk-ref">{a.reference}</span>{r&&tot>0&&<span className="stk-badge">À renouveler</span>}{tot<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
+    <div className="c-ref"><span className="stk-ref">{a.reference}</span>{r&&tot>0&&!cmd&&<span className="stk-badge">À renouveler</span>}{cmd&&<span className="stk-badge" style={cmd.retard?{background:"#FFF1F2",color:"#B42318",borderColor:"#F4B4BC"}:{background:"#EEF4FF",color:"#1B4F8A",borderColor:"#AFC6E6"}}>📦 En commande : {cmd.reste} · prévu {tot+cmd.reste}{cmd.retard?" · ⏰ "+cmd.jours+" j":""}</span>}{tot<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
     <div className="c-dim">{a.dimensions||""}</div>
     <div className="c-emp">{a.emplacement||""}</div>
     <div className={"c-qte stk-qte "+etat}>{a.quantite||0}{a.groupe&&<small>les 2 : {tot}</small>}</div>
@@ -1820,7 +1851,7 @@ function LigneEdition({a,b,chg,erreur,onChamp,onOuvrir}){
     {erreur&&<div className="stk-erreur-ligne" role="alert">{erreur}</div>}
   </div>);
 }
-function ListeArticles({lignes,parFamille,edition,brouillonDe,modifie,erreurs,onChamp,onOuvrir}){
+function ListeArticles({lignes,parFamille,edition,brouillonDe,modifie,erreurs,onChamp,onOuvrir,commandeDe}){
   const groupes=parFamille?grouperParFamille(lignes):[[null,lignes]];
   return(<div className="stk-lt">
     <div className="stk-lh" aria-hidden="true"><span>Référence</span><span>Dimensions ou description</span><span>Emplacement</span><span>Stock</span><span>Mini</span><span>Maxi</span></div>
@@ -1828,7 +1859,7 @@ function ListeArticles({lignes,parFamille,edition,brouillonDe,modifie,erreurs,on
       {f&&<div className="stk-lg">{LIB_FAMILLE[f]} ({l.length})</div>}
       {l.map(a=>edition
         ?<LigneEdition key={a.id} a={a} b={brouillonDe(a)} chg={modifie(a)} erreur={erreurs[a.id]} onChamp={onChamp} onOuvrir={onOuvrir}/>
-        :<LigneLecture key={a.id} a={a} onOuvrir={onOuvrir}/>)}
+        :<LigneLecture key={a.id} a={a} onOuvrir={onOuvrir} cmd={commandeDe?commandeDe(a):null}/>)}
     </React.Fragment>)}
   </div>);
 }
@@ -1868,6 +1899,8 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
   const [recents,setRecents]=useState([]);
   const [demandes,setDemandes]=useState(()=>new Set());
   const [cmdEnCours,setCmdEnCours]=useState(false);
+  const [commandes,setCommandes]=useState({});const [mouvEntrees,setMouvEntrees]=useState([]);
+  const [cmdForm,setCmdForm]=useState(null); // {id, qte} : formulaire « Commandé » ouvert sur une ligne de « À renouveler »
   const [toast,setToast]=useState(null);
   const toastRef=useRef(null);
   const afficherToast=useCallback(t=>{setToast(t);clearTimeout(toastRef.current);toastRef.current=setTimeout(()=>setToast(null),4200);},[]);
@@ -1880,7 +1913,12 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
     const r=await appel("GET","demandes_materiel?statut=eq.a_commander&select=designation&limit=1000");
     if(r.ok&&Array.isArray(r.data))setDemandes(new Set(r.data.map(d=>cle(d.designation))));
   },[]);
-  useEffect(()=>{if(disponible){chargerRecents();chargerDemandes();}},[disponible,chargerRecents,chargerDemandes]);
+  const chargerCommandes=useCallback(async()=>{
+    const l=await lireCommandes();if(!l.ok)return;
+    setCommandes(l.carte);
+    const m=await lireEntreesDepuis(l.carte);if(m)setMouvEntrees(m);
+  },[]);
+  useEffect(()=>{if(disponible){chargerRecents();chargerDemandes();chargerCommandes();}},[disponible,chargerRecents,chargerDemandes,chargerCommandes]);
   // le poste douchette s'ouvre tout seul si la tablette l'a demandé (une seule fois à l'ouverture du Stock)
   useEffect(()=>{
     if(posteAutoFait.current||disponible!==true||!articles.length)return;
@@ -1888,7 +1926,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
     let auto=false;try{auto=localStorage.getItem(CLE_POSTE_AUTO)==="1";}catch(e){/* facultatif */}
     if(auto||modePoste)setPoste(true);
   },[disponible,articles.length]);
-  const apresMouvement=useCallback(async()=>{await recharger();chargerRecents();},[recharger,chargerRecents]);
+  const apresMouvement=useCallback(async()=>{await recharger();chargerRecents();chargerCommandes();},[recharger,chargerRecents,chargerCommandes]); // chaque entrée (douchette comprise) fait avancer les commandes en cours
 
   const article=ficheId?articles.find(a=>a.id===ficheId):null;
   const parId=id=>articles.find(a=>a.id===id);
@@ -1903,7 +1941,43 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
     const va=qteEff(a)<=0?0:1,vb=qteEff(b)<=0?0:1;
     return va-vb||(qteEff(a)/(miniEff(a)||1))-(qteEff(b)/(miniEff(b)||1))||triRef(a,b);
   });
-  const aDemander=reco.filter(a=>!demandes.has(cle(designationDemande(a))));
+  // commande en cours d'un article (ou des deux références réunies) : null si aucune ou si les entrées l'ont soldée
+  const commandeDe=a=>{
+    const o=Object.values(commandes).find(x=>(x.ids||[]).includes(a.id));
+    if(!o)return null;
+    const recu=recuCommande(o,mouvEntrees),reste=Math.max(0,(o.qte||0)-recu);
+    if(reste<=0)return null;
+    const jours=Math.floor((Date.now()-new Date(o.le).getTime())/86400000);
+    return {...o,recu,reste,jours,retard:jours>=JOURS_RETARD_COMMANDE};
+  };
+  const idsCommande=a=>a.groupe?articles.filter(x=>x.groupe===a.groupe).map(x=>x.id):[a.id];
+  async function marquerCommande(a,qte){
+    if(!admin||cmdEnCours)return;
+    if(!qui){afficherToast("Choisissez d'abord l'opérateur (en haut de la page)");return;}
+    const n=parseInt(qte,10);
+    if(!(n>0)){afficherToast("Indiquez la quantité commandée");return;}
+    setCmdEnCours(true);
+    const ids=idsCommande(a);
+    const r=await majCommandes(c=>{Object.keys(c).forEach(k=>{if((c[k].ids||[]).some(i=>ids.includes(i)))delete c[k];});c[a.id]={ids,ref:libelleGroupe(a," + "),qte:n,le:new Date().toISOString(),par:qui};return c;});
+    setCmdEnCours(false);setCmdForm(null);
+    if(!r.ok){afficherToast("La commande n'a pas pu être enregistrée (connexion ?)");return;}
+    setCommandes(r.carte);
+    afficherToast("✓ « "+libelleGroupe(a," + ")+" » : "+n+" en commande");
+  }
+  // « Reçue » (livraison pas scannée) ou « Annuler » (erreur) : la commande disparaît
+  async function retirerCommande(a,recue){
+    if(!admin||cmdEnCours)return;
+    setCmdEnCours(true);
+    const ids=idsCommande(a);
+    const r=await majCommandes(c=>{Object.keys(c).forEach(k=>{if((c[k].ids||[]).some(i=>ids.includes(i)))delete c[k];});return c;});
+    setCmdEnCours(false);
+    if(!r.ok){afficherToast("La commande n'a pas pu être modifiée (connexion ?)");return;}
+    setCommandes(r.carte);
+    afficherToast(recue?"✓ Commande marquée reçue":"Commande annulée");
+  }
+  const recoAFaire=reco.filter(a=>!commandeDe(a)); // alertes pas encore commandées (une commande passée sort de cette liste et va dans « En commande »)
+  const enCommande=base.filter(estPrincipal).map(a=>[a,commandeDe(a)]).filter(([,c])=>c).sort((x,y)=>(y[1].retard-x[1].retard)||String(x[1].le).localeCompare(String(y[1].le)));
+  const aDemander=recoAFaire.filter(a=>!demandes.has(cle(designationDemande(a))));
   const nbRupture=base.filter(a=>estPrincipal(a)&&qteEff(a)<=0).length;
 
   async function envoyerDemandes(arts){
@@ -2002,17 +2076,41 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
   }
 
   const ligneReno=a=>{
-    const st=qteEff(a),dem=demandes.has(cle(designationDemande(a)));
+    const st=qteEff(a),dem=demandes.has(cle(designationDemande(a))),form=cmdForm&&cmdForm.id===a.id;
     return(<div key={a.id} className={"stk-reno"+(st<=0?" vide":"")}>
       <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>setFicheId(a.id)}>
         <div><span className="stk-ref">{libelleGroupe(a," + ")}</span>{st<=0&&<span className="stk-badge stk-badge--r">Rupture</span>}</div>
         <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
         <div className="stk-sub">Stock{a.groupe?" des 2":""} <b>{st}</b> · {libSeuils(a)||"seuil ?"} · à commander <b>{qteARecommander(a)}</b></div>
       </div>
-      <div className="act">{dem?<span className="stk-ok-pill">✓ Demandé</span>:<button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} onClick={()=>envoyerDemandes([a])}>Demander</button>}</div>
+      <div className="act" style={{display:"flex",flexDirection:"column",gap:6,alignItems:"stretch"}}>
+        {form
+          ?<span style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
+            <input className="stk-champ" style={{width:76}} type="number" inputMode="numeric" min="1" autoFocus value={cmdForm.qte} aria-label={"Quantité commandée de "+libelleGroupe(a," + ")} onChange={e=>setCmdForm({id:a.id,qte:e.target.value.replace(/\D/g,"")})} onKeyDown={e=>{if(e.key==="Enter")marquerCommande(a,cmdForm.qte);}}/>
+            <button type="button" className="stk-btn stk-btn--s stk-btn--p" disabled={cmdEnCours} onClick={()=>marquerCommande(a,cmdForm.qte)}>OK</button>
+            <button type="button" className="stk-btn stk-btn--s" onClick={()=>setCmdForm(null)}>✕</button></span>
+          :<>{dem?<span className="stk-ok-pill">✓ Demandé</span>:<button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} onClick={()=>envoyerDemandes([a])}>Demander</button>}
+            <button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} onClick={()=>setCmdForm({id:a.id,qte:String(Math.max(1,qteARecommander(a)))})}>🛒 Commandé</button></>}
+      </div>
     </div>);
   };
-  const boutonToutDemander=liste=>{const a=liste.filter(x=>!demandes.has(cle(designationDemande(x))));return a.length>0&&<button type="button" className="stk-btn stk-btn--s stk-btn--p" disabled={cmdEnCours} onClick={()=>envoyerDemandes(a)}>{cmdEnCours?"Envoi…":"Tout demander ("+a.length+")"}</button>;};
+  // commande passée, pas encore soldée par les entrées : « Reçue » (livraison non scannée) et « Annuler » (erreur) la retirent
+  const ligneCommande=([a,cmd])=>{
+    const st=qteEff(a);
+    return(<div key={a.id} className={"stk-reno"+(cmd.retard?" vide":"")}>
+      <div style={{minWidth:0,cursor:"pointer"}} onClick={()=>setFicheId(a.id)}>
+        <div><span className="stk-ref">{libelleGroupe(a," + ")}</span>{cmd.retard&&<span className="stk-badge stk-badge--r">⏰ En retard : {cmd.jours} jours</span>}</div>
+        <div className="stk-sub">{[a.dimensions,a.emplacement&&"Empl. "+a.emplacement].filter(Boolean).join(" · ")}</div>
+        <div className="stk-sub" style={{color:cmd.retard?"#B42318":"#1B4F8A",fontWeight:700}}>📦 Il en reste <b>{cmd.reste}</b> à recevoir{cmd.recu>0?" (reçu "+cmd.recu+" sur "+cmd.qte+")":" sur "+cmd.qte} · stock {st} → prévu <b>{st+cmd.reste}</b></div>
+        <div className="stk-sub">Commande passée le {dateCourte(cmd.le)}{cmd.par?" par "+cmd.par:""} · {libSeuils(a)||"seuil ?"}</div>
+      </div>
+      <div className="act" style={{display:"flex",flexDirection:"column",gap:6,alignItems:"stretch"}}>
+        <button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} title="La livraison n'a pas été scannée : la commande est soldée" onClick={()=>retirerCommande(a,true)}>✓ Reçue</button>
+        <button type="button" className="stk-btn stk-btn--s" disabled={cmdEnCours} onClick={()=>retirerCommande(a,false)}>Annuler</button>
+      </div>
+    </div>);
+  };
+  const boutonToutDemander=liste=>{const a=liste.filter(x=>!demandes.has(cle(designationDemande(x)))&&!commandeDe(x));return a.length>0&&<button type="button" className="stk-btn stk-btn--s stk-btn--p" disabled={cmdEnCours} onClick={()=>envoyerDemandes(a)}>{cmdEnCours?"Envoi…":"Tout demander ("+a.length+")"}</button>;};
   const sousTitre=(f,l,bouton)=><div className="stk-titre" style={{margin:"16px 0 6px"}}><h3 style={{fontSize:15}}>{LIB_FAMILLE[f]} ({l.length})</h3>{bouton}</div>;
 
   if(disponible===false){
@@ -2045,7 +2143,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
         <input className="stk-champ" value={recherche} onChange={e=>setRecherche(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!edition){const a=articles.find(x=>cle(x.reference)===cle(recherche))||(listeAffichee.length===1?listeAffichee[0]:null);if(a){setRecherche("");setFicheId(a.id);}}}} placeholder="🔍 Chercher une référence, des dimensions…" autoComplete="off"/>
         {!edition&&<button type="button" className="stk-btn stk-btn--s" onClick={()=>setEdition(true)}>✏️ Modifier la liste</button>}
         <button type="button" className="stk-btn stk-btn--s" onClick={()=>setFormArticle({nouveau:true})}>➕ Nouvel article</button>
-        {reco.length>0&&<button type="button" className="stk-btn stk-btn--s" onClick={()=>{if(renoRef.current)renoRef.current.scrollIntoView({behavior:"smooth",block:"start"});}}>🔔 À renouveler ({reco.length})</button>}
+        {(recoAFaire.length>0||enCommande.length>0)&&<button type="button" className="stk-btn stk-btn--s" onClick={()=>{if(renoRef.current)renoRef.current.scrollIntoView({behavior:"smooth",block:"start"});}}>🔔 À renouveler ({recoAFaire.length}){enCommande.length>0?" · 📦 En commande ("+enCommande.length+")":""}</button>}
       </div>
       <p className="stk-resume" style={{marginTop:12}}><span><b>{base.length}</b> références</span><span><b>{nbRupture}</b> en rupture</span>{q&&<span><b>{listeAffichee.length}</b> affichée{listeAffichee.length>1?"s":""}</span>}</p>
       {series.length>1&&<div className="stk-chips" style={{marginTop:0,marginBottom:4}}>
@@ -2054,7 +2152,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
       </div>}
       {listeAffichee.length===0
         ?<div className="stk-vide" style={{marginTop:10}}>Aucune référence ne correspond.</div>
-        :<ListeArticles lignes={listeAffichee} parFamille={famille==="toutes"} edition={edition} brouillonDe={brouillonDe} modifie={modifie} erreurs={erreursListe} onChamp={changerChamp} onOuvrir={id=>{setRecherche("");setFicheId(id);}}/>}
+        :<ListeArticles lignes={listeAffichee} parFamille={famille==="toutes"} edition={edition} brouillonDe={brouillonDe} modifie={modifie} erreurs={erreursListe} onChamp={changerChamp} onOuvrir={id=>{setRecherche("");setFicheId(id);}} commandeDe={commandeDe}/>}
       {edition&&<div className="stk-barre-edit" role="region" aria-label="Modification de la liste">
         <span style={{fontSize:13.5,color:"#374151"}}>✏️ <b>{nbModifs}</b> article{nbModifs>1?"s":""} modifié{nbModifs>1?"s":""} · la quantité se change par Entrée, Sortie ou Inventaire</span>
         <span style={{display:"flex",gap:8}}>
@@ -2063,13 +2161,19 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
         </span>
       </div>}
 
-      <div className="stk-titre" ref={renoRef} style={{scrollMarginTop:12}}><h3>🔔 À renouveler ({reco.length})</h3>
-        {famille!=="toutes"&&boutonToutDemander(reco)}
+      <div className="stk-titre" ref={renoRef} style={{scrollMarginTop:12}}><h3>🔔 À renouveler ({recoAFaire.length})</h3>
+        {famille!=="toutes"&&boutonToutDemander(recoAFaire)}
       </div>
-      {reco.length===0?<div className="stk-rien">✓ Rien à renouveler : tous les stocks sont au-dessus du minimum.</div>
+      {recoAFaire.length===0?<div className="stk-rien">✓ Rien à renouveler{enCommande.length>0?" (ce qui manque est déjà en commande)":" : tous les stocks sont au-dessus du minimum"}.</div>
         :famille==="toutes"
-          ?grouperParFamille(reco).map(([f,l])=><div key={f}>{sousTitre(f,l,boutonToutDemander(l))}<div className="stk-liste" style={{marginTop:0}}>{l.map(ligneReno)}</div></div>)
-          :<div className="stk-liste" style={{marginTop:0}}>{reco.map(ligneReno)}</div>}
+          ?grouperParFamille(recoAFaire).map(([f,l])=><div key={f}>{sousTitre(f,l,boutonToutDemander(l))}<div className="stk-liste" style={{marginTop:0}}>{l.map(ligneReno)}</div></div>)
+          :<div className="stk-liste" style={{marginTop:0}}>{recoAFaire.map(ligneReno)}</div>}
+
+      {enCommande.length>0&&<>
+        <div className="stk-titre"><h3>📦 En commande ({enCommande.length})</h3></div>
+        <p className="stk-aide" style={{marginTop:0}}>Le stock prévu compte ce qui est commandé. Chaque entrée enregistrée (douchette, session d'entrée…) solde la commande toute seule ; « Reçue » ne sert que si la livraison n'a pas été scannée.</p>
+        <div className="stk-liste" style={{marginTop:0}}>{enCommande.map(ligneCommande)}</div>
+      </>}
 
       <div className="stk-titre"><h3>🕘 Derniers mouvements</h3></div>
       {recents.length===0?<p className="stk-aide">Aucun mouvement pour le moment.</p>
