@@ -6669,6 +6669,7 @@ export default function App(){
 
   const width=useWidth();
   const isMobile=width<1400; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
+  const tablette=isMobile&&width>=600; // tablette : la personne connectée (pastille + ⇄) est aussi dans l'en-tête, à côté du ☰ (téléphone : seulement dans le menu ☰)
   const [menuOuvert,setMenuOuvert]=useState(false);
   // Accès par personne : la liste vient de la base ; le profil de la personne choisie décide de ce qu'elle voit
   const chargerAcces=()=>{setErreurAcces(null);lirePersonnes().then(r=>{if(r.liste)setPersonnes(r.liste);else setErreurAcces(r.erreur);});};
@@ -6706,7 +6707,8 @@ export default function App(){
     onChoisir={p=>{const cb=demandeQui&&demandeQui.cb;setDemandeQui(null);choisirPersonne(p);if(cb)cb(p);}}
     onAnnuler={()=>{const cb=demandeQui&&demandeQui.cb;setDemandeQui(null);setChangerPers(false);if(cb)cb(null);}}/>;
   const fenetrePersonne=menuPersonne&&<MenuPersonne moi={moi} onChanger={()=>{setMenuPersonne(false);setChangerPers(true);}} onAcces={()=>{setMenuPersonne(false);setMenuOuvert(false);setPage("acces");}} onFermer={()=>setMenuPersonne(false)}/>;
-  const chipPersonne=(compact)=><button onClick={()=>setMenuPersonne(true)} title={nomComplet(moi)+" — "+PROFILS[role].label+" (toucher pour changer de personne)"} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",maxWidth:150,overflow:"hidden",textOverflow:"ellipsis"}}>{PROFILS[role].icone}{compact?"":" "+nomCourt(moi)}</button>;
+  // pastille de la personne connectée = bouton « changer de personne » ; sur tablette (avecBouton) elle ajoute le signe ⇄ pour montrer qu'on peut la toucher
+  const chipPersonne=(compact,avecBouton)=><button onClick={()=>setMenuPersonne(true)} title={nomComplet(moi)+" — "+PROFILS[role].label+" (toucher pour changer de personne)"} aria-label={"Personne connectée : "+nomComplet(moi)+". Changer de personne"} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",maxWidth:avecBouton?200:150,overflow:"hidden",textOverflow:"ellipsis"}}>{PROFILS[role].icone}{compact?"":" "+nomCourt(moi)}{avecBouton?" ⇄":""}</button>;
   if(MODE_STOCK){
     return(<PersonneCtx.Provider value={ctxPersonne}><div style={S.app}>
       <div style={{...S.hdr,flexWrap:"nowrap",position:"sticky",top:0,zIndex:100}}>
@@ -6748,6 +6750,7 @@ export default function App(){
       {/* Droite */}
       <div style={{display:"flex",alignItems:"center",gap:8,marginLeft:"auto",flexShrink:0}}>
         {!isMobile&&chipPersonne(false)}
+        {tablette&&chipPersonne(false,true)}
         {!commercial&&role!=="maintenance"&&<BadgeStockage onClick={()=>setPage("stockage")}/>}
         {/* Hamburger mobile */}
         {isMobile&&<button onClick={()=>setMenuOuvert(o=>!o)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",width:36,height:36,borderRadius:8,cursor:"pointer",fontSize:20,display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1}}>
