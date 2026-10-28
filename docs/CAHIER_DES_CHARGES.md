@@ -332,6 +332,7 @@ Demande du 20/10/2026 : pouvoir changer les rapports (moteur, pompe, ventilateur
 
 - `src/App.js` utilise des fins de ligne CRLF ; modifier par script tenant compte des CRLF ou avec l'outil d'édition, jamais par remplacement global aveugle.
 - Pagination Supabase pour toute table pouvant dépasser 1000 lignes.
+- **Écriture des valeurs d'une fiche atelier (28/10/2026)** : « Valider et continuer » passe par `ecrireValeursFiche` (`App.js`) : les valeurs sont **écrites d'abord** (mise à jour par lots de 50, la base refuse = erreur affichée, étape non validée, rien de supprimé), puis seulement nettoyées (valeurs vidées ou disparues ; clés internes `__…` jamais touchées). **Ne jamais remettre « tout supprimer puis recréer »** : une coupure entre les deux vidait la fiche alors que l'écran annonçait « validé ». Pour une fiche existante, les valeurs passent avant la mise à jour des étapes validées, dont la réponse est vérifiée.
 - Paramètres de l'appli : table clé/valeur `parametres_app` (dont `clients_rail`, liste JSON des clients dont les numéros sont en DV).
 - Table `rail_stock` (stock RAIL) : SQL dans `src/Rail.js` (`SQL_RAIL`), collé par l'utilisateur ; l'erreur `PGRST205` = table absente (bandeau d'activation).
 - Les modifications de base (DDL) passent par un SQL que l'utilisateur colle lui-même ; l'appli affiche un bandeau d'activation tant que la table manque.

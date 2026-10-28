@@ -3637,6 +3637,19 @@ function variantesEtapesPourType(type){
     :[{}];
   return vs.map(v=>etapesPourType(type,v));
 }
+// Écrit les valeurs d'une fiche sans jamais supprimer avant d'avoir écrit : mise à jour par lots (db.upsert lève une erreur si la base refuse), puis suppression des valeurs
+// enregistrées qui ne sont plus dans la fiche (champ vidé ou disparu), hors clés internes « __… » (commentaires, export NAS…). Avant le 28/10/2026, la validation d'une étape
+// supprimait toutes les valeurs puis les recréait sans vérifier la réponse : une coupure entre les deux laissait la fiche vide alors que l'écran annonçait « validé ».
+async function ecrireValeursFiche(fid,v){
+  const gardees=Object.keys(v).filter(k=>!k.startsWith("__")&&v[k]!==undefined&&v[k]!=="");
+  const rows=gardees.map(k=>({fiche_id:fid,champ_id:k,valeur:String(v[k])}));
+  for(let i=0;i<rows.length;i+=50)await db.upsert("fiche_valeurs",rows.slice(i,i+50),"fiche_id,champ_id");
+  // nettoyage : ne bloque jamais la validation (au pire, une valeur périmée reste jusqu'à la prochaine validation)
+  const exist=await db.get("fiche_valeurs","?fiche_id=eq."+fid+"&select=champ_id&limit=5000");
+  if(!Array.isArray(exist))return;
+  const aSupprimer=exist.map(x=>x.champ_id).filter(c=>c&&!c.startsWith("__")&&!gardees.includes(c));
+  for(let i=0;i<aSupprimer.length;i+=40)await db.del("fiche_valeurs","?fiche_id=eq."+fid+"&champ_id=in.("+aSupprimer.slice(i,i+40).map(encodeURIComponent).join(",")+")");
+}
 function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient,categories,onRetour,onFicheUpdated,ouvrirApercu,onClearApercu,onOpenRapport,onOuvrirCommandes,seedValeurs,onSeedConsumed,onReouvrir}){
   const lecture=React.useContext(LectureCtx);
   const largeurEcran=useWidth();
@@ -3886,10 +3899,14 @@ const onChange=useCallback((id,val)=>setV(p=>{
         const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||matDefaut,client:v.client||"",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:idx+1,etapes_validees:newVal,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;if(!fid)throw new Error("Impossible de créer la fiche");setFicheId(fid);
         await rattacherPhotos(fid);
-      }else{await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:Math.min(idx+1,etapesActives.length-1),etapes_validees:newVal});setStatutChantier(newSC);}
-      await db.del("fiche_valeurs","?fiche_id=eq."+fid+"&champ_id=not.in.(__commentaires)");
-      const vals=Object.entries(v).filter(([k,val])=>!k.startsWith("__")&&val!==undefined&&val!=="").map(([champ_id,valeur])=>({fiche_id:fid,champ_id,valeur:String(valeur)}));
-      if(vals.length>0)await db.post("fiche_valeurs",vals);
+        await ecrireValeursFiche(fid,v);
+      }else{
+        // fiche existante : les valeurs d'abord ; si la base refuse, l'étape n'est pas comptée validée et rien n'a été supprimé
+        await ecrireValeursFiche(fid,v);
+        const maj=await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:Math.min(idx+1,etapesActives.length-1),etapes_validees:newVal});
+        if(!Array.isArray(maj))throw new Error("la fiche n'a pas pu être mise à jour (connexion ?)");
+        setStatutChantier(newSC);
+      }
       await synchroniserRail(fid);
       await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Étape validée",etape:etapesActives[idx]});
       if(onFicheUpdated)onFicheUpdated(fid,{statut:toutFini?"Terminée":"En cours",statut_chantier:newSC});
