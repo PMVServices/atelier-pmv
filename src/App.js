@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import {genHtml, imprimerFiche, telechargerZip, apercuRapport, afficherApercu, telechargerHtml, lancerImpression} from "./pdfUtils";
 import {cleNr, cleNrJust} from "./etapeNr";
+import {INTERTITRES_TRAME, sousParties, cleSousPartieJust} from "./sousParties";
 import {exporterRapportDocx} from "./rapportDocx";
 import {exporterRapportCheminee} from "./rapportLivretDocx";
 import {chargerConfigRapports} from "./configRapports";
@@ -757,8 +758,12 @@ function photoRequiseOk(c,v,photos){
 }
 function etapeOk(nom,v,nr,cs,photos){
   if(nr)return String(v[cleNrJust(nom)]||"").trim()!=="";   // étape non réalisable : justification obligatoire
-  for(const c of((cs||CHAMPS)[nom]||[])){
+  const liste=(cs||CHAMPS)[nom]||[];
+  const sp=sousParties(nom,liste,v,c=>champVisible(c,v)); // sous-parties « non réalisables » (sousParties.js)
+  if(sp.manque)return false;
+  for(const c of liste){
     if(!champVisible(c,v))continue;
+    if(sp.nrIds.has(c.id))continue;
     if(c.type==="photo_requise"){if(c.required&&!photoRequiseOk(c,v,photos))return false;continue;}
     if(estRequis(c,v)&&!v[c.id])return false;
     if(c.orRequiredWith&&!v[c.id]&&!v[c.orRequiredWith])return false;
@@ -1301,64 +1306,70 @@ const pleineLigne=cc=>CHAMPS_PLEINE_LIGNE.includes(cc.type)||(cc.type==="text"&&
 // puis de haut en bas dans l'ordre de la fiche. Un groupe de champs liés (isolement + DAR, flasque + arbre…) reste sur la même ligne : s'il ne tient pas
 // dans ce qui reste de la ligne, on passe à la suivante (la fin de ligne reste vide). Les champs larges prennent la ligne entière.
 // « placer(c) » reçoit un champ ; « vide() » complète la ligne en cours avec des cases vides.
-// Intertitres de la trame sur ordinateur : ils s'ajoutent tout seuls avant le champ indiqué (comme si l'on avait mis un intertitre dans la Maintenance), sur une nouvelle ligne.
-// Les variantes d'un même champ (2e passage « _2 », moteur d'une pompe « _m », pompe « _p ») reçoivent le même intertitre.
-const INTERTITRES_TRAME=(()=>{
-  const t={
-    // Entrée
-    depose_nos_soins:"Dépose et enlèvement",sur_variateur:"Installation et délai",marque_moteur:"Moteur",marque_pompe:"Pompe",marque_reducteur:"Réducteur",devis_necessaire:"Devis et rapport",
-    // Infos électriques
-    isol_masse:"Isolements",adx_resultat:"Mesure ADX",adx_resultat_var:"Mesure ADX",adx_resultat_novar:"Mesure ADX",plaque_bornes_etat:"Plaque à bornes",sonde_presence:"Sonde",
-    // Rotation avant démontage
-    int_p1_avant:"Intensités",vib_av_mms_avant:"Vibrations",int_560_p1_avant:"Intensités à 560 V",nettoyage_hp:"Nettoyage et isolement",pression_essai_avant:"Essai en eau / air et pressions",mesures_vib_p_avant:"Vibrations de la pompe",mesures_vib_r_avant:"Vibrations du réducteur",
-    // Matériel au démontage moteur
-    circlips_av_present:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",accoup_present:"Accouplement et poulie",accoup_present_r:"Accouplement et poulie du réducteur",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",essais_moteur_seul:"Essais du moteur seul",
-    // Mécanique pompe au démontage
-    diametre_nez_roue:"Roue et volute",etat_jc:"Joint de corps",type_gm_fixe:"Garniture mécanique",roulement_av_p_present:"Roulement avant de la pompe",roulement_ar_p_present:"Roulement arrière de la pompe",marque_pompe_neuve:"Pompe neuve",
-    // Essais après remontage (et essais du moteur seul : mêmes sections)
-    int_p1_apres_ms:"Intensités",vib_av_mms_apres_ms:"Vibrations",int_560_p1_apres_ms:"Intensités à 560 V",
-    int_p1_apres:"Intensités",vib_av_mms_apres:"Vibrations",int_560_p1_apres:"Intensités à 560 V",pression_essai_apres:"Essai en eau / air et pressions",vib_p_av_mms_apres:"Vibrations de la pompe",
-  };
-  const out={};
-  const avecVariantes=["isol_masse","adx_resultat","adx_resultat_var","adx_resultat_novar","int_p1_avant","vib_av_mms_avant","int_560_p1_avant","nettoyage_hp"];
-  Object.keys(t).forEach(k=>{out[k]=t[k];if(avecVariantes.includes(k))["_2","_m","_p"].forEach(suf=>{out[k+suf]=t[k];});});
-  return out;
-})();
-function trameFiche(champs,v,cols,rendre){
+// sp (facultatif) : sous-parties de l'étape (sousParties.js) ; sp.actif = la case « Cette partie n'est pas réalisable » est proposée (pas à l'étape 1)
+function trameFiche(champs,v,cols,rendre,sp){
   const cases=[];let col=0;const vus=new Set();let dernierTitre=false;
   const vide=()=>{if(col===0)return;while(col<cols){cases.push(<div key={"vide-"+cases.length} aria-hidden="true"/>);col++;}col=0;};
   const placer=m=>{
     if(pleineLigne(m)){vide();cases.push(<div key={m.id} style={{gridColumn:"1 / -1",minWidth:0,maxWidth:m.type==="titre"?undefined:1000}}>{rendre(m)}</div>);col=0;}
     else{cases.push(<div key={m.id} style={{minWidth:0}}>{rendre(m)}</div>);col=(col+1)%cols;}
   };
+  const controle=s=>{vide();cases.push(<div key={"nr-"+s.cle} style={{gridColumn:"1 / -1",minWidth:0}}><ControleSousPartie s={s} v={v} onChange={sp.onChange}/></div>);};
   for(let i=0;i<champs.length;i++){
     const c=champs[i];
     if(vus.has(c.id))continue;
     if(!champVisible(c,v)){vus.add(c.id);continue;}
     const membres=c.groupe?champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v)):[c];
     membres.forEach(m=>vus.add(m.id));
+    const sec=sp&&sp.actif?sp.parDebut[c.id]:null;
     const inter=INTERTITRES_TRAME[c.id];
-    if(inter&&!dernierTitre&&cases.length>0){vide();cases.push(<p key={"it-"+c.id} style={{gridColumn:"1 / -1",fontSize:13,fontWeight:700,color:"#1B4F8A",margin:"14px 0 8px",paddingBottom:4,borderBottom:"1px solid #E2E6EA"}}>{inter}</p>);}
+    // intertitre : mêmes règles qu'avant (sp.parDebut les reprend : pas d'intertitre en tête d'étape ni juste après un champ « titre »)
+    if(sp&&sp.actif?(sec&&!sec.estTitre):(inter&&!dernierTitre&&cases.length>0)){vide();cases.push(<p key={"it-"+c.id} style={{gridColumn:"1 / -1",fontSize:13,fontWeight:700,color:"#1B4F8A",margin:"14px 0 8px",paddingBottom:4,borderBottom:"1px solid #E2E6EA"}}>{inter}</p>);}
+    if(sec&&!sec.estTitre)controle(sec);
     dernierTitre=c.type==="titre";
-    if(membres.length>1&&membres.length<=cols&&!membres.some(pleineLigne)&&col+membres.length>cols)vide();
-    membres.forEach(placer);
+    const aPlacer=sp&&sp.actif?membres.filter(m=>!sp.nrIds.has(m.id)):membres; // les champs d'une sous-partie non réalisable ne sont pas affichés
+    if(aPlacer.length>1&&aPlacer.length<=cols&&!aPlacer.some(pleineLigne)&&col+aPlacer.length>cols)vide();
+    aPlacer.forEach(placer);
+    if(sec&&sec.estTitre)controle(sec);
   }
   vide();
   return {cases,vide};
 }
-function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,onPhotoRemoved,champsSource}){
+function RenduChamps({nom,v,onChange,techs,clients,onAddClient,ficheId,cheminBase,categories,photos=[],onPhotoAdded,onPhotoRemoved,champsSource,sousPartiesNR}){
   const width=useWidth();const champs=(champsSource||CHAMPS)[nom]||[];const rendus=[];const vus=new Set();
   const un=cc=><UnChamp key={cc.id} c={cc} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} etape={nom}/>;
+  // sous-parties de l'étape (intertitres) : chacune peut être « non réalisable » (sousPartiesNR : toutes les étapes sauf la première)
+  const sp=sousParties(nom,champs,v,c=>champVisible(c,v));sp.actif=!!sousPartiesNR;sp.onChange=onChange;
   // les photos obligatoires (champs « photo_requise ») s'affichent dans leur champ : on ne les répète pas dans « Photos — étape »
   const catsRequises=new Set(champs.filter(c=>c.type==="photo_requise").flatMap(c=>[c.categorie,...(c.anciennesCategories||[])]));
   const pied=[<CasesLibres key="libres" etape={nom} v={v} onChange={onChange}/>,<SectionPhotos key="photos" etape={nom} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos.filter(p=>p.etape===nom&&!catsRequises.has(p.categorie_nom))} toutes={photos} onPhotoAdded={p=>onPhotoAdded({...p,etape:nom})} onPhotoRemoved={onPhotoRemoved}/>];
   if(width>=1000){
     const cols=width>=1500?4:2;
-    const {cases}=trameFiche(champs,v,cols,un);
+    const {cases}=trameFiche(champs,v,cols,un,sp);
     return <><div style={{display:"grid",gridTemplateColumns:"repeat("+cols+",minmax(0,1fr))",columnGap:24,alignItems:"start"}}>{cases}</div>{pied}</>;
   }
-  for(let i=0;i<champs.length;i++){const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}if(c.groupe){const grp=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));grp.forEach(cc=>vus.add(cc.id));const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>);}else{vus.add(c.id);rendus.push(un(c));}}
+  for(let i=0;i<champs.length;i++){
+    const c=champs[i];if(vus.has(c.id))continue;if(!champVisible(c,v)){vus.add(c.id);continue;}
+    const sec=sp.actif?sp.parDebut[c.id]:null;
+    // tablette et téléphone : l'intertitre (absent jusqu'ici) s'affiche pour porter la case « non réalisable »
+    if(sec&&!sec.estTitre)rendus.push(<div key={"it-"+sec.cle}><p style={{fontSize:13,fontWeight:700,color:"#1B4F8A",margin:"14px 0 6px",paddingBottom:4,borderBottom:"1px solid #E2E6EA"}}>{sec.titre}</p><ControleSousPartie s={sec} v={v} onChange={onChange}/></div>);
+    if(c.groupe){
+      const tous=champs.filter(cc=>cc.groupe===c.groupe&&champVisible(cc,v));tous.forEach(cc=>vus.add(cc.id));
+      const grp=sp.actif?tous.filter(cc=>!sp.nrIds.has(cc.id)):tous;
+      if(grp.length){const nCols=grilleCols(grp.length===3?3:2,width);rendus.push(<div key={c.groupe} style={{display:"grid",gridTemplateColumns:"repeat("+nCols+",1fr)",gap:8,marginBottom:4}}>{grp.map(un)}</div>);}
+    }else{vus.add(c.id);if(!(sp.actif&&sp.nrIds.has(c.id)))rendus.push(un(c));}
+    if(sec&&sec.estTitre)rendus.push(<ControleSousPartie key={"nr-"+sec.cle} s={sec} v={v} onChange={onChange}/>);
+  }
   return <>{rendus}{pied}</>;
+}
+
+// Case « Cette partie n'est pas réalisable » d'une sous-partie + justification obligatoire (demande du 28/10/2026 ; sousParties.js)
+function ControleSousPartie({s,v,onChange}){
+  const j=cleSousPartieJust(s.cle),manque=s.nr&&!s.justification;
+  return(<div style={{margin:"2px 0 10px"}}>
+    <label style={{display:"inline-flex",gap:8,alignItems:"center",fontSize:12,color:s.nr?"#B45309":"#6B7280",fontWeight:s.nr?700:500,cursor:"pointer"}}><input type="checkbox" checked={!!s.nr} onChange={e=>onChange(s.cle,e.target.checked?"Oui":"")}/> Cette partie n'est pas réalisable</label>
+    {s.nr&&<div style={{marginTop:6}}><label style={{...S.lbl,color:manque?"#D73A49":"#6B7280"}}>Justification — pourquoi « {s.titre} » n'est pas réalisable<span style={{color:"#D73A49"}}> *</span></label><ChampTexteDictee champId={j} valeur={v[j]} onChange={onChange} erreur={manque}/></div>}
+  </div>);
 }
 
 // Case « Étape non réalisable » + justification obligatoire (étape en cours ou déjà validée)
@@ -1373,7 +1384,7 @@ function BlocNonRealisable({nom,v,nr,onNR,onChange}){
 function SectionEtape({nom,idx,total,actif,validees,v,nr,onChange,onNR,onValider,onSauvegarder,onEnregistrerEtape,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,onPhotoRemoved,champsSource}){
   const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2,photos);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
   function resume(){if(v[cleNr(nom)]==="Oui")return "Non réalisable — "+(v[cleNrJust(nom)]||"justification manquante");return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${(c.unitesChoix&&v[c.id+"__unite"])||c.unite?" "+((c.unitesChoix&&v[c.id+"__unite"])||c.unite):""}`).join(" · ");}
-  const champsEtape=<RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2}/>;
+  const champsEtape=<RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2} sousPartiesNR={idx>0}/>;
   if(estLock)return<div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
   // étape validée : repliée avec son ✅ ; la dernière étape reste « active » une fois validée (il n'y a pas de suivante), elle se replie quand même
   if(estVal&&(!estAct||idx===(total||ETAPES.length)-1))return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>{nr?"⚠️":"✅"}</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}</span>{nr&&<span style={{fontSize:12,color:"#E8720C",fontWeight:600,marginLeft:8}}>· non réalisable</span>}</div></div><span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modifiez puis enregistrez : la modification est tracée dans l'historique.</div>{idx!==0&&<BlocNonRealisable nom={nom} v={v} nr={nr} onNR={onNR} onChange={onChange}/>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}>{champsEtape}</div>{!ok&&<div style={{...S.alert,marginBottom:10}}>⚠ {nr?"Indiquez la justification (obligatoire).":"Des champs obligatoires (*) sont manquants."}</div>}<button onClick={onEnregistrerEtape} disabled={saving||!ok} style={{...S.p1,marginTop:8,width:"100%",justifyContent:"center",opacity:(saving||!ok)?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer cette étape"}</button></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
