@@ -141,6 +141,20 @@ function champsAccouplementPoulie(sfx="",quand=siAncien,lieu=""){
   });
   return out;
 }
+// Mesures de vibrations de la pompe (p) ou du réducteur (r) avant démontage (demande du 28/10/2026) : question Oui / Non, puis les mêmes infos que pour le moteur
+// (vibration avant et arrière en mm/s et en GE, captures SKF). Les cases s'appellent vib_p_… / vib_r_… _avant : l'alerte rouge et la conclusion des rapports (vibrations.js) les reconnaissent.
+function champsVibrationsOrgane(p,nom,du){
+  const q="mesures_vib_"+p+"_avant";
+  const si=v=>v[q]==="Oui";
+  const mesure=(cote,lib,mesureId,unite,groupe)=>({id:"vib_"+p+"_"+cote+"_"+mesureId+"_avant",label:"Vibration "+lib+" "+nom+" — "+unite,type:"mesure",unite,required:true,groupe,condition:si});
+  return [
+    {id:q,label:"Mesures de vibrations "+du,type:"oui_non",required:true,note:"« Oui » : les mêmes mesures que pour le moteur (avant, arrière, captures SKF) ; « Non » : rien de plus"},
+    mesure("av","avant","mms","mm/s","vib_"+p+"_avant_rot"),mesure("av","avant","ge","GE","vib_"+p+"_avant_rot"),
+    mesure("ar","arrière","mms","mm/s","vib_"+p+"_arriere_rot"),mesure("ar","arrière","ge","GE","vib_"+p+"_arriere_rot"),
+    {id:"skf_av_rot_"+p,label:"Screen SKF avant rotation",type:"photo_skf",categorie:"Screen SKF avant "+nom+" au démontage",required:false,condition:si},
+    {id:"skf_ar_rot_"+p,label:"Screen SKF arrière rotation",type:"photo_skf",categorie:"Screen SKF arrière "+nom+" au démontage",required:false,condition:si},
+  ];
+}
 const siPompeNeuve=v=>v.pompe_neuve==="Oui";
 const siPompeAncienne=v=>v.pompe_neuve!=="Oui";
 // roulements de la pompe : question « Roulement avant / arrière pompe » Oui / Non ; avec « Non », tout ce qui concerne ce roulement disparaît (sans réponse, il reste affiché)
@@ -454,6 +468,7 @@ const CHAMPS_POMPE={
     {id:"int_560_p1_avant_p",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_p"},
     {id:"int_560_p2_avant_p",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_p"},
     {id:"int_560_p3_avant_p",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_p"},
+    ...champsVibrationsOrgane("p","pompe","de la pompe"), // vibrations de la pompe : Oui / Non puis les mêmes mesures que le moteur
     {id:"pression_essai_avant",label:"Essai en eau / air",type:"select",options:["Eau","Air"],required:true},
     {id:"pression_nom_max",label:"Pression nominale max",type:"mesure",unite:"bar",required:true,groupe:"pression_pompe_pair"},
     {id:"pression_courbe_0",label:"Pression max débit nul",type:"mesure",unite:"bar",required:true,groupe:"pression_pompe_pair"},
@@ -645,6 +660,7 @@ const CHAMPS_REDUCTEUR={
     {id:"int_560_p1_avant_r",label:"Intensité 560V — Ph.1",type:"mesure",unite:"A",required:false,groupe:"int560_avant_r"},
     {id:"int_560_p2_avant_r",label:"Intensité 560V — Ph.2",type:"mesure",unite:"A",required:false,groupe:"int560_avant_r"},
     {id:"int_560_p3_avant_r",label:"Intensité 560V — Ph.3",type:"mesure",unite:"A",required:false,groupe:"int560_avant_r"},
+    ...champsVibrationsOrgane("r","réducteur","du réducteur"), // vibrations du réducteur : Oui / Non puis les mêmes mesures que le moteur
     {id:"tech_mesure_avant_r",label:"Qui a mesuré",type:"technicien",required:true},
   ],
   "Matériel au démontage moteur":[
@@ -1292,7 +1308,7 @@ const INTERTITRES_TRAME=(()=>{
     // Infos électriques
     isol_masse:"Isolements",adx_resultat:"Mesure ADX",adx_resultat_var:"Mesure ADX",adx_resultat_novar:"Mesure ADX",plaque_bornes_etat:"Plaque à bornes",sonde_presence:"Sonde",
     // Rotation avant démontage
-    int_p1_avant:"Intensités",vib_av_mms_avant:"Vibrations",int_560_p1_avant:"Intensités à 560 V",nettoyage_hp:"Nettoyage et isolement",pression_essai_avant:"Essai en eau / air et pressions",
+    int_p1_avant:"Intensités",vib_av_mms_avant:"Vibrations",int_560_p1_avant:"Intensités à 560 V",nettoyage_hp:"Nettoyage et isolement",pression_essai_avant:"Essai en eau / air et pressions",mesures_vib_p_avant:"Vibrations de la pompe",mesures_vib_r_avant:"Vibrations du réducteur",
     // Matériel au démontage moteur
     circlips_av_present:"Circlips, rondelle et ventilateur",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",accoup_present:"Accouplement et poulie",accoup_present_r:"Accouplement et poulie du réducteur",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",essais_moteur_seul:"Essais du moteur seul",
     // Mécanique pompe au démontage
