@@ -2117,6 +2117,15 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
 }
 
 // ─── PAGE PLANNING KANBAN ───────────────────────────────────────────────
+// Colonnes « fantômes » du planning (demande du 28/10/2026) : cachées d'office, un bouton « Afficher … » les montre (le choix vaut le temps de la visite du planning).
+// Pour tout le monde : « Devis envoyé » (colonne créée dans la Maintenance, repérée par son nom) ; pour les techniciens : en plus « Devis » et « En commande ».
+// La case « Masquée par défaut » de la Maintenance (statut.masque) cache toujours la colonne, pour tous les profils.
+const sansAccentMin=t=>String(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().trim();
+const FANTOMES_TECHNICIEN=["Devis","En_commande"];
+function colonneFantome(st,profil){
+  if(/^devis envoy/.test(sansAccentMin(st.label)))return true;
+  return profil==="tech"&&FANTOMES_TECHNICIEN.includes(st.id);
+}
 function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche,onNouvelleFiche}){
   const [filtTech,setFiltTech]=useState("tous");const [showTermine,setShowTermine]=useState(false);const [showAbandonne,setShowAbandonne]=useState(false);
   const [montres,setMontres]=useState({});const [infoMasque,setInfoMasque]=useState(""); // colonnes « masquées par défaut » (Maintenance) affichées à la demande ; message après un rangement dans l'une d'elles
@@ -2138,7 +2147,7 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
     catch(e){setErreurLibre("Enregistrement impossible : "+e.message);return false;}
   }
   // une carte « sans fiche » change de colonne dans la liste du planning, une fiche dans la base des fiches
-  const masquesPerso=STATUTS_CHANTIER.filter(x=>x.masque&&x.id!=="Termine"&&x.id!=="Abandonne"); // colonnes cachées par la Maintenance (case « Masquée par défaut »)
+  const masquesPerso=STATUTS_CHANTIER.filter(x=>(x.masque||colonneFantome(x,moiP&&moiP.profil))&&x.id!=="Termine"&&x.id!=="Abandonne"); // colonnes cachées d'office : case « Masquée par défaut » de la Maintenance, « Devis envoyé » pour tous, « Devis » et « En commande » pour les techniciens
   function onStatutChange(id,statut){
     const cachee=masquesPerso.find(x=>x.id===statut);
     if(cachee&&!montres[cachee.id]){setInfoMasque("Carte rangée dans « "+cachee.label+" » : cette colonne est masquée, touchez « Afficher "+cachee.label+" » pour la voir.");setTimeout(()=>setInfoMasque(""),8000);}
