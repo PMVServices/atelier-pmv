@@ -3339,7 +3339,9 @@ function PageRapportsListe({fiches,onOpen}){
   const tousTypes=fiches.filter(f=>["Moteur","Autre","Moto-réducteur","Pompe","Ventilateur",TYPE_CHEMINEE].includes(f.type_materiel||"Moteur"));
   // état d'une fiche : « termine » (rapport marqué terminé) · « encours » (rapport commencé ou enregistré) · « demande » (demandé à l'entrée, cheminée, ou colonne « Rapport à faire » du Planning) · « aucun »
   const etatRapport=f=>!info?"":info.termines.has(f.id)?"termine":info.enregistres.has(f.id)?"encours":(info.demandes.has(f.id)||f.type_materiel===TYPE_CHEMINEE||f.statut_chantier==="Rapport_a_faire")?"demande":"aucun";
-  const aFaire=tousTypes.filter(f=>{const e=etatRapport(f);return e==="encours"||e==="demande";});
+  // « À faire » = la fiche est dans la colonne « Rapport à faire » du Planning, ou c'est une cheminée de freinage (elles ont toutes un rapport, dès leur création) ; tant que le rapport n'est pas terminé.
+  // Les autres fiches (même avec « Rapport client demandé » = Oui ou un rapport commencé) n'y viennent qu'en arrivant à cette étape ; le bouton « Afficher aussi les fiches sans rapport » les montre.
+  const aFaire=tousTypes.filter(f=>etatRapport(f)!=="termine"&&(f.type_materiel===TYPE_CHEMINEE||f.statut_chantier==="Rapport_a_faire"));
   const faits=tousTypes.filter(f=>etatRapport(f)==="termine");
   const sansRapport=info?tousTypes.length-aFaire.length-faits.length:0;
   const liste=info===undefined?[]:info===null?(sous==="fait"?[]:tousTypes):sous==="fait"?faits:toutes?tousTypes.filter(f=>etatRapport(f)!=="termine"):aFaire;
@@ -3353,7 +3355,7 @@ function PageRapportsListe({fiches,onOpen}){
   const pastille=actif=>({padding:"9px 18px",minHeight:44,borderRadius:22,border:"1.5px solid "+(actif?"#1B4F8A":"#D1D5DB"),background:actif?"#1B4F8A":"#fff",color:actif?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer"});
   return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
     <h1 style={{fontSize:22,fontWeight:800,margin:"0 0 4px"}}>📧 Rapports client</h1>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px"}}>{info===undefined?"Chargement…":info===null?"Le tri des rapports n'a pas pu être fait (connexion ?) : toutes les fiches sont affichées.":sous==="fait"?"Rapports enregistrés et terminés. Touchez-en un pour le revoir, l'exporter ou le rouvrir.":"Rapports en cours ou pas encore commencés. Touchez une fiche pour créer ou modifier son rapport ; marquez-le terminé quand il est fini."}</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px"}}>{info===undefined?"Chargement…":info===null?"Le tri des rapports n'a pas pu être fait (connexion ?) : toutes les fiches sont affichées.":sous==="fait"?"Rapports enregistrés et terminés. Touchez-en un pour le revoir, l'exporter ou le rouvrir.":"Fiches dans la colonne « Rapport à faire » du Planning, et cheminées de freinage. Touchez une fiche pour créer ou modifier son rapport ; marquez-le terminé quand il est fini."}</p>
     <div role="tablist" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
       <button type="button" role="tab" aria-selected={sous==="afaire"} onClick={()=>setSous("afaire")} style={pastille(sous==="afaire")}>📝 À faire{info?" ("+aFaire.length+")":""}</button>
       <button type="button" role="tab" aria-selected={sous==="fait"} onClick={()=>setSous("fait")} style={pastille(sous==="fait")}>✅ Déjà fait{info?" ("+faits.length+")":""}</button>
@@ -3362,7 +3364,7 @@ function PageRapportsListe({fiches,onOpen}){
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={S.inp}/>
     </div>
     {info&&sous==="afaire"&&(sansRapport>0||toutes)&&<div style={{display:"flex",marginBottom:12}}><button type="button" onClick={()=>setToutes(!toutes)} aria-pressed={toutes} style={{padding:"8px 16px",minHeight:44,borderRadius:22,border:"1.5px solid #6B7280",background:toutes?"#6B7280":"#fff",color:toutes?"#fff":"#4B5563",fontSize:13,fontWeight:700,cursor:"pointer"}}>{toutes?"🙈 Masquer les fiches sans rapport":"👁 Afficher aussi les fiches sans rapport ("+sansRapport+")"}</button></div>}
-    {info!==undefined&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{sous==="fait"?"Aucun rapport terminé pour le moment.":info&&!toutes?"Aucun rapport à faire pour le moment. Une fiche arrive ici dès que « Rapport client demandé » est sur Oui, qu'elle est dans la colonne « Rapport à faire » du Planning, ou que son rapport est commencé.":"Aucune fiche."}</div>}
+    {info!==undefined&&clientList.length===0&&<div style={{textAlign:"center",padding:40,color:"#9CA3AF",background:"#fff",borderRadius:10,border:"1px solid #E2E6EA"}}>{sous==="fait"?"Aucun rapport terminé pour le moment.":info&&!toutes?"Aucun rapport à faire pour le moment. Une fiche arrive ici quand elle est dans la colonne « Rapport à faire » du Planning ; une cheminée de freinage y est dès sa création.":"Aucune fiche."}</div>}
     <div className="grille-large">
     {clientList.map(c=>(
       <div key={c} style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",marginBottom:8,padding:"12px 16px"}}>
@@ -6648,7 +6650,14 @@ export default function App(){
       if(Array.isArray(rows)&&rows[0]){setFicheOuverte(rows[0]);setFiches(prev=>prev.map(f=>f.id===id?{...f,...rows[0]}:f));setCleFiche(k=>k+1);}
     }catch(e){/* la fiche reste telle quelle */}
   }
-  function onFicheUpdated(id,updates){setFiches(prev=>prev.map(f=>f.id===id?{...f,...updates}:f));if(ficheOuverte?.id===id)setFicheOuverte(prev=>({...prev,...updates}));}
+  // une fiche tout juste créée n'était pas dans la liste de l'appli (Planning, onglet Rapport…) avant un rechargement : on la lit en base et on l'ajoute (28/10/2026)
+  const fichesRef=useRef([]);fichesRef.current=fiches;
+  function onFicheUpdated(id,updates){
+    if(!fichesRef.current.some(f=>f.id===id)){
+      db.get("fiches","?id=eq."+id).then(rows=>{if(Array.isArray(rows)&&rows[0])setFiches(prev=>prev.some(f=>f.id===id)?prev.map(f=>f.id===id?{...f,...rows[0],...updates}:f):[{...rows[0],...updates},...prev]);}).catch(()=>{});
+    }
+    setFiches(prev=>prev.map(f=>f.id===id?{...f,...updates}:f));if(ficheOuverte?.id===id)setFicheOuverte(prev=>({...prev,...updates}));
+  }
   async function onStatutChange(ficheId,newStatut){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});onFicheUpdated(ficheId,{statut_chantier:newStatut});}
 
   const devisCount=fiches.filter(f=>(f.statut_chantier||"A_demonter")==="Devis").length;
