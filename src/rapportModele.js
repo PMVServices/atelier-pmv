@@ -77,6 +77,25 @@ export const ANCRES_DIP = [
   { id: "nouveau", titre: "Relevé d'information du nouveau moteur", niveau: 1 },
   { id: "conclusion", titre: "Conclusion", niveau: 1 },
 ];
+// Pompe autre que DIP : rapport de travaux (entretien) ou d'expertise (diagnostic), un seul modèle (demande du 29/10/2026) ; la nature se choisit dans la page du rapport (data.nature_rapport)
+export const ANCRES_POMPE = [
+  { id: "iso", titre: "Norme ISO", niveau: 1 },
+  { id: "releve", titre: "Relevé d'information", niveau: 1 },
+  { id: "releve.moteur", titre: "Moteur", niveau: 2 },
+  { id: "releve.pompe", titre: "Pompe", niveau: 2 },
+  { id: "electrique", titre: "Informations électriques", niveau: 1 },
+  { id: "mecanique", titre: "Rapport mécanique", niveau: 1 },
+  { id: "mecanique.rotation", titre: "Essai en rotation à l'arrivée", niveau: 2 },
+  { id: "mecanique.moteur", titre: "Partie mécanique du moteur", niveau: 2 },
+  { id: "mecanique.hydraulique", titre: "Partie hydraulique", niveau: 2 },
+  { id: "apres", titre: "Niveau global de vibration relevé après entretien", niveau: 1 },
+  { id: "pression", titre: "Pression relevée après essai en agence", niveau: 1 },
+  { id: "demontage", titre: "Photos après démontage de la pompe", niveau: 1 },
+  { id: "conclusion", titre: "Conclusion", niveau: 1 },
+  { id: "conclusion.materiel", titre: "Liste du matériel utilisé et date de validité", niveau: 2 },
+];
+export const POMPE_DESCRIPTIF_DEFAUT = { entretien: "Entretien du moteur et de la pompe", expertise: "Expertise de la pompe" };
+export const naturePompe = (data) => (data && data.nature_rapport === "expertise" ? "expertise" : "entretien");
 export const estPompeDip = (v) => String((v && v.famille_pompe) || "").trim().toUpperCase() === "DIP";
 export const DIP_DESCRIPTIF_DEFAUT = "Remplacement du moteur et modification de la roue et du flasque pour adapter une garniture mécanique plus fiable et moins onéreuse";
 export const DIP_POMPE_TEXTE_DEFAUT = "Rénovation de la pompe DIP : rebaguage de la flasque";
@@ -120,7 +139,7 @@ export function construireRapport(v, data, photos) {
   v = v || {}; data = data || {}; photos = photos || {};
   const meta = photos._meta || null;
   const ctxPerso = { v, champs: (meta && meta.champs) || {}, fiche: (meta && meta.fiche) || [] };
-  if (meta && typeGenerique(meta.type)) return meta.type === "Pompe" && estPompeDip(v) ? construireRapportDip(v, data, photos, meta, ctxPerso) : construireRapportGenerique(v, data, meta, ctxPerso);
+  if (meta && typeGenerique(meta.type)) return meta.type === "Pompe" ? (estPompeDip(v) ? construireRapportDip(v, data, photos, meta, ctxPerso) : construireRapportPompe(v, data, photos, meta, ctxPerso)) : construireRapportGenerique(v, data, meta, ctxPerso);
   const txt = (id) => clean(v[id]);
   const num = (id, unite) => (has(v[id]) ? String(v[id]).trim() + (unite ? " " + unite : "") : "");
   // valeur d'isolement "346_GΩ" -> "346 GΩ"
@@ -392,7 +411,311 @@ function construireRapportDip(v, data, photos, meta, ctxPerso) {
   return appliquerChapitres(modele, configDuType(meta.type, meta.config), ctxPerso, ANCRES_DIP);
 }
 
-// Rapport d'une pompe, d'un ventilateur… : couverture, identification et conclusion automatiques, tout le reste vient de la Maintenance
+// Rapport d'une pompe autre que DIP : « Rapport de travaux » (entretien) ou « Rapport d'expertise » (diagnostic), UN SEUL modèle pour tous (demande du 29/10/2026), d'après les rapports
+// Delpharm DE7334 / DE7183 (entretien) et Palm DE7224 / DE7372 (expertise). Tout ce que la fiche sait est repris ; le reste se saisit dans la page du rapport (data.*). Mieux vaut trop que pas assez :
+// on supprime dans le formulaire (sections décochées, textes vidés) ou dans la page Maintenance → Rapports.
+// photos : pompe_vue (page de garde), plaque_moteur, plaque_pompe, skf_av_dem / skf_ar_dem (moteur, à l'arrivée), skf_av_p / skf_ar_p (pompe), stator_av / stator_ar, skf_av_ms / skf_ar_ms (moteur seul),
+// skf_av_rem / skf_ar_rem (ensemble après entretien), pompe_courbe, pompe_banc, pompe_dem1…4 (après démontage), apres.
+function aidePompe(v, data) {
+  const txt = (id) => clean(v[id]);
+  const num = (id, unite) => (has(v[id]) ? String(v[id]).trim() + (unite ? " " + unite : "") : "");
+  // valeur d'une case du moteur : « _m » (moteur d'une pompe) d'abord, sinon la case de la fiche moteur
+  const nm = (id, unite) => (has(v[id + "_m"]) ? num(id + "_m", unite) : num(id, unite));
+  const isol = (id) => { const p = String(v[id] || "").split("_"); return p[0] ? p[0] + " " + (p[1] || "GΩ") : ""; };
+  const dar = (id) => (has(v[id]) ? " avec un DAR de " + String(v[id]).trim() : "");
+  const fr = (d) => { try { const x = new Date(d); return isNaN(x.getTime()) ? "" : x.toLocaleDateString("fr-FR"); } catch (e) { return ""; } };
+  const maintenant = new Date();
+  const moisAnnee = has(data.mois_annee) ? String(data.mois_annee).trim() : String(maintenant.getMonth() + 1).padStart(2, "0") + "/" + maintenant.getFullYear();
+  const dateRapport = data.date ? fr(data.date) : fr(maintenant);
+  const verdict = (cle) => {
+    const val = data[cle] || "";
+    if (val === "Conforme") return { v: "ok", txt: "conforme" };
+    if (val === "Non conforme") return { v: "ko", txt: "non conforme" };
+    if (val.indexOf("Autre:") === 0 && has(clean(val))) return { v: "libre", txt: clean(val) };
+    return null;
+  };
+  const nombre = (x) => { const n = parseFloat(String(x == null ? "" : x).replace(",", ".")); return isNaN(n) ? null : n; };
+  const virgule = (n) => String(Math.round(n * 100) / 100).replace(".", ",");
+  return { txt, num, nm, isol, dar, fr, moisAnnee, dateRapport, verdict, nombre, virgule };
+}
+
+function construireRapportPompe(v, data, photos, meta, ctxPerso) {
+  photos = photos || {};
+  const nature = naturePompe(data), expertise = nature === "expertise";
+  const { txt, num, nm, isol, dar, fr, moisAnnee, dateRapport, verdict, nombre, virgule } = aidePompe(v, data);
+  const sec = sectionsActives(data);
+  const de = txt("de");
+  const chapitres = [];
+  const ajouter = (id, titre, blocs) => { if (blocs.length) chapitres.push({ id, titre, blocs }); };
+  const ligne = (lib, val) => (has(val) ? [lib + " : " + String(val).trim()] : null);
+  const lignes = (...l) => l.filter(Boolean);
+  const img = (cle, taille) => (photos[cle] ? [{ t: "img", url: photos[cle], taille: taille || "moyenne" }] : []);
+  const paire = (a, b) => { const it = [photos[a[0]] && { url: photos[a[0]], legende: a[1] }, photos[b[0]] && { url: photos[b[0]], legende: b[1] }].filter(Boolean); return it.length ? [{ t: "paire", items: it }] : []; };
+  const para = (t) => (has(t) ? [{ t: "para", parts: [String(t).trim()] }] : []);
+
+  // ── page de garde et identification ────────────────────────────────
+  const couverture = { titre: (expertise ? "Rapport d'expertise" : "Rapport de travaux") + (de ? " " + de : ""), objet: "", serie: "", cible: "", date: moisAnnee, photo: photos.pompe_vue || null };
+  const dateLib = expertise ? "Date d'intervention" : "Date de mise à disposition en agence";
+  const identite = [
+    ["Client", txt("client")],
+    ["Référence ou localisation", txt("materiel_lieu")],
+    ["N° de chantier", de],
+    ["Adresse du chantier", data.adresse_chantier],
+    ["Contact sur place", data.contact],
+    ["N° de commande client", data.commande_achat],
+    ["Bordereau d'expédition", data.bordereau],
+    ["Date de réception", v.date_entree ? fr(v.date_entree) : ""],
+    [dateLib, data.date_depart ? fr(data.date_depart) : ""],
+    ["Descriptif des travaux réalisés par " + SOCIETE.nom, data.descriptif_travaux],
+  ].filter((f) => has(f[1])).map((f) => ({ k: f[0], v: String(f[1]).trim() }));
+
+  // ── 1. Norme ISO (toujours, comme pour les moteurs) ────────────────
+  ajouter("iso", "Norme ISO", [{ t: "iso" }]);
+
+  // ── 2. Relevé d'information : moteur et pompe ──────────────────────
+  {
+    const b = [...para(data.remarque_releve)];
+    const unitePuiss = v.puissance__unite || "kW";
+    const moteur = lignes(
+      has(txt("marque_moteur")) || has(v.puissance) || has(v.vitesse) ? ["Moteur : " + [txt("marque_moteur"), num("puissance", unitePuiss), has(v.vitesse) ? txt("vitesse") + " tr/mn" : ""].filter(Boolean).join(" ")] : null,
+      ligne("Type", txt("type_moteur")), ligne("N° de série", txt("numero_serie")), ligne("Tension", num("tension", "V")), ligne("Fixation", txt("fixation")));
+    if (moteur.length || photos.plaque_moteur) {
+      b.push({ t: "sous", id: "releve.moteur", txt: "Moteur" });
+      if (moteur.length) b.push({ t: "lignes", lignes: moteur });
+      b.push(...img("plaque_moteur"));
+    }
+    const pompe = lignes(
+      has(txt("marque_pompe")) ? ["Pompe : " + txt("marque_pompe")] : null,
+      ligne("Type", txt("modele_pompe")), ligne("N° de série", txt("numero_serie_pompe")), ligne("Débit nominal", txt("debit_nominal")), ligne("Pression nominale", txt("pression_nominale")),
+      ligne("Fluide pompé", txt("type_fluide")), ligne("Température du fluide", txt("temperature_fluide")));
+    if (pompe.length || photos.plaque_pompe) {
+      b.push({ t: "sous", id: "releve.pompe", txt: "Pompe" });
+      if (pompe.length) b.push({ t: "lignes", lignes: pompe });
+      b.push(...img("plaque_pompe"));
+    }
+    ajouter("releve", "Relevé d'information", b);
+  }
+
+  // ── 3. Informations électriques ────────────────────────────────────
+  if (sec.electrique) {
+    const b = [];
+    const l = [];
+    if (has(txt("couplage"))) l.push(["Couplage : " + txt("couplage")]);
+    const vBob = verdict("verdict_bobinage"), vMasse = verdict("verdict_masse");
+    if (isol("isol_masse")) l.push(vMasse ? ["L'isolement entre enroulements et la masse est ", vMasse, " : " + isol("isol_masse") + dar("isol_masse_dar")] : ["Isolement entre enroulements et la masse : " + isol("isol_masse") + dar("isol_masse_dar")]);
+    else if (vMasse) l.push(["L'isolement à la masse est ", vMasse, "."]);
+    const ph = [];
+    if (isol("isol_uv")) ph.push(["Isolement entre U et V : " + isol("isol_uv") + dar("isol_uv_dar")]);
+    if (isol("isol_vw")) ph.push(["Isolement entre V et W : " + isol("isol_vw") + dar("isol_vw_dar")]);
+    if (isol("isol_wu")) ph.push(["Isolement entre W et U : " + isol("isol_wu") + dar("isol_wu_dar")]);
+    if (vBob) l.push(["Les valeurs d'isolement entre enroulements sont ", vBob, ph.length ? " :" : "."]);
+    l.push(...ph);
+    const serieEt = derniereSerie(v, "");
+    if (isol("isol_enroul_min" + serieEt)) l.push(["Isolement entre enroulements, plus petite valeur : " + isol("isol_enroul_min" + serieEt) + dar("isol_enroul_min" + serieEt + "_dar")]);
+    [["adx_resultat_var", "adx_valeur_var", "avec variateur"], ["adx_resultat_novar", "adx_valeur_novar", "sans variateur"]].forEach(([r, val, lib]) => {
+      if (has(v[r])) l.push(["Mesure ADX " + lib + " : " + clean(v[r]) + (has(v[val]) ? " (" + String(v[val]).trim() + ")" : "")]);
+    });
+    if (l.length) b.push({ t: "lignes", lignes: l });
+    capturesAppareil(data).forEach((c) => { if (c && c.url) b.push({ t: "capture", url: c.url, legende: has(c.caption) ? String(c.caption).trim() : "" }); });
+    const nettoyage = v.nettoyage_hp === "Oui" || v.nettoyage_hp_m === "Oui", etuvage = v.etuvage_stator === "Oui" || v.etuvage_stator_m === "Oui";
+    const apres = nettoyage && etuvage ? " après nettoyage et étuvage" : nettoyage ? " après nettoyage" : etuvage ? " après étuvage" : "";
+    ajouter("electrique", "Informations électriques" + apres, b);
+  }
+
+  // ── 4. Rapport mécanique : rotation à l'arrivée, moteur, partie hydraulique ──
+  if (sec.avant || sec.mecanique) {
+    const b = [];
+    if (sec.avant) {
+      const l = [];
+      const cvm = [nm("vib_av_mms_avant", "mm/s") && "avant (côté commande) " + nm("vib_av_mms_avant", "mm/s"), nm("vib_ar_mms_avant", "mm/s") && "arrière (côté opposé) " + nm("vib_ar_mms_avant", "mm/s")].filter(Boolean);
+      const cge = [nm("vib_av_ge_avant", "Ge") && "avant " + nm("vib_av_ge_avant", "Ge"), nm("vib_ar_ge_avant", "Ge") && "arrière " + nm("vib_ar_ge_avant", "Ge")].filter(Boolean);
+      if (cvm.length) l.push(["Moteur — mesure de vibration : " + cvm.join(", ")]);
+      if (cge.length) l.push(["Moteur — mesure d'accélération (Ge) : " + cge.join(", ")]);
+      const pvm = [num("vib_p_av_mms_avant", "mm/s") && "avant " + num("vib_p_av_mms_avant", "mm/s"), num("vib_p_ar_mms_avant", "mm/s") && "arrière " + num("vib_p_ar_mms_avant", "mm/s")].filter(Boolean);
+      const pge = [num("vib_p_av_ge_avant", "Ge") && "avant " + num("vib_p_av_ge_avant", "Ge"), num("vib_p_ar_ge_avant", "Ge") && "arrière " + num("vib_p_ar_ge_avant", "Ge")].filter(Boolean);
+      if (pvm.length) l.push(["Pompe — mesure de vibration : " + pvm.join(", ")]);
+      if (pge.length) l.push(["Pompe — mesure d'accélération (Ge) : " + pge.join(", ")]);
+      const intAvant = [nm("int_p1_avant", "A"), nm("int_p2_avant", "A"), nm("int_p3_avant", "A")].filter(Boolean);
+      if (intAvant.length) l.push(["Le moteur consomme à vide sous 400 V " + intAvant.join(", ") + " par phase."]);
+      const intPompe = [num("int_p1_avant_p", "A"), num("int_p2_avant_p", "A"), num("int_p3_avant_p", "A")].filter(Boolean);
+      if (intPompe.length) l.push(["L'ensemble consomme " + intPompe.join(", ") + " par phase (essai de la pompe)."]);
+      const c = conclusionVibrations(v, "avant", expertise ? "à l'arrivée" : "avant entretien");
+      if (l.length || photos.skf_av_dem || photos.skf_ar_dem || photos.skf_av_p || photos.skf_ar_p || c || has(data.commentaire_vibration_avant)) {
+        b.push({ t: "sous", id: "mecanique.rotation", txt: expertise ? "Essai en rotation à l'arrivée (en charge et en eau)" : "Essai en rotation à l'arrivée : mesure électrique, vibratoire et spectrale avant démontage" });
+        if (l.length) b.push({ t: "lignes", lignes: l });
+        b.push(...paire(["skf_av_dem", "Moteur — côté commande"], ["skf_ar_dem", "Moteur — côté opposé commande"]));
+        b.push(...paire(["skf_av_p", "Pompe — avant"], ["skf_ar_p", "Pompe — arrière"]));
+        b.push(...para(data.commentaire_vibration_avant));
+        if (c) b.push({ t: "para", parts: c.parts });
+      }
+    }
+    if (sec.mecanique) {
+      // moteur : portées, roulements, état des roulements déposés
+      const m = [];
+      const portee = (lib, valId, cle) => { const val = num(valId, "mm"); if (!val) return; const vd = verdict(cle); m.push([lib + " est de " + val + (vd ? ", cette valeur est " : "."), ...(vd ? [vd, "."] : [])]); };
+      portee("La portée interne (portée d'arbre) côté commande", "mesure_arbre_av", "verdict_arbre_av");
+      portee("La portée extérieure (portée de flasque) côté commande", "mesure_flasque_av", "verdict_flasque_av");
+      portee("La portée interne (portée d'arbre) côté opposé commande", "mesure_arbre_ar", "verdict_arbre_ar");
+      portee("La portée extérieure (portée de flasque) côté opposé commande", "mesure_flasque_ar", "verdict_flasque_ar");
+      if (txt("type_roulement_av")) m.push(["Roulement installé côté commande : " + txt("type_roulement_av")]);
+      if (txt("type_roulement_ar")) m.push(["Roulement installé côté opposé commande : " + txt("type_roulement_ar")]);
+      const etat = (id, chg, lib) => { if (!has(v[id])) return; m.push(["État du roulement déposé " + lib + " : " + clean(v[id]) + (v[chg] === "Oui" ? " — roulement changé" : "")]); };
+      etat("etat_roulement_av", "roulement_av_change", "côté commande");
+      etat("etat_roulement_ar", "roulement_ar_change", "côté opposé commande");
+      if (m.length || has(data.commentaire_roulements) || photos.stator_av || photos.stator_ar) {
+        b.push({ t: "sous", id: "mecanique.moteur", txt: "Partie mécanique du moteur" });
+        if (m.length) b.push({ t: "lignes", lignes: m });
+        b.push(...para(data.commentaire_roulements));
+        b.push(...paire(["stator_av", "Côté commande"], ["stator_ar", "Côté opposé commande"]));
+        b.push(...para(data.commentaire_demontage));
+      }
+      // pompe : partie hydraulique
+      const h = [];
+      if (has(v.type_gm_fixe)) h.push(["Garniture mécanique fixe : " + [clean(v.type_gm_fixe), has(v.diametre_gm_fixe) ? "Ø arbre " + String(v.diametre_gm_fixe).trim() : "", has(v.etat_gm_fixe) ? "état " + clean(v.etat_gm_fixe) : ""].filter(Boolean).join(" — ")]);
+      if (has(v.type_gm_mobile)) h.push(["Garniture mécanique mobile : " + [clean(v.type_gm_mobile), has(v.diametre_gm_mobile) ? "Ø arbre " + String(v.diametre_gm_mobile).trim() : "", has(v.etat_gm_mobile) ? "état " + clean(v.etat_gm_mobile) : ""].filter(Boolean).join(" — ")]);
+      if (has(v.diametre_nez_roue)) h.push(["Diamètre du nez de roue : " + num("diametre_nez_roue", "mm")]);
+      if (has(v.diametre_volute)) h.push(["Diamètre de la volute intérieur : " + num("diametre_volute", "mm")]);
+      if (has(v.etat_jc)) h.push(["Joint de corps : " + clean(v.etat_jc) + (v.remplacement_jc === "Oui" ? " — remplacé" + (has(v.matiere_taille_jc) ? " (" + clean(v.matiere_taille_jc) + ")" : "") : "")]);
+      [["av", "avant"], ["ar", "arrière"]].forEach(([c, lib]) => {
+        if (v["roulement_" + c + "_p_present"] === "Non" || !has(v["type_roulement_" + c + "_p"])) return;
+        h.push(["Roulement " + lib + " de la pompe : " + clean(v["type_roulement_" + c + "_p"]) + (has(v["etat_roulement_" + c + "_p"]) ? " — état " + clean(v["etat_roulement_" + c + "_p"]) : "") + (v["roulement_" + c + "_p_change"] === "Oui" ? " — changé" : "")]);
+      });
+      if (h.length) { b.push({ t: "sous", id: "mecanique.hydraulique", txt: "Partie hydraulique" }); b.push({ t: "lignes", lignes: h }); }
+    }
+    ajouter("mecanique", "Rapport mécanique", b);
+  }
+
+  // ── 5. Niveau global de vibration après entretien : moteur seul, puis moteur + pompe ──
+  if (sec.apres) {
+    const b = [];
+    const vib = (suf, pre) => {
+      const l = [];
+      const vm = [num("vib_av_mms_apres" + suf, "mm/s") && "avant " + num("vib_av_mms_apres" + suf, "mm/s"), num("vib_ar_mms_apres" + suf, "mm/s") && "arrière " + num("vib_ar_mms_apres" + suf, "mm/s")].filter(Boolean);
+      const ge = [num("vib_av_ge_apres" + suf, "Ge") && "avant " + num("vib_av_ge_apres" + suf, "Ge"), num("vib_ar_ge_apres" + suf, "Ge") && "arrière " + num("vib_ar_ge_apres" + suf, "Ge")].filter(Boolean);
+      if (vm.length) l.push([pre + "Mesure de vibration " + vm.join(", ")]);
+      if (ge.length) l.push([pre + "Mesure d'accélération " + ge.join(", ")]);
+      const i400 = [num("int_p1_apres" + suf, "A"), num("int_p2_apres" + suf, "A"), num("int_p3_apres" + suf, "A")].filter(Boolean);
+      const i560 = [num("int_560_p1_apres" + suf, "A"), num("int_560_p2_apres" + suf, "A"), num("int_560_p3_apres" + suf, "A")].filter(Boolean);
+      if (i400.length) l.push([pre + "Consommation à vide sous 400 V : " + i400.join(", ") + " par phase"]);
+      if (i560.length) l.push([pre + "Consommation sous 560 V : " + i560.join(", ") + " par phase"]);
+      return l;
+    };
+    const seul = vib("_ms", "");
+    const cSeul = conclusionVibrations(v, "apres", "moteur seul", true);
+    if (seul.length || photos.skf_av_ms || photos.skf_ar_ms || cSeul) {
+      b.push({ t: "sous", id: "apres.seul", txt: "Essai en rotation — moteur seul" });
+      if (seul.length) b.push({ t: "lignes", lignes: seul });
+      b.push(...paire(["skf_av_ms", "Moteur seul — côté commande"], ["skf_ar_ms", "Moteur seul — côté opposé commande"]));
+      if (cSeul) b.push({ t: "para", parts: cSeul.parts });
+    }
+    const ens = vib("", "");
+    const pp = [num("vib_p_av_mms_apres", "mm/s") && "avant " + num("vib_p_av_mms_apres", "mm/s"), num("vib_p_ar_mms_apres", "mm/s") && "arrière " + num("vib_p_ar_mms_apres", "mm/s")].filter(Boolean);
+    const ppg = [num("vib_p_av_ge_apres", "Ge") && "avant " + num("vib_p_av_ge_apres", "Ge"), num("vib_p_ar_ge_apres", "Ge") && "arrière " + num("vib_p_ar_ge_apres", "Ge")].filter(Boolean);
+    if (pp.length) ens.push(["Pompe — mesure de vibration " + pp.join(", ")]);
+    if (ppg.length) ens.push(["Pompe — mesure d'accélération " + ppg.join(", ")]);
+    const cEns = conclusionVibrations(v, "apres", "après entretien (moteur + pompe)");
+    if (has(data.ensemble_libre)) { const e = String(data.ensemble_libre).trim(); ens.push([/^l['’]ensemble/i.test(e) ? e : "L'ensemble est " + e + (/[.!]$/.test(e) ? "" : ".")]); }
+    if (ens.length || photos.skf_av_rem || photos.skf_ar_rem || cEns) {
+      b.push({ t: "sous", id: "apres.ensemble", txt: "Essai en rotation — moteur + pompe" });
+      if (ens.length) b.push({ t: "lignes", lignes: ens });
+      b.push(...paire(["skf_av_rem", "Moteur + pompe — côté commande"], ["skf_ar_rem", "Moteur + pompe — côté opposé commande"]));
+      if (cEns) b.push({ t: "para", parts: cEns.parts });
+    }
+    ajouter("apres", "Niveau global de vibration relevé après entretien", b);
+  }
+
+  // ── 6. Pression relevée lors des essais en eau ─────────────────────
+  if (sec.mecanique) {
+    const b = [];
+    let deltaRef = null;
+    const jeu = (suf, titre) => {
+      const l = [];
+      const essai = clean(v["pression_essai_" + (suf === "_apres" ? "apres" : "avant")]);
+      const nomMax = suf === "_apres" ? "pression_nom_max_apres" : "pression_nom_max", c0 = suf === "_apres" ? "pression_courbe_0_apres" : "pression_courbe_0";
+      const ville = suf === "_apres" ? "pression_ville_apres" : "pression_ville", pompe = suf === "_apres" ? "pression_pompe_apres" : "pression_pompe";
+      const etat = suf === "_apres" ? "delta_p_etat_apres" : "delta_p_etat";
+      if (essai) l.push(["Essai en : " + essai.toLowerCase()]);
+      if (num(nomMax)) l.push(["Pression nominale maximum : " + num(nomMax, "bar")]);
+      if (num(c0)) l.push(["Pression maximum de la courbe à débit nul : " + num(c0, "bar")]);
+      if (num(ville)) l.push(["Pression de ville : " + num(ville, "bar")]);
+      if (num(pompe)) l.push(["Pression de pompe : " + num(pompe, "bar")]);
+      const nv = nombre(v[ville]), np = nombre(v[pompe]);
+      const delta = nv != null && np != null ? Math.round((np - nv) * 100) / 100 : null;
+      if (delta != null) l.push(["Delta pression relevé : " + virgule(delta) + " bar" + (has(v[etat]) ? " — " + clean(v[etat]) : "")]);
+      if (l.length) { b.push({ t: "sous", id: "pression." + (suf === "_apres" ? "apres" : "avant"), txt: titre }); b.push({ t: "lignes", lignes: l }); }
+      return delta;
+    };
+    const dAvant = jeu("", expertise ? "Essai en eau à l'arrivée" : "Essai en eau à l'arrivée");
+    const dApres = jeu("_apres", "Essai en agence après entretien");
+    deltaRef = expertise ? (dAvant != null ? dAvant : dApres) : (dApres != null ? dApres : dAvant);
+    const attendue = nombre(data.pression_attendue);
+    if (attendue != null) {
+      const bas = attendue * 0.9, haut = attendue * 1.1;
+      const l = [["Pression attendue (courbe constructeur) : " + virgule(attendue) + " bar, tolérance ± 10 % soit de " + virgule(bas) + " à " + virgule(haut) + " bar"]];
+      if (deltaRef != null) { const ok = deltaRef >= bas - 1e-9 && deltaRef <= haut + 1e-9; l.push(["Le delta pression relevé (" + virgule(deltaRef) + " bar) est ", ok ? { v: "ok", txt: "dans la tolérance" } : { v: "ko", txt: "hors tolérance" }, "."]); }
+      b.push({ t: "lignes", lignes: l });
+    }
+    b.push(...para(data.commentaire_pression));
+    b.push(...img("pompe_banc"), ...img("pompe_courbe"));
+    ajouter("pression", expertise ? "Courbe de pression" : "Pression relevée après essai en agence", b);
+  }
+
+  // ── 7. Photos après démontage de la pompe ──────────────────────────
+  {
+    const cles = ["pompe_dem1", "pompe_dem2", "pompe_dem3", "pompe_dem4"].filter((k) => photos[k]);
+    const b = [];
+    for (let i = 0; i < cles.length; i += 2) {
+      const it = cles.slice(i, i + 2).map((k) => ({ url: photos[k], legende: "" }));
+      b.push(it.length === 2 ? { t: "paire", items: it } : { t: "img", url: it[0].url, taille: "moyenne" });
+    }
+    ajouter("demontage", "Photos après démontage de la pompe", b);
+  }
+
+  // ── 8. Conclusion ──────────────────────────────────────────────────
+  if (sec.conclusion) {
+    const b = [];
+    const l = [];
+    const ligneVerdict = (avant, cle, apres) => { const vd = verdict(cle); if (vd) l.push([avant, vd, apres || ""]); };
+    ligneVerdict("La partie mécanique est ", "verdict_meca");
+    ligneVerdict("La partie bobinage ADX est ", "verdict_elec");
+    ligneVerdict("La partie hydraulique" + (expertise ? "" : " après entretien") + " est ", "verdict_hydraulique");
+    { const vd = verdict("verdict_cq"); if (vd) l.push(["Peinture et contrôle qualité ", vd, data.bouchon_stockage === "Oui" ? " (bouchon de stockage mis en place)" : ""]); else if (data.bouchon_stockage === "Oui") l.push(["Bouchon de stockage mis en place."]); }
+    if (l.length) b.push({ t: "lignes", lignes: l });
+    const libres = String(has(data.conclusion_pompe) ? data.conclusion_pompe : "").split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+    if (libres.length) b.push({ t: "lignes", lignes: libres.map((s) => [s]), espace: true });
+    const preco = String(data.preconisation || "");
+    const phrasePreco = { "Entretien préconisé": "Nous préconisons un entretien de la pompe.", "Entretien non préconisé": "En raison des problèmes et non-conformités observés, nous ne préconisons pas d'entretien.", "Remplacement préconisé": "Nous préconisons le remplacement de la pompe." }[preco] || (preco.indexOf("Autre:") === 0 ? clean(preco) : "");
+    if (phrasePreco) b.push({ t: "para", parts: [{ b: phrasePreco }] });
+    if (data.photo_apres_url) b.push({ t: "img", url: data.photo_apres_url, taille: "petite", legende: "La pompe après entretien" });
+    if (has(data.commentaire_apres) && !expertise) { b.push({ t: "sous", id: "conclusion.depart", txt: "Départ de nos ateliers" }); b.push({ t: "para", parts: [String(data.commentaire_apres).trim()] }); }
+    const sign = [];
+    if (!expertise && has(data.certifie_par)) sign.push(["Certifié conforme le " + dateRapport + " par " + listeEt(data.certifie_par)]);
+    if (has(data.realise_par)) sign.push([(expertise ? "Expertise réalisée par " : "Rapport réalisé par ") + listeEt(data.realise_par) + " le " + dateRapport]);
+    if (has(data.verifie_par)) sign.push(["Vérifié par " + listeEt(data.verifie_par)]);
+    if (sign.length) b.push({ t: "lignes", lignes: sign, espace: true });
+    if (has(data.materiel_controle)) {
+      b.push({ t: "sous", id: "conclusion.materiel", txt: "Liste du matériel utilisé et date de validité pour effectuer ce rapport" });
+      b.push({ t: "lignes", lignes: String(data.materiel_controle).split(/\r?\n/).map((s) => s.trim()).filter(Boolean).map((s) => [s]), petit: true });
+    }
+    ajouter("conclusion", "Conclusion", b);
+  }
+
+  const modele = {
+    objet: "Pompe",
+    de,
+    client: txt("client"),
+    entete: (expertise ? "Rapport d'expertise — " : "Rapport de travaux — ") + [de, txt("client")].filter(Boolean).join(" — "),
+    titreIdentite: expertise ? "Rapport d'expertise" : "Rapport de travaux",
+    couverture,
+    societe: SOCIETE,
+    identite,
+    chapitres,
+    sommaire: chapitres.map((c, i) => (i + 1) + ". " + c.titre),
+  };
+  return appliquerChapitres(modele, configDuType(meta.type, meta.config), ctxPerso, ANCRES_POMPE);
+}
+
+// Rapport d'un ventilateur… : couverture, identification et conclusion automatiques, tout le reste vient de la Maintenance
 function construireRapportGenerique(v, data, meta, ctxPerso) {
   const txt = (id) => clean(v[id]);
   const fr = (d) => { try { const x = new Date(d); return isNaN(x.getTime()) ? "" : x.toLocaleDateString("fr-FR"); } catch (e) { return ""; } };

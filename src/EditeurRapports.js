@@ -6,7 +6,7 @@
 import React, {useState, useEffect, useRef} from "react";
 import {configRapportsActuelle, surChangementConfigRapports, publierConfigRapports, lireHistoriqueRapports, configDuType} from "./configRapports";
 import {TYPES_RAPPORT, TYPES_BLOC, STYLES, OPERATEURS, TAILLES_PHOTO, typeGenerique, blocsDepuisAjout, jetonsDe} from "./rapportPerso";
-import {ANCRES_MOTEUR, ANCRES_GENERIQUE} from "./rapportModele";
+import {ANCRES_MOTEUR, ANCRES_GENERIQUE, ANCRES_POMPE} from "./rapportModele";
 import {ANCRES_CHEMINEE, CHAMPS_FORMULAIRE_CHEMINEE, valeursDepartRapportCheminee} from "./rapportCheminee";
 import {genererHtmlEdition} from "./apercuEdition";
 import {db} from "./supabase";
@@ -24,7 +24,7 @@ const nouvelId=()=>"b_"+Date.now().toString(36)+Math.random().toString(36).slice
 const INTERNE=/recommander|observation|^obs_|_obs$|commentaire|interne|justif|__just/i;
 const PREFIXE_RAPPORT_CHEMINEE="rapportch_";
 
-export const ancresDuType=type=>(type===TYPE_CHEMINEE?ANCRES_CHEMINEE:typeGenerique(type)?ANCRES_GENERIQUE:ANCRES_MOTEUR).map(a=>({kind:a.niveau===1?"h1":"h2",...a}));
+export const ancresDuType=type=>(type===TYPE_CHEMINEE?ANCRES_CHEMINEE:type==="Pompe"?ANCRES_POMPE:typeGenerique(type)?ANCRES_GENERIQUE:ANCRES_MOTEUR).map(a=>({kind:a.niveau===1?"h1":"h2",...a}));
 const libType=t=>t==="identite"?"Ligne d'identification":(TYPES_BLOC.find(x=>x[0]===t)||[t,t])[1];
 const estCorps=a=>a.kind!=="ligne"&&a.kind!=="page";
 const champsFormulairePour=type=>type===TYPE_CHEMINEE?CHAMPS_FORMULAIRE_CHEMINEE:[];

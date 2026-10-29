@@ -2,7 +2,7 @@
 // Les photos sont réduites une seule fois puis gardées en mémoire : seule la première génération est longue, les suivantes (après chaque modification) sont rapides.
 import {construireRapportCheminee, urlsRapportCheminee, adresseImage, ANCRES_CHEMINEE} from "./rapportCheminee";
 import {genRapportLivretHtml} from "./rapportLivretHtml";
-import {construireRapport, ANCRES_MOTEUR, ANCRES_GENERIQUE} from "./rapportModele";
+import {construireRapport, ANCRES_MOTEUR, ANCRES_GENERIQUE, ANCRES_POMPE} from "./rapportModele";
 import {genRapportHtml, reduireImage} from "./pdfUtils";
 import {typeGenerique} from "./rapportPerso";
 import {TYPE_CHEMINEE} from "./railClients";
@@ -32,5 +32,5 @@ export async function genererHtmlEdition(type,prep,config){
   const urls=[];
   M.chapitres.forEach(ch=>ch.blocs.forEach(b=>{if(b.url)urls.push(b.url);(b.items||[]).forEach(it=>{if(it.url)urls.push(it.url);});}));
   const {images}=await preparerImages(urls);
-  return {html:genRapportHtml(prep.v,prep.data,photos,images,{modele:M,edition:true,ancres:typeGenerique(type)?ANCRES_GENERIQUE:ANCRES_MOTEUR}),textes:M.textes||[]};
+  return {html:genRapportHtml(prep.v,prep.data,photos,images,{modele:M,edition:true,ancres:type==="Pompe"?ANCRES_POMPE:typeGenerique(type)?ANCRES_GENERIQUE:ANCRES_MOTEUR}),textes:M.textes||[]};
 }

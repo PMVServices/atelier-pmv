@@ -41,7 +41,7 @@ export function decrireCase(id) {
   const m = RE_ID.exec(String(id || ""));
   if (!m) return null;
   const organe = m[1] || "m";
-  return { organe, cote: m[2], mesure: m[3], moment: m[4], idRoulement: "type_roulement_" + m[2] + (m[1] ? "_" + m[1] : "") };
+  return { organe, cote: m[2], mesure: m[3], moment: m[4], seul: m[5] === "_ms", idRoulement: "type_roulement_" + m[2] + (m[1] ? "_" + m[1] : "") };
 }
 
 // Message à afficher sous une case de mesure : null (pas une case de vibration, ou vide) | {ok:true} | {ok:false, message}
@@ -60,11 +60,12 @@ export function controleVibration(id, valeur, v) {
 }
 
 // Les mesures d'un moment (« avant » ou « apres » entretien), regroupées par organe et par côté, avec leur verdict
-export function lireVibrations(v, moment) {
+// seul : false (défaut) = les mesures de l'ensemble ; true = celles de l'essai « moteur seul » (cases …_ms d'une pompe ou d'un moto-réducteur), jamais mélangées aux autres
+export function lireVibrations(v, moment, seul) {
   const lignes = {};
   Object.keys(v || {}).forEach((id) => {
     const d = decrireCase(id);
-    if (!d || d.moment !== moment) return;
+    if (!d || d.moment !== moment || d.seul !== !!seul) return;
     const x = num(v[id]);
     if (x == null) return;
     const cle = d.organe + "." + d.cote;
@@ -79,8 +80,8 @@ export function lireVibrations(v, moment) {
 }
 
 // Lignes « Mesure de Ge CC : 0.8 Ge, conforme (limite : …) » du moteur pour un moment (côté commande = CC, côté opposé commande = COC), avec le verdict de chaque côté
-export function lignesGeMoteur(v, moment) {
-  return lireVibrations(v, moment).filter((x) => x.organe === "m" && x.ge != null).map((x) => {
+export function lignesGeMoteur(v, moment, seul) {
+  return lireVibrations(v, moment, seul).filter((x) => x.organe === "m" && x.ge != null).map((x) => {
     const cote = x.cote === "av" ? "CC" : "COC";
     const debut = "Mesure de Ge " + cote + " : " + x.geTxt + " Ge";
     if (x.limGe == null) return [debut + " (pas de limite définie : " + (x.ref ? "roulement " + x.ref : "type de roulement non renseigné") + ")."];
@@ -91,8 +92,8 @@ export function lignesGeMoteur(v, moment) {
 
 // Petite conclusion pour un rapport : null s'il n'y a aucune mesure, sinon { ok, parts } (parts : morceaux de phrase du modèle de rapport, voir rapportModele.js)
 // moment : "avant" | "apres" ; libelle : « avant entretien » / « après entretien »
-export function conclusionVibrations(v, moment, libelle) {
-  const l = lireVibrations(v, moment);
+export function conclusionVibrations(v, moment, libelle, seul) {
+  const l = lireVibrations(v, moment, seul);
   if (!l.length) return null;
   const plusieurs = new Set(l.map((x) => x.organe)).size > 1;
   const hors = [];
@@ -107,7 +108,11 @@ export function conclusionVibrations(v, moment, libelle) {
   const titre = { b: "Conclusion sur les vibrations " + libelle + " : " };
   if (hors.length) return { ok: false, parts: [titre, { v: "ko", txt: "non conformes" }, " — " + hors.join(" ; ") + "."] };
   const jugeGe = l.some((x) => x.geOk === true), nonJugeGe = l.some((x) => x.ge != null && x.geOk == null);
+  // roulement renseigné mais sans limite connue (ex. 7309 BEP) : on le dit, au lieu de « type non renseigné »
+  const refsInconnues = [...new Set(l.filter((x) => x.ge != null && x.geOk == null && x.ref).map((x) => x.ref))];
+  const rienDeRenseigne = l.some((x) => x.ge != null && x.geOk == null && !x.ref);
+  const motifGe = !rienDeRenseigne && refsInconnues.length ? "pas de limite connue pour le roulement " + refsInconnues.join(", ") : "type de roulement non renseigné";
   const aMms = l.some((x) => x.mmsOk === true);
   const criteres = [aMms ? "vitesse vibratoire de " + SEUIL_MMS + " mm/s au plus" : "", jugeGe ? "Ge de " + LIMITE_GE_NORMAL + " au plus (" + LIMITE_GE_NU + " pour un roulement NU)" : ""].filter(Boolean).join(" et ");
-  return { ok: true, parts: [titre, { v: "ok", txt: "conformes" }, (criteres ? " — " + criteres : "") + (nonJugeGe ? (criteres ? ", " : " — ") + "Ge non jugé (type de roulement non renseigné)" : "") + "."] };
+  return { ok: true, parts: [titre, { v: "ok", txt: "conformes" }, (criteres ? " — " + criteres : "") + (nonJugeGe ? (criteres ? ", " : " — ") + "Ge non jugé (" + motifGe + ")" : "") + "."] };
 }
