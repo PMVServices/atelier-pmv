@@ -20,7 +20,7 @@ import {useSuiviClients, PageSuiviClients, DashboardCommercial} from "./SuiviCli
 import PageClients, {ouvrirClient} from "./Clients";
 import {PanneauResumeCommercial, verifierResumeCommercial} from "./ResumeCommercial";
 import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
-import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT, naturePompe, POMPE_DESCRIPTIF_DEFAUT, estPompeDip, DIP_DESCRIPTIF_DEFAUT, DIP_POMPE_TEXTE_DEFAUT, dipConclusionDefaut} from "./rapportModele";
+import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT, naturePompe, POMPE_DESCRIPTIF_DEFAUT, estPompeDip, garnitureAbsente, DIP_DESCRIPTIF_DEFAUT, DIP_POMPE_TEXTE_DEFAUT, dipConclusionDefaut} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris, SourcesPhoto} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
 import {CHAMPS_CHEMINEE, ETAPES_CHEMINEE} from "./Cheminee";
@@ -159,6 +159,10 @@ function champsVibrationsOrgane(p,nom,du){
 }
 const siPompeNeuve=v=>v.pompe_neuve==="Oui";
 const siPompeAncienne=v=>v.pompe_neuve!=="Oui";
+// Garniture mécanique (demande du 29/10/2026) : une pompe DIP en a toujours une ; une pompe « Autre » n'en a pas forcément -> « Garniture mécanique présente ? » d'abord, les garnitures fixe et mobile seulement si « Oui ».
+// Une fiche « Autre » déjà commencée avec des garnitures saisies (question pas encore posée) les garde affichées.
+const siGarnitureDemandee=v=>siPompeAncienne(v)&&!estPompeDip(v);
+const siGarniture=v=>siPompeAncienne(v)&&(estPompeDip(v)||v.garniture_presente==="Oui"||((v.garniture_presente===undefined||v.garniture_presente==="")&&!!(v.type_gm_fixe||v.type_gm_mobile)));
 // roulements de la pompe : question « Roulement avant / arrière pompe » Oui / Non ; avec « Non », tout ce qui concerne ce roulement disparaît (sans réponse, il reste affiché)
 const siRoulementAvP=v=>siPompeAncienne(v)&&v.roulement_av_p_present!=="Non";
 const siRoulementArP=v=>siPompeAncienne(v)&&v.roulement_ar_p_present!=="Non";
@@ -542,13 +546,14 @@ const CHAMPS_POMPE={
     {id:"etat_jc",label:"État du joint de corps",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:siPompeAncienne},
     {id:"matiere_taille_jc",label:"Matière et taille du joint de corps",type:"text",required:true,condition:siPompeAncienne},
     {id:"remplacement_jc",label:"Remplacement du joint de corps",type:"oui_non",required:true,condition:siPompeAncienne},
-    {id:"type_gm_fixe",label:"Type GM fixe",type:"garniture_fixe",required:true,groupe:"gm_fixe_type_diam",condition:siPompeAncienne},
-    {id:"diametre_gm_fixe",label:"Diamètre arbre GM fixe",type:"number",unite:"mm",required:true,groupe:"gm_fixe_type_diam",condition:siPompeAncienne},
-    {id:"etat_gm_fixe",label:"État GM fixe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"gm_fixe_etat_diam",condition:siPompeAncienne},
-    {id:"diametre_portee_fixe",label:"Diamètre de la portée GM fixe",type:"mesure",unite:"mm",required:true,groupe:"gm_fixe_etat_diam",condition:siPompeAncienne},
-    {id:"type_gm_mobile",label:"Type GM mobile",type:"garniture_mobile",required:true,groupe:"gm_mobile_type_diam",condition:siPompeAncienne},
-    {id:"diametre_gm_mobile",label:"Diamètre arbre GM mobile",type:"number",unite:"mm",required:true,groupe:"gm_mobile_type_diam",condition:siPompeAncienne},
-    {id:"etat_gm_mobile",label:"État GM mobile",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:siPompeAncienne},
+    {id:"garniture_presente",label:"Garniture mécanique présente ?",type:"oui_non",required:true,condition:siGarnitureDemandee,note:"Une pompe autre que DIP n'a pas forcément de garniture mécanique : « Non » = rien à saisir pour les garnitures"},
+    {id:"type_gm_fixe",label:"Type GM fixe",type:"garniture_fixe",required:true,groupe:"gm_fixe_type_diam",condition:siGarniture},
+    {id:"diametre_gm_fixe",label:"Diamètre arbre GM fixe",type:"number",unite:"mm",required:true,groupe:"gm_fixe_type_diam",condition:siGarniture},
+    {id:"etat_gm_fixe",label:"État GM fixe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"gm_fixe_etat_diam",condition:siGarniture},
+    {id:"diametre_portee_fixe",label:"Diamètre de la portée GM fixe",type:"mesure",unite:"mm",required:true,groupe:"gm_fixe_etat_diam",condition:siGarniture},
+    {id:"type_gm_mobile",label:"Type GM mobile",type:"garniture_mobile",required:true,groupe:"gm_mobile_type_diam",condition:siGarniture},
+    {id:"diametre_gm_mobile",label:"Diamètre arbre GM mobile",type:"number",unite:"mm",required:true,groupe:"gm_mobile_type_diam",condition:siGarniture},
+    {id:"etat_gm_mobile",label:"État GM mobile",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:siGarniture},
     {id:"roulement_av_p_present",label:"Roulement avant pompe",type:"oui_non",required:true,condition:siPompeAncienne},
     {id:"type_roulement_av_p",label:"Type roulement avant pompe",type:"roulement",required:true,condition:siRoulementAvP},
     {id:"etat_roulement_av_p",label:"État roulement avant pompe",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,groupe:"roulement_av_p_pair",condition:siRoulementAvP},{id:"roulement_av_p_change",label:"Roulement avant pompe changé",type:"oui_non",required:false,groupe:"roulement_av_p_pair",condition:siRoulementAvP},
@@ -857,11 +862,11 @@ function detecterPieces(v,typeMat){
   if(v.etat_rotor&&mauvais.includes(v.etat_rotor))pieces.push({designation:"Rotor",reference:""});
   // Spécifique pompe
   if(typeMat==="Pompe"){
-    if(v.type_gm_fixe){
+    if(v.type_gm_fixe&&!garnitureAbsente(v)){
       const ref=(v.type_gm_fixe||"").replace("Autre:","").trim()+" "+(v.diametre_gm_fixe||"");
       pieces.push({designation:"GM fixe",reference:ref.trim()});
     }
-    if(v.type_gm_mobile){
+    if(v.type_gm_mobile&&!garnitureAbsente(v)){
       const ref=(v.type_gm_mobile||"").replace("Autre:","").trim()+" "+(v.diametre_gm_mobile||"");
       pieces.push({designation:"GM mobile",reference:ref.trim()});
     }

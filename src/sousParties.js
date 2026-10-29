@@ -19,7 +19,7 @@ export const INTERTITRES_TRAME=(()=>{
     // Matériel au démontage moteur
     ventilateur_present:"Ventilateur",circlips_av_present:"Circlips et rondelle",type_roulement_av:"Côté avant : roulement, flasque, arbre, joints",type_roulement_ar:"Côté arrière : roulement, flasque, arbre, joints",accoup_present:"Accouplement et poulie",accoup_present_r:"Accouplement et poulie du réducteur",peinture:"Bobinage, rotor et peinture",marque_moteur_neuf:"Moteur neuf",essais_moteur_seul:"Essais du moteur seul",
     // Mécanique pompe au démontage
-    diametre_nez_roue:"Roue et volute",etat_jc:"Joint de corps",type_gm_fixe:"Garniture mécanique",roulement_av_p_present:"Roulement avant de la pompe",roulement_ar_p_present:"Roulement arrière de la pompe",marque_pompe_neuve:"Pompe neuve",
+    diametre_nez_roue:"Roue et volute",etat_jc:"Joint de corps",garniture_presente:"Garniture mécanique",type_gm_fixe:"Garniture mécanique",roulement_av_p_present:"Roulement avant de la pompe",roulement_ar_p_present:"Roulement arrière de la pompe",marque_pompe_neuve:"Pompe neuve",
     // Essais après remontage (et essais du moteur seul : mêmes sections)
     int_p1_apres_ms:"Intensités",vib_av_mms_apres_ms:"Vibrations",int_560_p1_apres_ms:"Intensités à 560 V",
     int_p1_apres:"Intensités",vib_av_mms_apres:"Vibrations",int_560_p1_apres:"Intensités à 560 V",pression_essai_apres:"Essai en eau / air et pressions",vib_p_av_mms_apres:"Vibrations de la pompe",
@@ -45,7 +45,7 @@ export function sousParties(nomEtape,champs,v,visible){
     membres.forEach(m=>vus.add(m.id));
     let titre=null,estTitre=false;
     if(c.type==="titre"){titre=c.label;estTitre=true;}
-    else{const it=INTERTITRES_TRAME[c.id];if(it&&n>0&&!dernierTitre)titre=it;} // même règle que la trame : pas d'intertitre en tête d'étape ni juste après un champ « titre »
+    else{const it=INTERTITRES_TRAME[c.id];if(it&&n>0&&!dernierTitre&&!(courante&&courante.titre===it))titre=it;} // même règle que la trame : pas d'intertitre en tête d'étape ni juste après un champ « titre »
     dernierTitre=c.type==="titre";
     if(titre!==null){
       let k=cleSousPartie(nomEtape,titre);pris[k]=(pris[k]||0)+1;if(pris[k]>1)k+="_"+pris[k];

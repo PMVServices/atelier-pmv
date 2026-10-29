@@ -97,6 +97,8 @@ export const ANCRES_POMPE = [
 export const POMPE_DESCRIPTIF_DEFAUT = { entretien: "Entretien du moteur et de la pompe", expertise: "Expertise de la pompe" };
 export const naturePompe = (data) => (data && data.nature_rapport === "expertise" ? "expertise" : "entretien");
 export const estPompeDip = (v) => String((v && v.famille_pompe) || "").trim().toUpperCase() === "DIP";
+// Garniture mécanique (demande du 29/10/2026) : une pompe « Autre » (pas DIP) n'en a pas forcément ; la question « Garniture mécanique présente ? » de la fiche répond. « Non » : rien à lire ni à commander pour les garnitures.
+export const garnitureAbsente = (v) => !!v && !estPompeDip(v) && v.garniture_presente === "Non";
 export const DIP_DESCRIPTIF_DEFAUT = "Remplacement du moteur et modification de la roue et du flasque pour adapter une garniture mécanique plus fiable et moins onéreuse";
 export const DIP_POMPE_TEXTE_DEFAUT = "Rénovation de la pompe DIP : rebaguage de la flasque";
 // phrases de conclusion proposées au départ (modifiables) : moteur changé (d'après la fiche), usinage, garniture standard (références prises dans la fiche : type + diamètre), jeu des couteaux
@@ -571,8 +573,8 @@ function construireRapportPompe(v, data, photos, meta, ctxPerso) {
       }
       // pompe : partie hydraulique
       const h = [];
-      if (has(v.type_gm_fixe)) h.push(["Garniture mécanique fixe : " + [clean(v.type_gm_fixe), has(v.diametre_gm_fixe) ? "Ø arbre " + String(v.diametre_gm_fixe).trim() : "", has(v.etat_gm_fixe) ? "état " + clean(v.etat_gm_fixe) : ""].filter(Boolean).join(" — ")]);
-      if (has(v.type_gm_mobile)) h.push(["Garniture mécanique mobile : " + [clean(v.type_gm_mobile), has(v.diametre_gm_mobile) ? "Ø arbre " + String(v.diametre_gm_mobile).trim() : "", has(v.etat_gm_mobile) ? "état " + clean(v.etat_gm_mobile) : ""].filter(Boolean).join(" — ")]);
+      if (has(v.type_gm_fixe) && !garnitureAbsente(v)) h.push(["Garniture mécanique fixe : " + [clean(v.type_gm_fixe), has(v.diametre_gm_fixe) ? "Ø arbre " + String(v.diametre_gm_fixe).trim() : "", has(v.etat_gm_fixe) ? "état " + clean(v.etat_gm_fixe) : ""].filter(Boolean).join(" — ")]);
+      if (has(v.type_gm_mobile) && !garnitureAbsente(v)) h.push(["Garniture mécanique mobile : " + [clean(v.type_gm_mobile), has(v.diametre_gm_mobile) ? "Ø arbre " + String(v.diametre_gm_mobile).trim() : "", has(v.etat_gm_mobile) ? "état " + clean(v.etat_gm_mobile) : ""].filter(Boolean).join(" — ")]);
       if (has(v.diametre_nez_roue)) h.push(["Diamètre du nez de roue : " + num("diametre_nez_roue", "mm")]);
       if (has(v.diametre_volute)) h.push(["Diamètre de la volute intérieur : " + num("diametre_volute", "mm")]);
       if (has(v.etat_jc)) h.push(["Joint de corps : " + clean(v.etat_jc) + (v.remplacement_jc === "Oui" ? " — remplacé" + (has(v.matiere_taille_jc) ? " (" + clean(v.matiere_taille_jc) + ")" : "") : "")]);
