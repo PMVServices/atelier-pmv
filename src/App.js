@@ -1326,6 +1326,8 @@ function CasesLibres({etape,v,onChange}){
 // Champs larges : ils prennent toute la ligne de la grille (ordinateur) ; les autres sont des cases de même largeur
 const CHAMPS_PLEINE_LIGNE=["titre","conseil","illustration","verdict","fait","photo_requise","photo_skf","joints","materiel_liste","technicien","techniciens_multi","contact","case_atelier","tags","textarea"];
 const pleineLigne=cc=>CHAMPS_PLEINE_LIGNE.includes(cc.type)||(cc.type==="text"&&!!cc.dictee);
+// Commentaires (texte avec dictée vocale : « Travaux conseillé/à effectuer », « Travaux effectué », « Conclusion »…) : toute la largeur de la grille, sans la limite de 1000 px des autres champs larges (demande du 29/10/2026)
+const commentaire=cc=>(cc.type==="text"&&!!cc.dictee)||cc.type==="textarea";
 // Trame d'une fiche sur ordinateur (≥ 1000 px) : une grille de cases TOUTES de même largeur (2 colonnes, 4 à partir de 1500 px), remplie de gauche à droite
 // puis de haut en bas dans l'ordre de la fiche. Un groupe de champs liés (isolement + DAR, flasque + arbre…) reste sur la même ligne : s'il ne tient pas
 // dans ce qui reste de la ligne, on passe à la suivante (la fin de ligne reste vide). Les champs larges prennent la ligne entière.
@@ -1335,7 +1337,7 @@ function trameFiche(champs,v,cols,rendre,sp){
   const cases=[];let col=0;const vus=new Set();let dernierTitre=false;
   const vide=()=>{if(col===0)return;while(col<cols){cases.push(<div key={"vide-"+cases.length} aria-hidden="true"/>);col++;}col=0;};
   const placer=m=>{
-    if(pleineLigne(m)){vide();cases.push(<div key={m.id} style={{gridColumn:"1 / -1",minWidth:0,maxWidth:m.type==="titre"?undefined:1000}}>{rendre(m)}</div>);col=0;}
+    if(pleineLigne(m)){vide();cases.push(<div key={m.id} style={{gridColumn:"1 / -1",minWidth:0,maxWidth:m.type==="titre"||commentaire(m)?undefined:1000}}>{rendre(m)}</div>);col=0;}
     else{cases.push(<div key={m.id} style={{minWidth:0}}>{rendre(m)}</div>);col=(col+1)%cols;}
   };
   const controle=s=>{vide();cases.push(<div key={"nr-"+s.cle} style={{gridColumn:"1 / -1",minWidth:0}}><ControleSousPartie s={s} v={v} onChange={sp.onChange}/></div>);};
