@@ -107,12 +107,16 @@ export function champDepuisAjout(a){
   }
 }
 
+// Cases ajoutées dans la Maintenance puis reprises par le code pour tous les types de fiche : l'ajout reste dans la configuration mais n'est plus affiché (le champ du code le remplace).
+// x_mvteiks4np4 : « Nombre de sonde » de la fiche pompe (29/10/2026) -> sonde_nombre (App.js : champsSondes ; sa valeur déjà saisie sous cet id compte encore).
+const AJOUTS_REPRIS_PAR_LE_CODE=new Set(["x_mvteiks4np4"]);
+
 // ── application de la configuration aux définitions du code ──
 // map : {étape: [champs]} ; cle : « Moteur », « Pompe »… (atelier) ou « ch:Moteur »… (chantier) ; garderMasques : pour l'éditeur
 function construire(map,cle,cfgGlobale,garderMasques){
   const cfg=cfgGlobale.fiches&&cfgGlobale.fiches[cle];
   if(!cfg)return map;
-  const champs=cfg.champs||{};const deplace={...(cfg.deplace||{})};const ajouts=cfg.ajouts||[];
+  const champs=cfg.champs||{};const deplace={...(cfg.deplace||{})};const ajouts=(cfg.ajouts||[]).filter(a=>!AJOUTS_REPRIS_PAR_LE_CODE.has(a.id));
   const out={};
   const transforme=c=>{
     const o=champs[c.id];

@@ -130,7 +130,7 @@ function champsCirclips(){
   return out;
 }
 // Accouplement et poulie (demande du 27/10/2026) : présence Oui / Non, puis le type et les dimensions, puis « à changer ? » (Oui : la pièce part dans le matériel à commander, voir detecterPieces).
-// Sous le côté arrière dans le matériel au démontage du moteur (sfx "", quand siAncien) ; et dans « Mécanique réducteur au démontage » (sfx "_r", lieu "réducteur", quand siReducteurAncien).
+// Au-dessus de « Présence d'un ventilateur » dans le matériel au démontage du moteur (sfx "", quand siAncien) ; et dans « Mécanique réducteur au démontage » (sfx "_r", lieu "réducteur", quand siReducteurAncien).
 function champsAccouplementPoulie(sfx="",quand=siAncien,lieu=""){
   const out=[];
   [["accoup","accouplement","d'un accouplement","Accouplement","Ø extérieur, alésage, longueur…"],["poulie","poulie","d'une poulie","Poulie","Ø, alésage, largeur, nombre de gorges…"]].forEach(([p,g,question,nom,aide])=>{
@@ -205,6 +205,24 @@ function suffixerChamps(champs,suf){
     return n;
   });
 }
+// Sondes (demande du 29/10/2026) : « Nombre de sonde » donne le nombre de valeurs de résistance demandées (1 si vide, 9 au plus) ; toutes les fiches (moteur, pompe, moto-réducteur, ventilateur, autre matériel).
+// Ancienne case « Nombre de sonde » ajoutée dans la Maintenance sur la fiche pompe (id x_mvteiks4np4) : reprise ici (sa valeur compte encore, voir configFiches.js : AJOUTS_REPRIS_PAR_LE_CODE).
+const NB_SONDES_MAX=9;
+function nombreSondes(v){
+  const brut=v.sonde_nombre!==undefined&&v.sonde_nombre!==""?v.sonde_nombre:v.x_mvteiks4np4;
+  const n=parseInt(String(brut==null?"":brut).replace(",","."),10);
+  return isNaN(n)||n<1?1:Math.min(n,NB_SONDES_MAX);
+}
+const siSondePresente=v=>v.sonde_presence==="Présente";
+function champsSondes(){
+  const out=[
+    {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
+    {id:"sonde_nombre",label:"Nombre de sonde",type:"number",required:false,note:"Une valeur de résistance est demandée par sonde (une seule si vide, "+NB_SONDES_MAX+" au plus)",condition:siSondePresente},
+    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",required:true,groupe:"sonde_valeurs",condition:siSondePresente},
+  ];
+  for(let k=2;k<=NB_SONDES_MAX;k++)out.push({id:"sonde_n"+k,label:"Résistance sonde "+k+" — valeur",type:"mesure",unite:"Ω",required:true,groupe:"sonde_valeurs",condition:v=>siSondePresente(v)&&nombreSondes(v)>=k});
+  return out;
+}
 const CHAMPS_INFOS_ELECTRIQUES=[
     {id:"couplage",label:"Couplage",type:"select",options:["Étoile","Triangle","Absent"],required:true},
     {id:"isol_masse",label:"Isol. masse",type:"ohm",required:true,groupe:"isol_masse_pair"},{id:"isol_masse_dar",label:"DAR masse",type:"number",unite:"DAR",required:false,groupe:"isol_masse_pair"},{id:"isol_uv",label:"Isol. U-V",type:"ohm",required:true,groupe:"isol_uv_pair"},{id:"isol_uv_dar",label:"DAR U-V",type:"number",unite:"DAR",required:false,groupe:"isol_uv_pair"},{id:"isol_vw",label:"Isol. V-W",type:"ohm",required:true,groupe:"isol_vw_pair"},{id:"isol_vw_dar",label:"DAR V-W",type:"number",unite:"DAR",required:false,groupe:"isol_vw_pair"},{id:"isol_wu",label:"Isol. W-U",type:"ohm",required:true,groupe:"isol_wu_pair"},{id:"isol_wu_dar",label:"DAR W-U",type:"number",unite:"DAR",required:false,groupe:"isol_wu_pair"},
@@ -216,8 +234,8 @@ const CHAMPS_INFOS_ELECTRIQUES=[
     {id:"adx_valeur_novar",label:"ADX mesure isol. sans variateur 2000V — valeur",type:"ohm",required:true,condition:[{champ:"sur_variateur",valeur:"Non"},{champ:"adx_resultat_novar",sauf:"Non fait"}]},
     {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
     {id:"plaque_bornes_taille",label:"Plaque à bornes — taille",type:"text",required:true,condition:{champ:"plaque_bornes_etat",valeur:"HS"}},
-    {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
-    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
+    ...champsSondes(), // présence, nombre et valeurs des sondes
+
     {id:"tech_elec",label:"Technicien",type:"technicien",required:true},
     {id:"conclusion",label:"Conclusion",type:"text",required:true,dictee:true},
 ];
@@ -248,7 +266,7 @@ const CHAMPS_ROTATION_AVANT=[
 const ETAPE_ELEC_2="Infos électriques (2e passage)";
 const ETAPE_ROTATION_2="Information rotation avant démontage (2e passage)";
 const CHAMPS_INFOS_ELECTRIQUES_2=suffixerChamps(
-  CHAMPS_INFOS_ELECTRIQUES.filter(c=>!["couplage","plaque_bornes_etat","plaque_bornes_taille","sonde_presence"].includes(c.id)),
+  CHAMPS_INFOS_ELECTRIQUES.filter(c=>!["couplage","plaque_bornes_etat","plaque_bornes_taille","sonde_presence","sonde_nombre"].includes(c.id)),
   "_2"
 ).map(c=>c.id==="sonde_valeur_2"?{...c,condition:{champ:"sonde_presence",valeur:"Présente"}}:c)
  .map(c=>c.id==="adx_valeur_2"?{...c,condition:v=>!v.sur_variateur&&v.adx_resultat_2!=="Non fait"}:c)
@@ -320,6 +338,7 @@ const CHAMPS={
   "Information matériel au démontage":[
     ...champsHpEtuvage("",v=>v.essai_vide_avant!=="Non"), // nettoyage HP, mesures, étuvage (etuvage.js) puis la question « Moteur neuf »
     {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true,condition:v=>v.essai_vide_avant!=="Non"},
+    ...champsAccouplementPoulie(), // accouplement et poulie : présence, type, dimensions, à changer ? ; au-dessus de « Présence d'un ventilateur » (demande du 29/10/2026)
     {id:"ventilateur_present",label:"Présence d'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     {id:"etat_ventilateur",label:"État ventilateur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:v=>siAncien(v)&&v.ventilateur_present==="Oui",groupe:"ventilateur_pair"},
     {id:"taille_ventilateur",label:"Taille ventilateur",type:"text",required:false,condition:v=>siAncien(v)&&v.ventilateur_present==="Oui",groupe:"ventilateur_pair"},
@@ -341,7 +360,6 @@ const CHAMPS={
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar",condition:siAncien},
-    ...champsAccouplementPoulie(), // accouplement et poulie : présence, type, dimensions
     {id:"peinture",label:"Peinture à faire",type:"oui_non",required:true,condition:siAncien},
     {id:"etat_bobinage",label:"État visuel bobinage",type:"select",options:["RAS","Cuit","Sale","Vieux","HS"],required:true,groupe:"bob_rotor",condition:siAncien},
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
@@ -438,8 +456,8 @@ const CHAMPS_POMPE={
     {id:"adx_valeur_novar",label:"ADX mesure isol. sans variateur 2000V — valeur",type:"ohm",required:true,condition:[{champ:"sur_variateur",valeur:"Non"},{champ:"adx_resultat_novar",sauf:"Non fait"}]},
     {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
     {id:"plaque_bornes_taille",label:"Plaque à bornes — taille",type:"text",required:true,condition:{champ:"plaque_bornes_etat",valeur:"HS"}},
-    {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
-    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
+    ...champsSondes(), // présence, nombre et valeurs des sondes
+
     {id:"tech_elec",label:"Technicien",type:"technicien",required:true},
     {id:"conclusion",label:"Conclusion",type:"text",required:true,dictee:true},
   ],
@@ -483,6 +501,7 @@ const CHAMPS_POMPE={
   "Matériel au démontage moteur":[
     ...champsHpEtuvage("_m"), // nettoyage HP, mesures, étuvage (etuvage.js) puis la question « Moteur neuf »
     {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true},
+    ...champsAccouplementPoulie(), // accouplement et poulie : présence, type, dimensions, à changer ? ; au-dessus de « Présence d'un ventilateur » (demande du 29/10/2026)
     {id:"ventilateur_present",label:"Présence d\'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     {id:"etat_ventilateur",label:"État ventilateur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:v=>siAncien(v)&&v.ventilateur_present==="Oui",groupe:"ventilateur_pair"},
     {id:"taille_ventilateur",label:"Taille ventilateur",type:"text",required:false,condition:v=>siAncien(v)&&v.ventilateur_present==="Oui",groupe:"ventilateur_pair"},
@@ -504,7 +523,6 @@ const CHAMPS_POMPE={
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar",condition:siAncien},
-    ...champsAccouplementPoulie(), // accouplement et poulie : présence, type, dimensions
     {id:"peinture",label:"Peinture à faire",type:"oui_non",required:true,condition:siAncien},
     {id:"etat_bobinage",label:"État visuel bobinage",type:"select",options:["RAS","Cuit","Sale","Vieux","HS"],required:true,groupe:"bob_rotor",condition:siAncien},
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
@@ -630,8 +648,8 @@ const CHAMPS_REDUCTEUR={
     {id:"adx_valeur_novar",label:"ADX mesure isol. sans variateur 2000V — valeur",type:"ohm",required:true,condition:[{champ:"sur_variateur",valeur:"Non"},{champ:"adx_resultat_novar",sauf:"Non fait"}]},
     {id:"plaque_bornes_etat",label:"Plaque à bornes — état",type:"select",options:["OK","HS"],required:true},
     {id:"plaque_bornes_taille",label:"Plaque à bornes — taille",type:"text",required:true,condition:{champ:"plaque_bornes_etat",valeur:"HS"}},
-    {id:"sonde_presence",label:"Résistance sonde — présence",type:"select",options:["Absente","Présente"],required:true},
-    {id:"sonde_valeur",label:"Résistance sonde — valeur",type:"mesure",unite:"Ω",required:true,condition:{champ:"sonde_presence",valeur:"Présente"}},
+    ...champsSondes(), // présence, nombre et valeurs des sondes
+
     {id:"tech_elec",label:"Technicien",type:"technicien",required:true},
     {id:"conclusion",label:"Conclusion",type:"text",required:true,dictee:true},
   ],
@@ -668,6 +686,7 @@ const CHAMPS_REDUCTEUR={
   "Matériel au démontage moteur":[
     ...champsHpEtuvage("_m"), // nettoyage HP, mesures, étuvage (etuvage.js) puis la question « Moteur neuf »
     {id:"moteur_neuf",label:"Moteur neuf",type:"choix",options:CHOIX_OUI_NON_NS,required:true},
+    ...champsAccouplementPoulie(), // accouplement et poulie : présence, type, dimensions, à changer ? ; au-dessus de « Présence d'un ventilateur » (demande du 29/10/2026)
     {id:"ventilateur_present",label:"Présence d\'un ventilateur",type:"oui_non",required:true,condition:siAncien},
     {id:"etat_ventilateur",label:"État ventilateur",type:"select",options:["RAS","Usé","HS","Cassé"],required:true,condition:v=>siAncien(v)&&v.ventilateur_present==="Oui",groupe:"ventilateur_pair"},
     {id:"taille_ventilateur",label:"Taille ventilateur",type:"text",required:false,condition:v=>siAncien(v)&&v.ventilateur_present==="Oui",groupe:"ventilateur_pair"},
@@ -689,7 +708,6 @@ const CHAMPS_REDUCTEUR={
     {id:"mesure_flasque_ar",label:"Mesure flasque arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"mesure_arbre_ar",label:"Mesure arbre arrière",type:"number",unite:"mm",required:true,groupe:"flasque_ar",condition:siAncien},
     {id:"joint_ar",label:"Joints arrière",type:"joints",required:false,groupe:"joint_ar",condition:siAncien},
-    ...champsAccouplementPoulie(), // accouplement et poulie : présence, type, dimensions
     {id:"peinture",label:"Peinture à faire",type:"oui_non",required:true,condition:siAncien},
     {id:"etat_bobinage",label:"État visuel bobinage",type:"select",options:["RAS","Cuit","Sale","Vieux","HS"],required:true,groupe:"bob_rotor",condition:siAncien},
     {id:"etat_rotor",label:"État visuel rotor",type:"select",options:["RAS","Bleui","HS","Autre"],required:false,autreTexte:true,groupe:"bob_rotor",condition:siAncien},
