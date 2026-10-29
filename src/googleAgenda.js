@@ -1,4 +1,4 @@
-// Lien avec Google Agenda (demande du 22/10/2026) : depuis le Planning, « 📅 Programmer » crée un événement « Atelier DE7544 POMPE remontage » à la date et à l'heure
+// Lien avec Google Agenda (demande du 22/10/2026) : depuis le Planning, « 📅 Programmer » crée un événement « Atelier DE7544 POMPE remontage » (ou démontage, peinture, rapport) à la date et à l'heure
 // voulues, dans l'agenda choisi (par son nom). Aucun serveur : la personne qui programme se connecte à son compte Google dans le navigateur (Google Identity Services,
 // jeton valable une heure) et l'appli appelle l'API Google Agenda avec ce jeton. L'identifiant client OAuth (public) est réglé une fois par l'administrateur
 // (parametres_app, clé « google_client_id »). Les événements créés sont rangés dans parametres_app (clé « planning_agenda ») pour pouvoir les déplacer ou les supprimer.
@@ -14,10 +14,11 @@ const PORTEE = "https://www.googleapis.com/auth/calendar.events https://www.goog
 const FUSEAU = "Europe/Paris";
 const API = "https://www.googleapis.com/calendar/v3";
 
-export const TRAVAUX = [["demontage", "démontage"], ["remontage", "remontage"], ["peinture", "peinture"]];
+// « rapport » (demande du 29/10/2026) : la plage pour rédiger le rapport, proposée pour les cartes de la colonne « Rapport à faire »
+export const TRAVAUX = [["demontage", "démontage"], ["remontage", "remontage"], ["peinture", "peinture"], ["rapport", "rapport"]];
 export const libTravail = (id) => (TRAVAUX.find((t) => t[0] === id) || [id, id])[1];
 // travail proposé d'après la colonne du Planning où se trouve la carte
-export const travailDepuisStatut = (statut) => (statut === "A_remonter" ? "remontage" : statut === "Peinture" ? "peinture" : "demontage");
+export const travailDepuisStatut = (statut) => (statut === "A_remonter" ? "remontage" : statut === "Peinture" ? "peinture" : statut === "Rapport_a_faire" ? "rapport" : "demontage");
 const TYPES = { "Moteur": "MOTEUR", "Pompe": "POMPE", "Moto-réducteur": "MOTO-RÉDUCTEUR", "Ventilateur": "VENTILATEUR", "Cheminée de freinage": "CHEMINÉE", "Autre": "AUTRE" };
 export const nomType = (type) => TYPES[type] || String(type || "").toUpperCase();
 // « Atelier DE7544 POMPE remontage » (un chantier sans fiche n'a pas de type de matériel : « Atelier DE7544 remontage »)

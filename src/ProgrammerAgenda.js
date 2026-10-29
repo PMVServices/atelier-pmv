@@ -1,4 +1,4 @@
-// Fenêtre « 📅 Programmer » du Planning : choisit le travail (démontage / remontage / peinture), la date, l'heure et l'agenda Google, puis crée (ou déplace, ou supprime)
+// Fenêtre « 📅 Programmer » du Planning : choisit le travail (démontage / remontage / peinture / rapport), la date, l'heure et l'agenda Google, puis crée (ou déplace, ou supprime)
 // l'événement « Atelier DE7544 POMPE remontage ». Voir googleAgenda.js pour le principe (connexion Google dans le navigateur, aucun serveur).
 import React, {useState, useEffect, useRef} from "react";
 import {TRAVAUX, travailDepuisStatut, titreEvenement, ajouterHeures, lienPreRempli, estConnecte, connecter, listerAgendas, creerEvenement, majEvenement,
