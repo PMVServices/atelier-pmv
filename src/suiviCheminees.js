@@ -74,6 +74,7 @@ export function construireLignes(fiches, valeurs, anciens) {
       if (!cible.plages.length) cible.plages = a.plages;
       if (a.notes) cible.notes = a.notes;
       if (!cible.client) cible.client = a.client;
+      if (!cible.origine) cible.origine = a.origine || "";
       cible.deAncien = true; cible.idAncien = a.id;
       return;
     }
@@ -112,6 +113,7 @@ export function correspondances(l, requete) {
     if (dans(l.loco) || dans(l.symbole)) res.add("loco");
     if (dans(l.arrivee) || gravuresListe(l).some((g) => norm(g).indexOf(q) >= 0)) res.add("gravure");
     if (dans(l.notes) || dans(l.client)) res.add("notes");
+    if (dans(l.origine)) res.add("origine");
     // la valeur de l'ancien tableau, quand elle diffère de celle de la fiche, reste cherchable (colonne « Remarques », où l'écart est affiché)
     (l.ecarts || []).forEach((e) => { if (dans(e.ancien)) res.add("notes"); });
   }
@@ -121,31 +123,53 @@ export function correspondances(l, requete) {
 // ── lecture du fichier Excel des anciennes informations ──
 // rows : feuille lue en tableau de tableaux (texte). Repère la ligne d'en-têtes (N°PMV / DV, Loco, N° Cheminée, N°moteur, Résist. seul, N° de gravage),
 // ignore les lignes vides et les en-têtes répétés, lit les plages « 259 à 266 », « Comme DV0026 », « nr » et les remarques à droite.
-export function analyserFeuille(rows) {
+// « SNCF » ou « IMATEQ », d'après le titre au-dessus du tableau (« Lot résistance gravé SNCF »), sinon d'après le nom du fichier ; "" si on ne sait pas
+export function detecterOrigine(rows, nomFichier) {
+  const dans = (t) => ({ s: /sncf/i.test(t), i: /imateq/i.test(t) });
+  let d = dans((rows || []).slice(0, 6).map((r) => (r || []).join(" ")).join(" "));
+  if (d.s !== d.i) return d.s ? "SNCF" : "IMATEQ";
+  d = dans(nomFichier || "");
+  if (d.s !== d.i) return d.s ? "SNCF" : "IMATEQ";
+  return "";
+}
+
+// Un N° de DV (« DV0004 »), de DE (« 3681 » dans la colonne DE = DE3681) ou « N°PMV » peut se trouver dans une, deux ou trois colonnes : on prend le premier qui est rempli.
+export function analyserFeuille(rows, origine) {
   const lignesBrutes = (rows || []).map((r) => (r || []).map((c) => txt(c)));
   let ent = -1; const col = {};
   for (let i = 0; i < lignesBrutes.length && ent < 0; i++) {
     const c = {};
     lignesBrutes[i].forEach((cell, j) => {
-      if (/^n°?\s*(pmv|dv|de)\b|^(pmv|dv|de)$/i.test(cell) && c.pmv === undefined) c.pmv = j;
-      else if (/loco|engin/i.test(cell) && c.loco === undefined) c.loco = j;
-      else if (/chemin/i.test(cell) && c.cheminee === undefined) c.cheminee = j;
-      else if (/moteur/i.test(cell) && c.moteur === undefined) c.moteur = j;
-      else if (/r[ée]sist.*seul/i.test(cell) && c.seul === undefined) c.seul = j;
-      else if (/grav/i.test(cell) && c.grav === undefined) c.grav = j;
+      if (/loco|engin/i.test(cell)) { if (c.loco === undefined) c.loco = j; }
+      else if (/chemin/i.test(cell)) { if (c.cheminee === undefined) c.cheminee = j; }
+      else if (/moteur/i.test(cell)) { if (c.moteur === undefined) c.moteur = j; }
+      else if (/r[ée]sist.*seul/i.test(cell)) { if (c.seul === undefined) c.seul = j; }
+      else if (/grav/i.test(cell)) { if (c.grav === undefined) c.grav = j; }
+      else if (/\bpmv\b/i.test(cell)) { if (c.pmv === undefined) c.pmv = j; }
+      else if (/\bdv\b/i.test(cell)) { if (c.dv === undefined) c.dv = j; }
+      else if (/\bde\b/i.test(cell)) { if (c.de === undefined) c.de = j; }
     });
-    if (c.pmv !== undefined && Object.keys(c).length >= 3) { ent = i; Object.assign(col, c); }
+    if ((c.pmv !== undefined || c.dv !== undefined || c.de !== undefined) && Object.keys(c).length >= 3) { ent = i; Object.assign(col, c); }
   }
   if (ent < 0) return { erreur: "Les colonnes attendues n'ont pas été trouvées (N°PMV ou DV, N° cheminée, N° moteur, N° de gravage…).", lignes: [], avertissements: [], ignorees: [] };
   const avertissements = [], ignorees = [], brutes = [];
   const lit = (r, j) => (j === undefined ? "" : txt(r[j]));
   for (let i = ent + 1; i < lignesBrutes.length; i++) {
     const r = lignesBrutes[i];
-    const pmvBrut = lit(r, col.pmv);
-    if (!/^(DE|DV)\s*\d+/i.test(pmvBrut)) continue; // ligne vide, en-tête répété…
+    let pmvBrut = "";
+    [["pmv", ""], ["dv", "DV"], ["de", "DE"]].some(([cle, pref]) => {
+      const v = lit(r, col[cle]);
+      const t = /^\d+$/.test(v) ? pref + v : v; // « 3681 » dans la colonne DE = DE3681
+      if (/^(DE|DV)\s*\d+/i.test(t)) { pmvBrut = t; return true; }
+      return false;
+    });
+    if (!pmvBrut) continue; // ligne vide, en-tête répété…
     const pmv = numeroPmv(pmvBrut);
     if (pmvBrut.toUpperCase().replace(/\s+/g, "") !== pmv) avertissements.push("Ligne " + (i + 1) + " : « " + pmvBrut + " » lu comme " + pmv + ".");
-    let loco = lit(r, col.loco); if (/^nr$/i.test(loco)) loco = "NR";
+    const sansVirgules = (v) => (/^\d{1,3}(,\d{3})+$/.test(v) ? v.replace(/,/g, "") : v); // « 5,502,255 » (format Excel) = 5502255
+    let loco = sansVirgules(lit(r, col.loco)); if (/^nr$/i.test(loco)) loco = "NR";
+    const cheminee = sansVirgules(lit(r, col.cheminee)), moteur = lit(r, col.moteur);
+    if (/\?/.test(cheminee + loco + moteur)) avertissements.push(pmv + " : un doute est écrit dans le fichier (« " + [cheminee, loco, moteur].filter((x) => /\?/.test(x)).join(" ; ") + " »).");
     const seul = /^x$/i.test(lit(r, col.seul));
     let plages = [], comme = "", notes = "";
     if (col.grav !== undefined) {
@@ -161,7 +185,7 @@ export function analyserFeuille(rows) {
       notes = r.slice(debutNotes).filter(Boolean).join(" ");
       if (!comme && g0 && !/\d/.test(g0)) notes = (g0 + " " + notes).trim();
     }
-    brutes.push({ ligne: i + 1, pmv, type: seul ? "resistance" : "cheminee", cheminee: lit(r, col.cheminee), moteur: lit(r, col.moteur), loco, plages, comme, notes });
+    brutes.push({ ligne: i + 1, pmv, type: seul ? "resistance" : "cheminee", cheminee, moteur, loco, plages, comme, notes });
   }
   // regroupe les lignes d'un même N° (DE5040 en 3 lignes : 001-016, 017-032, 033-038)
   const parCle = new Map();
@@ -200,6 +224,6 @@ export function analyserFeuille(rows) {
       chev.push(a.pmv + " (" + texteGravure([pa]) + ") et " + b.pmv + " (" + texteGravure([pb]) + ") se chevauchent : " + texteGravure([[lo, hi]]) + ".");
     }));
   }
-  const lignes = utiles.map((e) => ({ pmv: e.pmv, type: e.type, cheminee: e.cheminee, moteur: e.moteur, loco: e.loco, symbole: "", plages: e.plages, notes: e.notes, cleImport: e.pmv + "|" + e.type + "|" + norm(e.cheminee) }));
+  const lignes = utiles.map((e) => ({ pmv: e.pmv, type: e.type, cheminee: e.cheminee, moteur: e.moteur, loco: e.loco, symbole: "", plages: e.plages, notes: e.notes, origine: origine || "", cleImport: e.pmv + "|" + e.type + "|" + norm(e.cheminee) }));
   return { lignes, avertissements: chev.concat(avertissements), ignorees, source: { entete: ent + 1, lignesLues: brutes.length } };
 }

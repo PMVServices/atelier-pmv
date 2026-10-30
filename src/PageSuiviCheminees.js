@@ -1,7 +1,7 @@
 import React, {useState, useEffect, useMemo} from "react";
 import {SUPA_URL, H, db} from "./supabase";
 import {TYPE_CHEMINEE} from "./railClients";
-import {CHAMPS_FICHE_SUIVI, norm, numeroPmv, rangPmv, compresser, lirePlages, texteGravure, construireLignes, correspondances, analyserFeuille} from "./suiviCheminees";
+import {CHAMPS_FICHE_SUIVI, norm, numeroPmv, rangPmv, compresser, lirePlages, texteGravure, construireLignes, correspondances, analyserFeuille, detecterOrigine} from "./suiviCheminees";
 
 // Suivi des cheminées / résistances de freinage (demande du 30/10/2026) : un tableau, une ligne par passage (N° DV), avec le n° de cheminée, de moteur, d'engin / loco et de gravage.
 // Les lignes des fiches atelier « Cheminée de freinage » sont lues en direct (rien n'est recopié : elles se mettent à jour toutes seules) ; les anciennes informations, sans fiche,
@@ -74,12 +74,20 @@ function Act({ children, onClick, titre, style }) {
 }
 const dateFr = (iso) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso || ""); return m ? m[3] + "/" + m[2] + "/" + m[1] : ""; };
 const cleTri = (l) => rangPmv(l.pmv);
+// « SNCF » ou « IMATEQ », comme dans la fiche atelier (champ « SNCF ou IMATEQ ») ; pastille pleine pour se lire d'un coup d'œil
+const COULEURS_ORIGINE = { SNCF: ["#1B4F8A", "#fff"], IMATEQ: ["#D97706", "#fff"] };
+function Origine({ valeur, surbrillance }) {
+  const c = COULEURS_ORIGINE[valeur];
+  if (!c) return <span style={{ color: "#9CA3AF" }} title="Origine non précisée">—</span>;
+  return <span style={{ display: "inline-block", fontSize: 11, fontWeight: 800, letterSpacing: ".03em", background: c[0], color: c[1], borderRadius: 10, padding: "2px 10px", outline: surbrillance ? "3px solid #FDE68A" : "none" }}>{valeur}</span>;
+}
 
 export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
   const [etat, setEtat] = useState({ charge: false, erreur: "", fiches: [], valeurs: {}, anciens: [] });
   const [q, setQ] = useState("");
   const [type, setType] = useState("tous");
   const [src, setSrc] = useState("tous");
+  const [orig, setOrig] = useState("tous");       // origine : tous | SNCF | IMATEQ
   const [groupe, setGroupe] = useState(false);
   const [edition, setEdition] = useState(null);   // ligne ancienne en cours d'édition (objet vide = nouvelle)
   const [apercu, setApercu] = useState(null);     // aperçu d'un import Excel
@@ -102,6 +110,7 @@ export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
   const passages = useMemo(() => { const c = {}; lignes.forEach((l) => { if (l.cheminee) c[norm(l.cheminee)] = (c[norm(l.cheminee)] || 0) + 1; }); return c; }, [lignes]);
   const nbCheminees = Object.keys(passages).length;
   const nbSeules = lignes.filter((l) => l.type === "resistance").length;
+  const nbSncf = lignes.filter((l) => l.origine === "SNCF").length, nbImateq = lignes.filter((l) => l.origine === "IMATEQ").length;
 
   const vus = useMemo(() => {
     const out = [];
@@ -109,6 +118,7 @@ export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
       if (type !== "tous" && l.type !== type) return;
       if (src === "fiche" && !l.deFiche) return;
       if (src === "ancien" && !l.deAncien) return;
+      if (orig !== "tous" && l.origine !== orig) return;
       const m = q.trim() ? correspondances(l, q) : null;
       if (m && !m.length) return;
       out.push({ l, m: m || [] });
@@ -116,7 +126,7 @@ export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
     if (groupe) out.sort((a, b) => (a.l.cheminee ? 0 : 1) - (b.l.cheminee ? 0 : 1) || norm(a.l.cheminee).localeCompare(norm(b.l.cheminee)) || cleTri(a.l) - cleTri(b.l));
     else out.sort((a, b) => cleTri(b.l) - cleTri(a.l));
     return out;
-  }, [lignes, q, type, src, groupe]);
+  }, [lignes, q, type, src, orig, groupe]);
 
   // ── actions ──
   async function enregistrerLigne(f) {
@@ -144,8 +154,9 @@ export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
       let res = null;
       for (const nom of wb.SheetNames) {
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[nom], { header: 1, raw: false, defval: "" });
-        const r = analyserFeuille(rows);
-        if (!r.erreur) { res = { ...r, feuille: nom }; break; }
+        const origine = detecterOrigine(rows, f.name);
+        const r = analyserFeuille(rows, origine);
+        if (!r.erreur) { res = { ...r, feuille: nom, origine }; break; }
       }
       if (!res) throw new Error("Les colonnes attendues n'ont pas été trouvées (N°PMV ou DV, N° cheminée, N° moteur, N° de gravage…).");
       setApercu({ ...res, fichier: f.name });
@@ -157,7 +168,7 @@ export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
     setOccupe(true);
     try {
       const maintenant = new Date().toISOString();
-      const nouvelles = apercu.lignes.map((l) => ({ ...l, id: "imp_" + l.cleImport, source: "ancien", cree: maintenant, par: par || "" }));
+      const nouvelles = apercu.lignes.map((l) => ({ ...l, origine: apercu.origine || "", id: "imp_" + l.cleImport, source: "ancien", cree: maintenant, par: par || "" }));
       const ids = new Set(nouvelles.map((x) => x.id));
       const anciens = await modifierSuivi((a) => a.filter((x) => !ids.has(x.id)).concat(nouvelles));
       setEtat((p) => ({ ...p, anciens })); setMsg("✓ " + nouvelles.length + " lignes importées depuis « " + apercu.fichier + " »."); setApercu(null);
@@ -192,7 +203,8 @@ export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
       cheminee: l.cheminee ? <span style={hl("cheminee")}>{lien(l.cheminee)}{nb > 1 && <Act onClick={() => setQ(l.cheminee)} titre="Voir tous les passages de cette cheminée" style={{ marginLeft: 6, fontSize: 10, fontWeight: 700, background: "#FEF3C7", color: "#92400E", borderRadius: 10, padding: "1px 6px" }}>×{nb}</Act>}</span> : vide,
       moteur: l.moteur ? <span style={hl("moteur")}>{lien(l.moteur)}</span> : vide,
       loco: l.loco === "NR" ? <span style={hl("loco")} title="NR : il n'y en a pas">NR</span>
-        : l.loco ? <span><span style={hl("loco")}>{lien(l.loco)}</span>{(l.symbole || l.origine) && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>{[l.symbole ? "symbole " + l.symbole : "", l.origine].filter(Boolean).join(" · ")}</div>}</span> : vide,
+        : l.loco ? <span><span style={hl("loco")}>{lien(l.loco)}</span>{l.symbole && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>symbole {l.symbole}</div>}</span> : vide,
+      origine: <Origine valeur={l.origine} surbrillance={m.includes("origine")}/>,
       gravure: (l.plages.length || l.arrivee) ? <div><span style={hl("gravure")}>{l.plages.length ? <b>{texteGravure(l.plages)}</b> : vide}</span>{l.prefixeGrav && <span style={{ fontSize: 11, color: "#6B7280" }}> ({l.prefixeGrav})</span>}
         {l.arrivee && <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>À l'arrivée : {l.arrivee}</div>}</div> : vide,
       remarques: <div>{l.notes && <span style={{ ...hl("notes"), fontSize: 12, overflowWrap: "anywhere" }}>{l.notes}</span>}
@@ -226,12 +238,14 @@ export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
         {[["tous", "Tout"], ["cheminee", "Cheminées"], ["resistance", "Résistances seules"]].map(([id, lib]) => <button type="button" key={id} aria-pressed={type === id} onClick={() => setType(id)} style={{ ...BTN_O, background: type === id ? BLEU : "#fff", color: type === id ? "#fff" : BLEU, padding: "5px 12px", fontSize: 12 }}>{lib}</button>)}
         <span style={{ width: 8 }}/>
+        {[["tous", "SNCF + IMATEQ"], ["SNCF", "SNCF"], ["IMATEQ", "IMATEQ"]].map(([id, lib]) => <button type="button" key={id} aria-pressed={orig === id} onClick={() => setOrig(id)} style={{ ...BTN_O, background: orig === id ? BLEU : "#fff", color: orig === id ? "#fff" : BLEU, padding: "5px 12px", fontSize: 12 }}>{lib}</button>)}
+        <span style={{ width: 8 }}/>
         {[["tous", "Toutes les sources"], ["fiche", "Fiches"], ["ancien", "Anciens"]].map(([id, lib]) => <button type="button" key={id} aria-pressed={src === id} onClick={() => setSrc(id)} style={{ ...BTN_O, background: src === id ? BLEU : "#fff", color: src === id ? "#fff" : BLEU, padding: "5px 12px", fontSize: 12 }}>{lib}</button>)}
         <span style={{ width: 8 }}/>
         <button type="button" aria-pressed={groupe} onClick={() => setGroupe(!groupe)} style={{ ...BTN_O, background: groupe ? BLEU : "#fff", color: groupe ? "#fff" : BLEU, padding: "5px 12px", fontSize: 12 }}>Regrouper par cheminée</button>
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10, alignItems: "center" }}>
-        <span style={{ fontSize: 12, color: "#6B7280", flex: "1 1 220px" }}>{etat.charge ? lignes.length + " passage" + (lignes.length > 1 ? "s" : "") + " · " + nbCheminees + " cheminée" + (nbCheminees > 1 ? "s" : "") + (nbSeules ? " · " + nbSeules + " résistance" + (nbSeules > 1 ? "s" : "") + " seule" + (nbSeules > 1 ? "s" : "") : "") + (vus.length !== lignes.length ? " · " + vus.length + " affiché" + (vus.length > 1 ? "s" : "") : "") : "Chargement…"}</span>
+        <span style={{ fontSize: 12, color: "#6B7280", flex: "1 1 220px" }}>{etat.charge ? lignes.length + " passage" + (lignes.length > 1 ? "s" : "") + " · " + nbCheminees + " cheminée" + (nbCheminees > 1 ? "s" : "") + (nbSeules ? " · " + nbSeules + " résistance" + (nbSeules > 1 ? "s" : "") + " seule" + (nbSeules > 1 ? "s" : "") : "") + " · " + nbSncf + " SNCF · " + nbImateq + " IMATEQ" + (vus.length !== lignes.length ? " · " + vus.length + " affiché" + (vus.length > 1 ? "s" : "") : "") : "Chargement…"}</span>
         <button type="button" onClick={exporter} disabled={!vus.length} style={BTN_O}>⬇ Exporter en Excel</button>
         {admin && <button type="button" onClick={() => setEdition({})} style={BTN_O}>➕ Ajouter une ligne</button>}
         {admin && <label style={{ ...BTN_O, display: "inline-flex", alignItems: "center", cursor: occupe ? "default" : "pointer", opacity: occupe ? .6 : 1 }}>📥 Importer un fichier Excel<input type="file" accept=".xlsx,.xlsm,.xls" onChange={choisirFichier} disabled={occupe} style={{ display: "none" }}/></label>}
@@ -243,14 +257,14 @@ export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
     {etat.charge && !etat.erreur && !vus.length && <div style={{ ...CARTE, textAlign: "center", color: "#6B7280", fontSize: 14 }}>{lignes.length ? "Aucune ligne ne correspond à cette recherche." : "Aucune cheminée pour le moment : les fiches « Cheminée de freinage » apparaîtront ici" + (admin ? ", et vous pouvez importer vos anciennes informations avec « Importer un fichier Excel »." : ".")}</div>}
 
     {vus.length > 0 && !cartes && <div style={{ ...CARTE, padding: 0, overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
-        <thead><tr>{["N° DV / DE", "N° de cheminée", "N° de moteur", "N° d'engin / loco", "N° de gravage", "Remarques", ""].map((t, i) => <th key={i} style={TH}>{t}</th>)}</tr></thead>
+      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
+        <thead><tr>{["N° DV / DE", "Origine", "N° de cheminée", "N° de moteur", "N° d'engin / loco", "N° de gravage", "Remarques", ""].map((t, i) => <th key={i} style={TH}>{t}</th>)}</tr></thead>
         <tbody>{vus.map((it, i) => {
           const c = cellules(it);
           const gr = entetesGroupe(it, i);
           return (<React.Fragment key={it.l.cle}>
-            {gr && <tr><td colSpan={7} style={{ background: "#F8F9FA", padding: "6px 10px" }}>{gr}</td></tr>}
-            <tr><td style={TD}>{c.pmv}</td><td style={TD}>{c.cheminee}</td><td style={TD}>{c.moteur}</td><td style={TD}>{c.loco}</td><td style={TD}>{c.gravure}</td><td style={{ ...TD, maxWidth: 280 }}>{c.remarques}</td><td style={TD}>{c.actions}</td></tr>
+            {gr && <tr><td colSpan={8} style={{ background: "#F8F9FA", padding: "6px 10px" }}>{gr}</td></tr>}
+            <tr><td style={TD}>{c.pmv}</td><td style={TD}>{c.origine}</td><td style={TD}>{c.cheminee}</td><td style={TD}>{c.moteur}</td><td style={TD}>{c.loco}</td><td style={TD}>{c.gravure}</td><td style={{ ...TD, maxWidth: 280 }}>{c.remarques}</td><td style={TD}>{c.actions}</td></tr>
           </React.Fragment>);
         })}</tbody>
       </table>
@@ -260,12 +274,12 @@ export default function PageSuiviCheminees({ admin, par, onOuvrirFiche }) {
       const c = cellules(it);
       const ligne = (lib, val) => <div style={{ display: "flex", gap: 8, padding: "5px 0", borderTop: "1px solid #F1F2F4", fontSize: 13 }}><span style={{ flex: "0 0 96px", fontSize: 11, fontWeight: 700, color: "#6B7280", textTransform: "uppercase" }}>{lib}</span><span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{val}</span></div>;
       return (<React.Fragment key={it.l.cle}>{entetesGroupe(it, i)}
-        <div style={CARTE}>{c.pmv}{ligne("Cheminée", c.cheminee)}{ligne("Moteur", c.moteur)}{ligne("Engin / loco", c.loco)}{ligne("Gravage", c.gravure)}{(it.l.notes || it.l.ecarts.length > 0) && ligne("Remarques", c.remarques)}
+        <div style={CARTE}>{c.pmv}{ligne("Origine", c.origine)}{ligne("Cheminée", c.cheminee)}{ligne("Moteur", c.moteur)}{ligne("Engin / loco", c.loco)}{ligne("Gravage", c.gravure)}{(it.l.notes || it.l.ecarts.length > 0) && ligne("Remarques", c.remarques)}
           <div style={{ marginTop: 8 }}>{c.actions}</div></div></React.Fragment>);
     })}</div>}
 
     {edition && <FormLigne init={edition} occupe={occupe} onSauver={enregistrerLigne} onSupprimer={supprimerLigne} onFermer={() => setEdition(null)}/>}
-    {apercu && <ApercuImport apercu={apercu} occupe={occupe} onImporter={importer} onFermer={() => setApercu(null)}/>}
+    {apercu && <ApercuImport apercu={apercu} occupe={occupe} onOrigine={(o) => setApercu((a) => ({ ...a, origine: o }))} onImporter={importer} onFermer={() => setApercu(null)}/>}
   </div>);
 }
 
@@ -289,12 +303,13 @@ function FormLigne({ init, occupe, onSauver, onSupprimer, onFermer }) {
   const [cheminee, setCheminee] = useState(init.cheminee || "");
   const [moteur, setMoteur] = useState(init.moteur || "");
   const [loco, setLoco] = useState(init.loco || "");
+  const [origine, setOrigine] = useState(init.origine || "");
   const [grav, setGrav] = useState(texteGravure(init.plages || []).replace(/ → /g, " à "));
   const [client, setClient] = useState(init.client || "");
   const [notes, setNotes] = useState(init.notes || "");
   const [conf, setConf] = useState(false);
   const pmvOk = /^(DE|DV)\s*\d+$/i.test(pmv.trim());
-  const sauver = () => onSauver({ ...init, pmv: numeroPmv(pmv), type, cheminee: cheminee.trim(), moteur: moteur.trim(), loco: loco.trim(), plages: lirePlages(grav), client: client.trim(), notes: notes.trim() });
+  const sauver = () => onSauver({ ...init, pmv: numeroPmv(pmv), type, cheminee: cheminee.trim(), moteur: moteur.trim(), loco: loco.trim(), origine, plages: lirePlages(grav), client: client.trim(), notes: notes.trim() });
   const champ = (lib, val, set, ph, extra) => <div><label style={LBL}>{lib}</label><input type="text" value={val} onChange={(e) => set(e.target.value)} placeholder={ph} style={INP} {...extra}/></div>;
   return (<Fenetre titre={neuve ? "Ajouter une ancienne ligne" : "Modifier la ligne " + init.pmv} onFermer={onFermer}>
     <p style={{ fontSize: 12, color: "#6B7280", margin: "8px 0 0" }}>Ancienne information, sans fiche atelier. Les cases vides restent vides.</p>
@@ -302,6 +317,8 @@ function FormLigne({ init, occupe, onSauver, onSupprimer, onFermer }) {
     {!pmvOk && pmv.trim() !== "" && <div style={{ fontSize: 12, color: "#B42318" }}>Écrivez le N° comme DV0022 ou DE5040.</div>}
     <label style={LBL}>Type</label>
     <select value={type} onChange={(e) => setType(e.target.value)} style={INP} aria-label="Type"><option value="cheminee">Cheminée</option><option value="resistance">Résistance seule (sans cheminée)</option></select>
+    <label style={LBL}>SNCF ou IMATEQ</label>
+    <select value={origine} onChange={(e) => setOrigine(e.target.value)} style={INP} aria-label="SNCF ou IMATEQ"><option value="">Non précisé</option><option value="SNCF">SNCF</option><option value="IMATEQ">IMATEQ</option></select>
     {champ("N° de cheminée", cheminee, setCheminee, "59578")}
     {champ("N° de moteur", moteur, setMoteur, "2170967-001-013")}
     <div><label style={LBL}>N° d'engin / loco</label>
@@ -322,11 +339,16 @@ function FormLigne({ init, occupe, onSauver, onSupprimer, onFermer }) {
   </Fenetre>);
 }
 
-function ApercuImport({ apercu, occupe, onImporter, onFermer }) {
+function ApercuImport({ apercu, occupe, onOrigine, onImporter, onFermer }) {
   const l = apercu.lignes;
   return (<Fenetre titre="Importer un fichier Excel" onFermer={onFermer} large>
     <p style={{ fontSize: 13, margin: "8px 0" }}><b>{apercu.fichier}</b> (feuille « {apercu.feuille} ») : {apercu.source.lignesLues} lignes lues, <b>{l.length} lignes</b> à importer
       ({l.filter((x) => x.type === "resistance").length} résistances seules).</p>
+    <div style={{ background: "#F8F9FA", border: "1px solid #E2E6EA", borderRadius: 8, padding: "8px 12px", margin: "8px 0" }}>
+      <label style={{ ...LBL, margin: "0 0 4px" }}>Ces cheminées sont-elles SNCF ou IMATEQ ?</label>
+      <select value={apercu.origine || ""} onChange={(e) => onOrigine(e.target.value)} style={INP} aria-label="Origine des lignes importées">
+        <option value="">Non précisée</option><option value="SNCF">SNCF</option><option value="IMATEQ">IMATEQ</option></select>
+      <p style={{ fontSize: 11, color: "#6B7280", margin: "4px 0 0" }}>{apercu.origine ? "Repérée d'après le titre ou le nom du fichier : vérifiez." : "Non repérée dans le fichier."} Même choix que dans la fiche atelier (« SNCF ou IMATEQ »).</p></div>
     {apercu.ignorees.length > 0 && <p style={{ fontSize: 12, color: "#4B5563", margin: "4px 0" }}>Ignorées car vides (seul le N° est écrit) : {apercu.ignorees.join(", ")}.</p>}
     {apercu.avertissements.length > 0 && <div style={{ background: "#FFF8E1", border: "1px solid #E8720C", borderRadius: 8, padding: "8px 12px", margin: "8px 0" }}>
       <b style={{ fontSize: 13, color: "#B45309" }}>À vérifier ({apercu.avertissements.length})</b>
