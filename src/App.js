@@ -18,6 +18,7 @@ import {chargerParamsApp, configMailDepuisParams, envoyerViaEmailJS, composerRes
 import PageCalendrier from "./Calendrier";
 import {useSuiviClients, PageSuiviClients, DashboardCommercial} from "./SuiviClients";
 import PageClients, {ouvrirClient} from "./Clients";
+import PageSuiviCheminees, {conserverLigneCheminee} from "./PageSuiviCheminees";
 import {PanneauResumeCommercial, verifierResumeCommercial} from "./ResumeCommercial";
 import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT, naturePompe, POMPE_DESCRIPTIF_DEFAUT, estPompeDip, garnitureAbsente, DIP_DESCRIPTIF_DEFAUT, DIP_POMPE_TEXTE_DEFAUT, dipConclusionDefaut} from "./rapportModele";
@@ -2454,6 +2455,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
   const [loadingP,setLoadingP]=useState(false);
   const [confirmSupprPhotos,setConfirmSupprPhotos]=useState(false);
   const [confirmSupprFiche,setConfirmSupprFiche]=useState(false);
+  const [garderSuivi,setGarderSuivi]=useState(true); // fiche cheminée : garder sa ligne dans le suivi des cheminées à la suppression
   const [ajoutPhoto,setAjoutPhoto]=useState(false);
   const [catPhoto,setCatPhoto]=useState("");
   const [uploadEnCours,setUploadEnCours]=useState(false);
@@ -2480,6 +2482,10 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
   async function supprimerFiche(){
     const prise=await verrouDeAutrui(f.id);
     if(prise){alert("Impossible de supprimer : cette fiche est en cours de modification par "+prise.p+".");setConfirmSupprFiche(false);return;}
+    if(f.type_materiel===TYPE_CHEMINEE&&garderSuivi){
+      try{await conserverLigneCheminee(f,"");}
+      catch(e){alert("La ligne n'a pas pu être gardée dans le suivi des cheminées ("+e.message+"). La fiche n'est pas supprimée.");return;}
+    }
     try{
       await db.del("fiche_photos","?fiche_id=eq."+f.id);
       await db.del("fiche_valeurs","?fiche_id=eq."+f.id);
@@ -2581,6 +2587,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
       {confirmSupprFiche&&<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:8,padding:"10px 12px",marginBottom:10}}>
         <p style={{fontSize:12,fontWeight:700,color:"#D73A49",margin:"0 0 6px"}}>⚠️ Supprimer toute la fiche ?</p>
         <p style={{fontSize:11,color:"#6B7280",margin:"0 0 10px"}}>Irréversible — fiche, données, photos et historique supprimés.</p>
+        {f.type_materiel===TYPE_CHEMINEE&&<label style={{display:"flex",alignItems:"center",gap:8,fontSize:12,margin:"0 0 10px",cursor:"pointer"}}><input type="checkbox" checked={garderSuivi} onChange={e=>setGarderSuivi(e.target.checked)}/> Garder la ligne dans le suivi des cheminées (N° DV, cheminée, moteur, engin / loco, gravures)</label>}
         <div style={{display:"flex",gap:8}}>
           <button onClick={supprimerFiche} style={{...S.pDanger,fontSize:12}}>🗑 Oui, tout supprimer</button>
           <button onClick={()=>setConfirmSupprFiche(false)} style={{...S.p2,fontSize:12}}>Annuler</button>
@@ -6689,6 +6696,7 @@ const NAV_ITEMS=[
   {id:"accueil",label:"📁 Fiche Atelier",roles:TOUS_PROFILS},{id:"chantier",label:"🏗 Fiche Chantier",roles:TOUS_PROFILS},
   {id:"planning",label:"📋 Planning",roles:TOUS_PROFILS},
   {id:"rapport",label:"📧 Rapport",roles:TOUS_PROFILS},
+  {id:"cheminees",label:"🚆 Suivi cheminées",roles:TOUS_PROFILS}, // tableau des cheminées / résistances de freinage (30/10/2026)
   {id:"suivi",label:"🔧 Matériel",roles:PROFILS_INTERNES},
   ...(SUIVI_COMMANDES?[{id:"commandes",label:"📦 Commandes",roles:PROFILS_INTERNES}]:[]),
   {id:"stock",label:"🗃 Stock",roles:PROFILS_INTERNES},
@@ -6699,8 +6707,8 @@ const NAV_ITEMS=[
   {id:"maintenance",label:"⚙️ Maintenance",roles:["maintenance"]},
 ];
 // Ordre des onglets du profil Commercial (le suivi clients passe avant tout le reste)
-const ORDRE_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport"];
-const PAGES_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","fiche","choix"];
+const ORDRE_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","cheminees"];
+const PAGES_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","cheminees","fiche","choix"];
 function navPourRole(role){
   const l=NAV_ITEMS.filter(n=>n.roles.includes(role));
   return role==="commercial"?l.sort((a,b)=>ORDRE_COMMERCIAL.indexOf(a.id)-ORDRE_COMMERCIAL.indexOf(b.id)):l;
@@ -6951,6 +6959,7 @@ export default function App(){
     {page==="clients"&&(admin||commercial)&&<PageClients clients={clients} fiches={fiches} suivi={suivi} onOuvrirFiche={fi=>ouvrirFicheDepuis(fi,"clients")}/>}
     {page==="devis"&&commercial&&<PageSuiviClients onOuvrirFiche={fi=>ouvrirFicheDepuis(fi,"devis")} onOuvrirClient={nom=>ouvrirClient(nom,setPage)} suivi={suivi} fiches={fiches} clients={clients} par={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="calendrier"&&<PageCalendrier admin={admin} sessionTech={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
+    {page==="cheminees"&&<PageSuiviCheminees admin={admin} par={sessionTech||nomCourt(moi)} onOuvrirFiche={fi=>ouvrirFicheDepuis(fi,"cheminees")}/>}
     {page==="stats"&&admin&&<PageStats fiches={fiches} pieces={pieces}/>}
     {page==="acces"&&admin&&<PageAcces personnes={personnes} techs={techs} moi={moi} onEnregistre={l=>setPersonnes(l)} onRetour={()=>setPage("dashboard")}/>}
   </div></LectureCtx.Provider></PersonneCtx.Provider>);
