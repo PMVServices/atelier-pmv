@@ -56,7 +56,10 @@ export function genHtmlPageDeGarde(v, type) {
     lignes.push("<div class='l'><div class='k'>" + esc(cle) + "</div><div class='v'>" + l.map((x) => "<div>" + esc(x) + "</div>").join("") + (sous ? "<div class='s'>" + sous + "</div>" : "") + "</div></div>");
   };
   ligne("Date d'entrée", dateIsoFr(v.date_entree));
-  ligne("Délai demandé", texteDelai(v));
+  const echeance = echeanceDe(v);
+  // avec un devis / bon de commande, la date saisie à l'Entrée est celle d'envoi du devis (la date de fin est redemandée à la réception du bon de commande)
+  if (v.devis_necessaire === "Oui" && echeance) ligne("Devis à envoyer avant", "le " + dateFr(echeance));
+  else ligne("Délai demandé", texteDelai(v));
   ligne("Type de matériel", libelleType(v, type), propre(v.materiel_lieu) ? "Réf. / localisation : " + esc(propre(v.materiel_lieu)) : "");
   ligne("Marque", lignesMarque(v, type));
   const contactSous = [propre(v.telephone) ? "Tél : " + esc(propre(v.telephone)) : "", propre(v.mail) ? esc(propre(v.mail)) : ""].filter(Boolean).join("   ·   ");

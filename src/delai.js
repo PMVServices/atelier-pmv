@@ -41,6 +41,33 @@ export function echeanceDe(v) {
   const d = new Date(iso + "T00:00:00");
   return isNaN(d.getTime()) ? null : d;
 }
+// Échéance EN VIGUEUR selon la phase de la fiche (demande du 02/11/2026) :
+//  - pas de devis ni de bon de commande (« Devis / bon de commande nécessaire » = Non) : la date saisie à l'Entrée est la date de fin, comme avant ;
+//  - devis nécessaire : cette 1re date n'est que celle du démontage et du devis (la fiche doit être « Devis envoyé » avant) ; une fois « Devis envoyé », la fiche attend le client : aucune échéance ;
+//    quand le bon de commande est reçu, une date de fin est redemandée (case « echeance_fin » du suivi devis) et devient l'échéance.
+//  - fiche déjà plus loin que « Devis envoyé » sans date de fin (fiches d'avant ce changement) : la date unique reste sa date de fin.
+// statuts : la liste ordonnée des statuts du planning [{id,label}] (celle de la Maintenance comprise) ; renvoie {date, phase: "devis" | "fin"} ou null
+const sansAccent = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+export function echeanceActive(v, statut, statuts) {
+  v = v || {};
+  const base = echeanceDe(v);
+  if (v.devis_necessaire !== "Oui") return base ? { date: base, phase: "fin" } : null;
+  if (v.bon_commande_recu === "Oui" && ESTISO.test(String(v.echeance_fin || ""))) {
+    const f = new Date(v.echeance_fin + "T00:00:00");
+    if (!isNaN(f.getTime())) return { date: f, phase: "fin" };
+  }
+  const ids = (statuts || []).map((s) => s.id);
+  const i = ids.indexOf(statut || "A_demonter");
+  const iEnvoye = (statuts || []).findIndex((s) => sansAccent(s.label) === "devisenvoye");
+  const iDevis = ids.indexOf("Devis");
+  if (i < 0) return base ? { date: base, phase: "fin" } : null;
+  if (iEnvoye >= 0) {
+    if (i < iEnvoye) return base ? { date: base, phase: "devis" } : null;
+    if (i === iEnvoye) return null; // devis envoyé : on attend le retour du client
+    return base ? { date: base, phase: "fin" } : null;
+  }
+  return i <= (iDevis >= 0 ? iDevis : 1) ? (base ? { date: base, phase: "devis" } : null) : (base ? { date: base, phase: "fin" } : null);
+}
 export function joursOuvresRestants(dateEcheance) {
   const t = new Date(); t.setHours(0, 0, 0, 0);
   const cible = new Date(dateEcheance); cible.setHours(0, 0, 0, 0);
@@ -61,7 +88,14 @@ export function champsDelai() {
     { id: "delai_date", label: "Date d'échéance précise", type: "date", required: true, groupe: "delai_pair", condition: (v) => v.delai_unite === DELAI_DATE },
     {
       id: "delai_echeance_info", label: "Échéance", type: "verdict", condition: (v) => !!echeanceDe(v),
-      verdict: (v) => { const d = echeanceDe(v); return { ok: null, texte: d ? "Le " + d.toLocaleDateString("fr-FR") + " — date fixée, elle ne bouge plus avec les jours qui passent" : "—" }; },
+      verdict: (v) => {
+        const d = echeanceDe(v);
+        if (!d) return { ok: null, texte: "—" };
+        const date = d.toLocaleDateString("fr-FR");
+        return { ok: null, texte: v.devis_necessaire === "Oui"
+          ? "Le " + date + " — date d'envoi du devis (démontage + devis). La date de fin sera demandée à la réception du bon de commande."
+          : "Le " + date + " — date fixée, elle ne bouge plus avec les jours qui passent" };
+      },
     },
   ];
 }

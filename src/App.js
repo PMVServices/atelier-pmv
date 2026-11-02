@@ -38,7 +38,7 @@ import {lireStock, trouverArticle, sousMini, marquePrelevement, lirePrelevements
 import {controleVibration} from "./vibrations";
 import {messageSeuil} from "./seuils";
 import ProgrammerAgenda, {SynchroAgenda} from "./ProgrammerAgenda";
-import {champsDelai, echeanceDe, echeanceFixe, joursOuvresRestants, CASES_DELAI, dateIso} from "./delai";
+import {champsDelai, echeanceDe, echeanceActive, echeanceFixe, joursOuvresRestants, CASES_DELAI, dateIso} from "./delai";
 import {lireAgenda, libTravail, titreEvenement, modifierAgenda as modifierAgendaGoogle} from "./googleAgenda";
 import {qteEff, miniEff, maxiEff, estPrincipal, libelleGroupe} from "./stockGroupes";
 
@@ -95,6 +95,7 @@ const ETAPE_SUIVI_DEVIS="Suivi devis et commande";
 const CHAMPS_SUIVI_DEVIS=[
   {id:"devis_fait",label:"Devis fait",type:"oui_non",required:true},
   {id:"bon_commande_recu",label:"Bon de commande reçu",type:"oui_non",required:true},
+  {id:"echeance_fin",label:"Date de fin des travaux (échéance)",type:"date",required:true,condition:{champ:"bon_commande_recu",valeur:"Oui"},note:"Bon de commande reçu : la 1re date ne valait que pour le démontage et le devis, voici la date à laquelle la fiche doit être terminée"},
   {id:"materiel_recu",label:"Matériel reçu",type:"oui_non",required:true},
 ];
 function insererEtapeSuiviDevis(etapes,v,type){
@@ -800,14 +801,17 @@ function etapeOk(nom,v,nr,cs,photos){
 function today(){return new Date().toISOString().split("T")[0];}
 
 // ─── Délai client / échéance (delai.js : jours ouvrés = lundi-vendredi ; l'échéance est fixée dès la saisie, ou choisie en « Date précise ») ────────────
-function urgenceInfo(v){
-  const ech=echeanceDe(v);
-  if(!ech)return null;
+// L'échéance en vigueur dépend de la phase (delai.js, echeanceActive) : « devis à envoyer avant… » puis, bon de commande reçu, « à terminer avant… » ; en attente du client après « Devis envoyé » : aucune.
+function urgenceInfo(v,statut){
+  const a=echeanceActive(v,statut,STATUTS_CHANTIER);
+  if(!a)return null;
+  const ech=a.date;
   const j=joursOuvresRestants(ech);
   const echStr=ech.toLocaleDateString("fr-FR");
-  if(j<5)return{id:"urgent",label:"Urgent",color:"#D73A49",bg:"#FFF5F5",echeance:echStr,jours:j};
-  if(j<10)return{id:"rapide",label:"À faire rapidement",color:"#CA8A04",bg:"#FFFBEB",echeance:echStr,jours:j};
-  return{id:"ok",label:"À faire",color:"#22863A",bg:"#F0FFF4",echeance:echStr,jours:j};
+  const texte=(a.phase==="devis"?"devis à envoyer avant le ":"à terminer avant le ")+echStr;
+  if(j<5)return{id:"urgent",label:"Urgent",color:"#D73A49",bg:"#FFF5F5",echeance:echStr,texte,phase:a.phase,jours:j};
+  if(j<10)return{id:"rapide",label:"À faire rapidement",color:"#CA8A04",bg:"#FFFBEB",echeance:echStr,texte,phase:a.phase,jours:j};
+  return{id:"ok",label:"À faire",color:"#22863A",bg:"#F0FFF4",echeance:echStr,texte,phase:a.phase,jours:j};
 }
 function fmt(iso){if(!iso)return "—";return new Date(iso).toLocaleDateString("fr-FR");}
 function slugCat(s){return s.toLowerCase().replace(/['\s]/g,"_").replace(/é|è|ê/g,"e").replace(/à|â/g,"a").replace(/[^a-z0-9_]/g,"");}
@@ -1994,7 +1998,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
   useEffect(()=>{
     if(!fiches.length){setDelaisMap({});return;}
     const ids=fiches.map(f=>f.id).join(",");
-    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite,delai_date,delai_echeance,__export_nas)").then(rows=>{
+    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite,delai_date,delai_echeance,devis_necessaire,bon_commande_recu,echeance_fin,__export_nas)").then(rows=>{
       if(!Array.isArray(rows))return;
       const m={};
       rows.forEach(r=>{if(!m[r.fiche_id])m[r.fiche_id]={};m[r.fiche_id][r.champ_id]=r.valeur;});
@@ -2006,7 +2010,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
 
   const fichesActives=fiches.filter(f=>!["Termine","Abandonne"].includes(f.statut_chantier||"A_demonter"));
   const avecUrgence=fichesActives
-    .map(f=>({f,urgence:delaisMap[f.id]?urgenceInfo(delaisMap[f.id]):null}))
+    .map(f=>({f,urgence:delaisMap[f.id]?urgenceInfo(delaisMap[f.id],f.statut_chantier||"A_demonter"):null}))
     .filter(x=>x.urgence&&(x.urgence.id==="urgent"||x.urgence.id==="rapide"))
     .sort((a,b)=>a.urgence.jours-b.urgence.jours);
   const fichesUrgentes=avecUrgence.filter(x=>x.urgence.id==="urgent");
@@ -2137,11 +2141,11 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
     </>)}
 
     {fichesUrgentes.length>0&&section("🔴 Fiches urgentes ("+fichesUrgentes.length+")","#D73A49","#FFF5F5",
-      fichesUrgentes.map(({f,urgence})=>ligneFiche(f,urgence.label+" — échéance le "+urgence.echeance))
+      fichesUrgentes.map(({f,urgence})=>ligneFiche(f,urgence.label+" — "+urgence.texte))
     )}
 
     {fichesRapides.length>0&&section("🟡 À faire rapidement ("+fichesRapides.length+")","#CA8A04","#FFFBEB",
-      fichesRapides.map(({f,urgence})=>ligneFiche(f,urgence.label+" — échéance le "+urgence.echeance))
+      fichesRapides.map(({f,urgence})=>ligneFiche(f,urgence.label+" — "+urgence.texte))
     )}
 
     {devisEnAttente.length>0&&section("⚠ Devis en attente ("+devisEnAttente.length+")","#E8720C","#FFF8E1",
@@ -2217,7 +2221,7 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
   useEffect(()=>{
     if(!fiches.length){setDelaisMap({});return;}
     const ids=fiches.map(f=>f.id).join(",");
-    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite,delai_date,delai_echeance)").then(rows=>{
+    db.get("fiche_valeurs","?fiche_id=in.("+ids+")&champ_id=in.(date_entree,delai_valeur,delai_unite,delai_date,delai_echeance,devis_necessaire,bon_commande_recu,echeance_fin)").then(rows=>{
       if(!Array.isArray(rows))return;
       const m={};
       rows.forEach(r=>{if(!m[r.fiche_id])m[r.fiche_id]={};m[r.fiche_id][r.champ_id]=r.valeur;});
@@ -2312,7 +2316,7 @@ function PagePlanning({fiches,clients,onOuvrirFiche,onStatutChange:onStatutFiche
           {(parStatut[s.id]||[]).length===0&&<p style={{fontSize:12,color:"#9CA3AF",textAlign:"center",padding:"16px 0",margin:0}}>Vide</p>}
           {(parStatut[s.id]||[]).map(f=>f.libre
             ?<CartePlanningLibre key={f.id} e={f} agenda={agenda[f.id]} onProgrammer={(c,x)=>setProgrammer({cible:c,existant:x})} onRetirer={retirerAgenda} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id} onModifier={x=>{setFormLibre(x);window.scrollTo&&window.scrollTo({top:0,behavior:"smooth"});}} onSupprimer={supprimerLibre}/>
-            :<CarteKanban key={f.id} f={f} s={s} urgence={delaisMap[f.id]?urgenceInfo(delaisMap[f.id]):null} agenda={agenda[f.id]} onProgrammer={(c,x)=>setProgrammer({cible:c,existant:x})} onRetirer={retirerAgenda} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id}/>)}
+            :<CarteKanban key={f.id} f={f} s={s} urgence={delaisMap[f.id]?urgenceInfo(delaisMap[f.id],f.statut_chantier||"A_demonter"):null} agenda={agenda[f.id]} onProgrammer={(c,x)=>setProgrammer({cible:c,existant:x})} onRetirer={retirerAgenda} onOuvrirFiche={onOuvrirFiche} onStatutChange={onStatutChange} onDragStart={handleDragStart} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd} isDragging={dragId===f.id}/>)}
         </div>
       ))}
     </div>
@@ -2444,7 +2448,7 @@ function CarteKanban({f,s,urgence,agenda,onProgrammer,onRetirer,onOuvrirFiche,on
     {ouvert&&<div style={{padding:"8px 10px",borderTop:"1px solid #E2E6EA",background:"#fff"}}>
       <div style={{fontSize:11,color:"#6B7280",marginBottom:4}}>{f.materiel||"Moteur"}</div>
       <div style={{fontSize:11,color:"#9CA3AF",marginBottom:8}}>Entrée le {fmt(f.created_at)}</div>
-      {urgence&&<div style={{fontSize:11,fontWeight:600,color:urgence.color,background:urgence.bg,borderRadius:6,padding:"5px 8px",marginBottom:8}}>{urgence.label} — échéance le {urgence.echeance}{urgence.jours>0?" (dans "+urgence.jours+" jour"+(urgence.jours>1?"s":"")+" ouvré"+(urgence.jours>1?"s":"")+")":" (aujourd'hui ou dépassée)"}</div>}
+      {urgence&&<div style={{fontSize:11,fontWeight:600,color:urgence.color,background:urgence.bg,borderRadius:6,padding:"5px 8px",marginBottom:8}}>{urgence.label} — {urgence.texte}{urgence.jours>0?" (dans "+urgence.jours+" jour"+(urgence.jours>1?"s":"")+" ouvré"+(urgence.jours>1?"s":"")+")":" (aujourd'hui ou dépassée)"}</div>}
       <BlocAgenda cible={{id:f.id,de:f.de,client:f.client,type:f.type_materiel||"Moteur",materiel:f.materiel,statut:f.statut_chantier}} entrees={agenda} lecture={lecture} onProgrammer={onProgrammer} onRetirer={onRetirer}/>
       <select value={f.statut_chantier||"A_demonter"} disabled={lecture} onChange={e=>onStatutChange(f.id,e.target.value)} style={{...S.sel,marginBottom:8,fontSize:12}}>
         {STATUTS_CHANTIER.map(st=><option key={st.id} value={st.id}>{st.label}</option>)}
