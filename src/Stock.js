@@ -285,6 +285,7 @@ const CSS_STOCK=`
 .stk-voile{position:fixed;inset:0;background:rgba(15,23,42,.55);z-index:300;display:flex;align-items:center;justify-content:center;padding:12px}
 .stk-feuille{background:#fff;border-radius:16px;width:100%;max-width:560px;max-height:94vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.3);color:#1A1A2E}
 .stk-large{max-width:800px}
+.stk-xl{max-width:1180px}
 .stk-feuille-tete{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 16px;border-bottom:1px solid #EEF1F5}
 .stk-feuille-tete h2{font-size:18px;margin:0;overflow-wrap:anywhere}
 .stk-x{flex:none;width:44px;height:44px;border-radius:10px;border:0;background:#F3F4F6;font-size:18px;cursor:pointer;padding:0 !important;display:flex;align-items:center;justify-content:center;color:#4B5563}
@@ -464,17 +465,33 @@ button.stk-lr{cursor:pointer;min-height:64px}
   .stk-grand--i{width:min(100%,560px)}
   .stk-mode.stk-fams button{flex:0 0 auto;min-width:130px}
 }
+/* Feuille « Fournisseurs et prix » : une carte par référence sur téléphone / tablette, une ligne de tableau dès 900 px */
+.stk-fp-l{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 10px;align-items:end;background:#fff;border:1px solid #E2E6EA;border-radius:12px;padding:10px 12px}
+.stk-fp-l.chg{border-color:#E8720C;background:#FFFBF2}
+.stk-fp-l.err{border-color:#D73A49;background:#FFF5F5}
+.stk-fp-ref{grid-column:1/-1;min-width:0}
+.stk-fp-dim{display:block;font-size:12.5px;color:#6B7280;overflow-wrap:anywhere}
+.stk-fp-c{display:block;min-width:0}
+.stk-fp-lab{display:block;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#667085;margin-bottom:3px}
+.stk-fp-tete{display:none}
+.stk-fp-manque{color:#B42318}
+@media (min-width:900px){
+  .stk-fp-tete,.stk-fp-l{grid-template-columns:minmax(170px,1.3fr) repeat(3,minmax(110px,1fr)) 110px;gap:0 10px;align-items:center}
+  .stk-fp-tete{display:grid;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#667085;padding:0 12px 4px}
+  .stk-fp-ref{grid-column:auto}
+  .stk-fp-lab{display:none}
+}
 `;
 
 // ─── Fenêtre (feuille) ───────────────────────────────────────────────────────────────────────────
-function Feuille({titre,onFermer,large,haut,children}){
+function Feuille({titre,onFermer,large,xl,haut,children}){
   useEffect(()=>{
     const prec=document.body.style.overflow;
     document.body.style.overflow="hidden";
     return()=>{document.body.style.overflow=prec;};
   },[]);
   return(<div className={"stk-voile"+(haut?" haut":"")} onClick={e=>{if(e.target===e.currentTarget)onFermer();}}>
-    <div className={"stk-feuille"+(large?" stk-large":"")} role="dialog" aria-label={titre}>
+    <div className={"stk-feuille"+(large?" stk-large":"")+(xl?" stk-xl":"")} role="dialog" aria-label={titre}>
       <div className="stk-feuille-tete"><h2>{titre}</h2><button type="button" className="stk-x" onClick={onFermer} aria-label="Fermer">✕</button></div>
       <div className="stk-corps">{children}</div>
     </div>
@@ -1063,6 +1080,7 @@ function FicheArticle({article,techs,sessionTech,depuisScan,onFermer,onChange,on
       {article.dimensions&&<div><b>Dimensions</b>{article.dimensions}</div>}
       {article.emplacement&&<div><b>Emplacement</b>{article.emplacement}</div>}
       {(article.fournisseur1||article.fournisseur2||article.fournisseur3)&&<div><b>Fournisseurs</b>{[article.fournisseur1,article.fournisseur2,article.fournisseur3].filter(Boolean).join(" · ")}</div>}
+      {article.prix_unitaire!=null&&Number(article.prix_unitaire)>0&&<div><b>Prix unitaire</b>{fmtEuro(article.prix_unitaire)}</div>}
     </div>
     {onModifier&&<div><button type="button" className="stk-btn stk-btn--s" onClick={()=>onModifier(article)}>✏️ Modifier le nom et les infos</button></div>}
     <div className="stk-seg" role="group" aria-label="Type de mouvement">
@@ -1864,6 +1882,107 @@ function ListeArticles({lignes,parFamille,edition,brouillonDe,modifie,erreurs,on
   </div>);
 }
 
+// ─── Fournisseurs et prix des articles du stock (administrateur) ─────────────────────────────────────
+// Les fournisseurs 1 à 3 et le prix unitaire de chaque référence viennent de l'import Excel ; ici on les voit tous ensemble, on repère ce qui manque (sans prix, sans fournisseur)
+// et on corrige à la main. Un nom de fournisseur déjà utilisé ailleurs est repris tel quel (pas de « Sefi » / « SEFI » en double). Une écriture par article modifié, comme la liste.
+const prixTexte=n=>n==null||n===""?"":String(Number(n)).replace(".",",");
+const prixLu=t=>{const x=String(t==null?"":t).trim().replace(/\s/g,"").replace("€","").replace(",",".");if(x==="")return {ok:true,v:null};const n=Number(x);return isFinite(n)&&n>=0?{ok:true,v:Math.round(n*100)/100}:{ok:false,v:null};};
+function FournisseursPrix({articles,familleInit,recharger,afficherToast,onFermer}){
+  const [fam,setFam]=useState(familleInit||"toutes");
+  const [filtre,setFiltre]=useState("tous"); // tous | sansPrix | sansFourn | un
+  const [rech,setRech]=useState("");
+  const [saisies,setSaisies]=useState({});
+  const [erreurs,setErreurs]=useState({});
+  const [enr,setEnr]=useState(false);
+  // noms de fournisseurs déjà utilisés (une seule orthographe par nom : la plus fréquente)
+  const orthos={};
+  articles.forEach(a=>[a.fournisseur1,a.fournisseur2,a.fournisseur3].forEach(x=>{const t=String(x||"").trim();if(t){const k=cle(t);(orthos[k]=orthos[k]||{})[t]=(orthos[k][t]||0)+1;}}));
+  const canon={};Object.keys(orthos).forEach(k=>{canon[k]=Object.entries(orthos[k]).sort((p,q)=>q[1]-p[1])[0][0];});
+  const connus=Object.values(canon).sort((p,q)=>p.localeCompare(q,"fr"));
+  const brouillon=a=>{const d=saisies[a.id]||{};return {f1:d.f1!==undefined?d.f1:(a.fournisseur1||""),f2:d.f2!==undefined?d.f2:(a.fournisseur2||""),f3:d.f3!==undefined?d.f3:(a.fournisseur3||""),prix:d.prix!==undefined?d.prix:prixTexte(a.prix_unitaire)};};
+  const modifie=a=>{
+    if(!saisies[a.id])return false;
+    const b=brouillon(a),p=prixLu(b.prix);
+    return (b.f1.trim()||null)!==(a.fournisseur1||null)||(b.f2.trim()||null)!==(a.fournisseur2||null)||(b.f3.trim()||null)!==(a.fournisseur3||null)||(p.ok?p.v:"?")!==(a.prix_unitaire==null?null:Number(a.prix_unitaire));
+  };
+  const changer=(id,champ,v)=>{setSaisies(p=>({...p,[id]:{...(p[id]||{}),[champ]:v}}));setErreurs(p=>{if(!p[id])return p;const n={...p};delete n[id];return n;});};
+  const canoniser=(id,champ,v)=>{const t=String(v||"").trim();const c=t?canon[cle(t)]:null;if(c&&c!==v)changer(id,champ,c);else if(t!==v)changer(id,champ,t);};
+  const dansFamille=articles.filter(a=>fam==="toutes"||familleDe(a.reference)===fam);
+  const sansPrix=a=>!(Number(a.prix_unitaire)>0),sansFourn=a=>!String(a.fournisseur1||"").trim(),un=a=>!!String(a.fournisseur1||"").trim()&&!String(a.fournisseur2||"").trim();
+  const q=cle(rech);
+  const liste=dansFamille.filter(a=>(filtre==="tous"||(filtre==="sansPrix"&&sansPrix(a))||(filtre==="sansFourn"&&sansFourn(a))||(filtre==="un"&&un(a)))
+    &&(!q||cle(a.reference).includes(q)||cle(a.dimensions).includes(q)||cle(a.fournisseur1).includes(q)||cle(a.fournisseur2).includes(q)||cle(a.fournisseur3).includes(q)));
+  const nbModifs=articles.filter(modifie).length;
+  const valeurPrix=dansFamille.filter(a=>!sansPrix(a)).length;
+  async function enregistrer(){
+    if(enr)return;
+    const mods=articles.filter(modifie);
+    if(!mods.length)return;
+    const err={};
+    mods.forEach(a=>{
+      const b=brouillon(a),p=prixLu(b.prix),fs=[b.f1,b.f2,b.f3].map(x=>x.trim()).filter(Boolean),m=[];
+      if(!p.ok)m.push("Le prix doit être un nombre (exemple : 12,50).");
+      if(new Set(fs.map(cle)).size<fs.length)m.push("Le même fournisseur est indiqué deux fois.");
+      if(m.length)err[a.id]=m.join(" ");
+    });
+    setErreurs(err);
+    if(Object.keys(err).length){afficherToast("Corrigez les lignes en rouge avant d'enregistrer");return;}
+    setEnr(true);
+    const echecs={};let n=0;
+    for(const a of mods){
+      const b=brouillon(a);
+      const corps={fournisseur1:b.f1.trim()||null,fournisseur2:b.f2.trim()||null,fournisseur3:b.f3.trim()||null,prix_unitaire:prixLu(b.prix).v};
+      const r=await appel("PATCH","stock_articles?id=eq."+a.id,corps,"return=representation");
+      if(r.ok&&Array.isArray(r.data)&&r.data.length===1)n++;else echecs[a.id]="Non enregistré (connexion ?). Réessayez.";
+    }
+    await recharger();
+    setSaisies(p=>{const o={};Object.keys(echecs).forEach(id=>{if(p[id])o[id]=p[id];});return o;});
+    setErreurs(echecs);setEnr(false);
+    const e=Object.keys(echecs).length;
+    afficherToast(n?"✓ "+n+" article"+(n>1?"s":"")+" enregistré"+(n>1?"s":"")+(e?" — "+e+" non enregistré"+(e>1?"s":""):""):"Aucun article n'a pu être enregistré");
+  }
+  const fams=grouperParFamille(articles);
+  const groupes=fam==="toutes"?grouperParFamille(liste):[[null,liste]];
+  const chip=(id,lib,n)=><button type="button" key={id} className={"stk-chip"+(filtre===id?" on":"")} aria-pressed={filtre===id} onClick={()=>setFiltre(id)}>{lib}{n!=null?" ("+n+")":""}</button>;
+  return(<Feuille titre="Fournisseurs et prix" xl haut onFermer={()=>{if(nbModifs>0&&!window.confirm("Des modifications ne sont pas enregistrées. Fermer quand même ?"))return;onFermer();}}>
+    <p className="stk-aide" style={{marginTop:0}}>Fournisseurs 1 à 3 et prix unitaire de chaque référence du stock. Corrigez ici ce qui est faux ou manquant : le nom d'un fournisseur déjà connu est repris tel quel.</p>
+    <div className="stk-champs" style={{gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))"}}>
+      <label><span>Famille</span><select className="stk-select" style={{width:"100%"}} value={fam} onChange={e=>setFam(e.target.value)} aria-label="Famille"><option value="toutes">Toutes ({articles.length})</option>{fams.map(([f,l])=><option key={f} value={f}>{LIB_FAMILLE[f]} ({l.length})</option>)}</select></label>
+      <label><span>Chercher</span><input className="stk-champ" value={rech} onChange={e=>setRech(e.target.value)} placeholder="🔍 Référence, fournisseur…" autoComplete="off"/></label>
+    </div>
+    <div className="stk-chips" style={{marginBottom:6}}>
+      {chip("tous","Tout",dansFamille.length)}{chip("sansPrix","Sans prix",dansFamille.filter(sansPrix).length)}{chip("sansFourn","Sans fournisseur",dansFamille.filter(sansFourn).length)}{chip("un","Un seul fournisseur",dansFamille.filter(un).length)}
+    </div>
+    <p className="stk-resume" style={{marginTop:8}}><span><b>{dansFamille.length}</b> références</span><span><b>{valeurPrix}</b> avec un prix</span><span className={dansFamille.length-valeurPrix?"stk-fp-manque":""}><b>{dansFamille.length-valeurPrix}</b> sans prix</span>{liste.length!==dansFamille.length&&<span><b>{liste.length}</b> affichée{liste.length>1?"s":""}</span>}</p>
+    <datalist id="stk-fp-noms">{connus.map(x=><option key={x} value={x}/>)}</datalist>
+    {liste.length===0?<div className="stk-vide">Aucune référence ne correspond.</div>
+      :<div className="stk-lt">
+        <div className="stk-fp-tete" aria-hidden="true"><span>Référence</span><span>Fournisseur 1</span><span>Fournisseur 2</span><span>Fournisseur 3</span><span>Prix unitaire (€)</span></div>
+        {groupes.map(([g,l])=><React.Fragment key={g||"liste"}>
+          {g&&<div className="stk-lg">{LIB_FAMILLE[g]} ({l.length})</div>}
+          {l.map(a=>{
+            const b=brouillon(a),chg=modifie(a),er=erreurs[a.id];
+            const champ=(n,lib,v)=><label className="stk-fp-c"><span className="stk-fp-lab">{lib}</span><input className={"stk-li"+((b["f"+n].trim()||null)!==(a["fournisseur"+n]||null)?" chg":"")} list="stk-fp-noms" value={v} onChange={e=>changer(a.id,"f"+n,e.target.value)} onBlur={e=>canoniser(a.id,"f"+n,e.target.value)} aria-label={lib+" de "+a.reference} autoComplete="off"/></label>;
+            const p=prixLu(b.prix);
+            return(<div key={a.id} className={"stk-fp-l"+(er?" err":chg?" chg":"")}>
+              <div className="stk-fp-ref"><span className="stk-ref">{a.reference}</span>{a.dimensions&&<span className="stk-fp-dim">{a.dimensions}</span>}</div>
+              {champ(1,"Fournisseur 1",b.f1)}{champ(2,"Fournisseur 2",b.f2)}{champ(3,"Fournisseur 3",b.f3)}
+              <label className="stk-fp-c"><span className="stk-fp-lab">Prix unitaire (€)</span><input className={"stk-li"+(!p.ok?" err":(p.v!==(a.prix_unitaire==null?null:Number(a.prix_unitaire))?" chg":""))} inputMode="decimal" value={b.prix} onChange={e=>changer(a.id,"prix",e.target.value.replace(/[^0-9.,\s€]/g,""))} aria-label={"Prix unitaire de "+a.reference} placeholder={sansPrix(a)?"à renseigner":""} autoComplete="off"/></label>
+              {er&&<div className="stk-erreur-ligne" role="alert">{er}</div>}
+            </div>);
+          })}
+        </React.Fragment>)}
+      </div>}
+    <div className="stk-barre-edit" role="region" aria-label="Enregistrement des fournisseurs et prix">
+      <span style={{fontSize:13.5,color:"#374151"}}>✏️ <b>{nbModifs}</b> article{nbModifs>1?"s":""} modifié{nbModifs>1?"s":""}</span>
+      <span style={{display:"flex",gap:8}}>
+        <button type="button" className="stk-btn stk-btn--s" disabled={enr||nbModifs===0} onClick={()=>{setSaisies({});setErreurs({});}}>Annuler les modifications</button>
+        <button type="button" className="stk-btn stk-btn--s stk-btn--p" disabled={enr||nbModifs===0} onClick={enregistrer}>{enr?"Enregistrement…":"💾 Enregistrer"+(nbModifs>0?" ("+nbModifs+")":"")}</button>
+      </span>
+    </div>
+  </Feuille>);
+}
+
 export default function PageStock({techs,sessionTech,admin,modePoste}){
   const {articles,disponible,recharger}=useStock();
   const liste=(techs||[]).filter(t=>t!=="Autre");
@@ -1894,6 +2013,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
   const [brouillon,setBrouillon]=useState(()=>lireBrouillonInv());
   const [assoc,setAssoc]=useState(null); // article dont on associe un code fabricant
   const [importOuvert,setImportOuvert]=useState(false);
+  const [fournPrix,setFournPrix]=useState(false); // feuille « Fournisseurs et prix »
   const [etiquettes,setEtiquettes]=useState(null);
   const [formArticle,setFormArticle]=useState(null); // null | {article} (modifier) | {nouveau:true}
   const [recents,setRecents]=useState([]);
@@ -2143,6 +2263,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
         <input className="stk-champ" value={recherche} onChange={e=>setRecherche(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"&&!edition){const a=articles.find(x=>cle(x.reference)===cle(recherche))||(listeAffichee.length===1?listeAffichee[0]:null);if(a){setRecherche("");setFicheId(a.id);}}}} placeholder="🔍 Chercher une référence, des dimensions…" autoComplete="off"/>
         {!edition&&<button type="button" className="stk-btn stk-btn--s" onClick={()=>setEdition(true)}>✏️ Modifier la liste</button>}
         <button type="button" className="stk-btn stk-btn--s" onClick={()=>setFormArticle({nouveau:true})}>➕ Nouvel article</button>
+        <button type="button" className="stk-btn stk-btn--s" onClick={()=>setFournPrix(true)}>💶 Fournisseurs et prix</button>
         {(recoAFaire.length>0||enCommande.length>0)&&<button type="button" className="stk-btn stk-btn--s" onClick={()=>{if(renoRef.current)renoRef.current.scrollIntoView({behavior:"smooth",block:"start"});}}>🔔 À renouveler ({recoAFaire.length}){enCommande.length>0?" · 📦 En commande ("+enCommande.length+")":""}</button>}
       </div>
       <p className="stk-resume" style={{marginTop:12}}><span><b>{base.length}</b> références</span><span><b>{nbRupture}</b> en rupture</span>{q&&<span><b>{listeAffichee.length}</b> affichée{listeAffichee.length>1?"s":""}</span>}</p>
@@ -2199,6 +2320,7 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
     {admin&&formArticle&&<FormArticle key={formArticle.article?"form-"+formArticle.article.id:"form-nouveau"} article={formArticle.article} familleInit={famille==="toutes"?"":famille} articles={articles} qui={qui} onFermer={()=>setFormArticle(null)} onFait={articleEnregistre}/>}
     {admin&&assoc&&<ScanneurCode titre={"Associer un code à "+assoc.reference} aide="Scannez le code imprimé sur la boîte du fabricant." onCode={traiterAssociation} onFermer={()=>setAssoc(null)}/>}
     {admin&&importOuvert&&<ImportExcel articles={articles} onFermer={()=>setImportOuvert(false)} onTermine={apresMouvement}/>}
+    {admin&&fournPrix&&<FournisseursPrix articles={articles} familleInit={famille} recharger={recharger} afficherToast={afficherToast} onFermer={()=>setFournPrix(false)}/>}
     {admin&&etiquettes&&<Etiquettes articles={articles} idsInitiaux={etiquettes.ids} onFermer={()=>setEtiquettes(null)}/>}
     {toast&&<div className="stk-toast" role="status">{toast}</div>}
   </div>);
