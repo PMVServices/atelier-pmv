@@ -19,6 +19,8 @@ import PageCalendrier from "./Calendrier";
 import {useSuiviClients, PageSuiviClients, DashboardCommercial} from "./SuiviClients";
 import PageClients, {ouvrirClient} from "./Clients";
 import PageSuiviCheminees, {conserverLigneCheminee} from "./PageSuiviCheminees";
+import VueDossiers from "./Dossiers";
+import {useAlertesDossiers, phraseAvant as phraseAvantCommande} from "./dossiersCommandes";
 import {PanneauResumeCommercial, verifierResumeCommercial} from "./ResumeCommercial";
 import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT, naturePompe, POMPE_DESCRIPTIF_DEFAUT, estPompeDip, garnitureAbsente, DIP_DESCRIPTIF_DEFAUT, DIP_POMPE_TEXTE_DEFAUT, dipConclusionDefaut} from "./rapportModele";
@@ -1986,6 +1988,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
   const [exportBusy,setExportBusy]=useState(null);
   const [stockDash,setStockDash]=useState(null);
   useEffect(()=>{if(admin)lireStock().then(setStockDash);},[admin]);
+  const alertesCmd=useAlertesDossiers(!!admin); // dossiers de commandes par fournisseur : lignes dont la date limite est dépassée ou proche (administrateur)
   // articles dont le stock a atteint le minimum (même règle que « À renouveler » de la page Stock ; une ligne par groupe de roulements réunis) ; ruptures d'abord
   const stockBas=admin&&stockDash&&stockDash.ok?stockDash.articles.filter(a=>estPrincipal(a)&&sousMini(a)).sort((a,b)=>(qteEff(a)>0)-(qteEff(b)>0)||String(a.reference).localeCompare(String(b.reference),"fr",{numeric:true})):[];
   useEffect(()=>{
@@ -2021,7 +2024,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
   const nbMat=matDemandes.length;
   const nbMatRenouveler=matDemandes.filter(l=>l.type==="renouveler").length;
   const matAffichees=matDemandes.slice(0,6);
-  const rienASignaler=devisEnAttente.length===0&&fichesUrgentes.length===0&&fichesRapides.length===0&&listeDEReco.length===0&&commandesAlerte===0&&fichesAExporter.length===0&&nbMat===0&&stockBas.length===0;
+  const rienASignaler=devisEnAttente.length===0&&fichesUrgentes.length===0&&fichesRapides.length===0&&listeDEReco.length===0&&commandesAlerte===0&&fichesAExporter.length===0&&nbMat===0&&stockBas.length===0&&!(admin&&alertesCmd.lignes.length>0);
 
   async function exporterFiche(f){
     setExportBusy(f.id);
@@ -2084,6 +2087,18 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
 
     {!telephone&&<div style={largeD?{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(520px,1fr))",columnGap:20,alignItems:"start"}:undefined}>
     {rienASignaler&&<div style={{gridColumn:"1 / -1",textAlign:"center",padding:40,color:"#22863A",background:"#F0FFF4",borderRadius:10,border:"1px solid #22863A",fontWeight:600}}>🎉 Rien à signaler — tout est à jour</div>}
+
+    {admin&&alertesCmd.lignes.length>0&&section("⏰ Commandes à passer ("+alertesCmd.lignes.length+")","#D73A49","#FFF5F5",<>
+      <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>{alertesCmd.retard} en retard · {alertesCmd.bientot} à passer bientôt (dossiers de commandes par fournisseur)</div>
+      <div style={{display:"flex",flexDirection:"column",gap:6,marginBottom:10}}>
+        {alertesCmd.lignes.slice(0,8).map(l=>(<div key={l.cle} style={{background:"#fff",border:"1px solid #F4B4BC",borderRadius:10,padding:"8px 12px",fontSize:12}}>
+          <strong>{l.fournisseur||"Sans fournisseur"}</strong> — {l.designation} × {l.quantite}{l.chantier?" · "+l.chantier:""}
+          <div style={{fontSize:11,color:"#B42318",fontWeight:700}}>{phraseAvantCommande(l.avant)}</div>
+        </div>))}
+      </div>
+      {alertesCmd.lignes.length>8&&<div style={{fontSize:12,color:"#6B7280",marginBottom:10}}>… et {alertesCmd.lignes.length-8} autre{alertesCmd.lignes.length-8>1?"s":""}</div>}
+      <button onClick={onVoirMateriel} style={{...S.p1,fontSize:12,padding:"6px 14px"}}>📁 Voir les dossiers →</button>
+    </>)}
 
     {stockBas.length>0&&section("📦 Stock au minimum ("+stockBas.length+")","#E8720C","#FFF8E1",<>
       <div style={{fontSize:12,color:"#6B7280",marginBottom:8}}>Articles dont le stock a atteint le minimum : à commander depuis la page Stock.</div>
@@ -6544,6 +6559,8 @@ function PageMesDemandes({techs,sessionTech,onDemandeMateriel}){
 }
 
 function PageMateriel({pieces,setPieces,demandesMat,onDemandeMateriel}){
+  const [vueMat,setVueMat]=useState(()=>{try{return localStorage.getItem("pmv_materiel_vue")==="demandes"?"demandes":"dossiers";}catch(e){return "dossiers";}});
+  const choisirVueMat=v=>{setVueMat(v);try{localStorage.setItem("pmv_materiel_vue",v);}catch(e){/* mémorisation facultative */}};
   useEffect(()=>{
     // fetch direct : un échec réseau ne doit pas vider la liste
     fetch(SUPA_URL+"/rest/v1/suivi_pieces?order=created_at.desc",{headers:H}).then(r=>r.json()).then(rows=>{if(Array.isArray(rows))setPieces(rows);}).catch(()=>{});
@@ -6560,7 +6577,12 @@ function PageMateriel({pieces,setPieces,demandesMat,onDemandeMateriel}){
       <h2 style={{fontSize:20,fontWeight:700,margin:0}}>🔧 Matériel</h2>
       {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{...S.p1,fontSize:12,padding:"7px 14px",background:"#E8720C"}}>🛒 Faire une demande</button>}
     </div>
-    <VueMaterielCommandes demandes={demandesMat?demandesMat.demandes:[]} disponible={demandesMat?demandesMat.disponible:null} recharger={demandesMat?demandesMat.recharger:async()=>{}} onDemandeMateriel={onDemandeMateriel} piecesFiches={pieces} onPieceStatut={changerStatutPiece}/>
+    <div role="tablist" aria-label="Vue du matériel" style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:14}}>
+      {[["dossiers","📁 Dossiers par fournisseur"],["demandes","🛒 Demandes et pièces"]].map(([id,lib])=><button key={id} type="button" role="tab" aria-selected={vueMat===id} onClick={()=>choisirVueMat(id)} style={{padding:"8px 18px",minHeight:44,borderRadius:22,border:"1.5px solid "+(vueMat===id?"#1B4F8A":"#D1D5DB"),background:vueMat===id?"#1B4F8A":"#fff",color:vueMat===id?"#fff":"#374151",fontSize:14,fontWeight:700,cursor:"pointer"}}>{lib}</button>)}
+    </div>
+    {vueMat==="dossiers"
+      ?<VueDossiers demandes={demandesMat?demandesMat.demandes:[]} pieces={pieces} onPieceStatut={changerStatutPiece} recharger={demandesMat?demandesMat.recharger:undefined}/>
+      :<VueMaterielCommandes demandes={demandesMat?demandesMat.demandes:[]} disponible={demandesMat?demandesMat.disponible:null} recharger={demandesMat?demandesMat.recharger:async()=>{}} onDemandeMateriel={onDemandeMateriel} piecesFiches={pieces} onPieceStatut={changerStatutPiece}/>}
   </div>);
 }
 

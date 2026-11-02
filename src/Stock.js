@@ -2325,3 +2325,22 @@ export default function PageStock({techs,sessionTech,admin,modePoste}){
     {toast&&<div className="stk-toast" role="status">{toast}</div>}
   </div>);
 }
+
+// ─── Pour les dossiers de commandes par fournisseur de l'onglet Matériel (administrateur, Dossiers.js) ──────────────────────────────
+// Le stock à renouveler y arrive tout seul (fournisseur 1 et prix de l'article) et « Commandé chez X » passe l'article « En commande » comme le bouton « 🛒 Commandé » de cette page.
+export {useStock};
+export const stockPourDossiers={
+  aRenouveler:articles=>articles.filter(a=>aRecommander(a)&&estPrincipal(a)),
+  quantite:a=>Math.max(1,qteARecommander(a)),
+  libelle:a=>libelleGroupe(a," + "),
+  async commandesEnCours(){const l=await lireCommandes();if(!l.ok)return null;const m=await lireEntreesDepuis(l.carte);return {carte:l.carte,mouvements:m||[]};},
+  enCommande(a,etat){
+    if(!etat)return false;
+    const o=Object.values(etat.carte||{}).find(x=>(x.ids||[]).includes(a.id));
+    return !!o&&Math.max(0,(o.qte||0)-recuCommande(o,etat.mouvements))>0;
+  },
+  async passerCommande(a,articles,qte,par){
+    const ids=a.groupe?articles.filter(x=>x.groupe===a.groupe).map(x=>x.id):[a.id];
+    return majCommandes(c=>{Object.keys(c).forEach(k=>{if((c[k].ids||[]).some(i=>ids.includes(i)))delete c[k];});c[a.id]={ids,ref:libelleGroupe(a," + "),qte,le:new Date().toISOString(),par:par||""};return c;});
+  },
+};

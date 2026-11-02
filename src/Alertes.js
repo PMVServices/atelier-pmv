@@ -1,5 +1,6 @@
 import {SUPA_URL, H, db} from "./supabase";
 import {reunirStocks, qteEff, miniEff, maxiEff, estPrincipal, libelleGroupe} from "./stockGroupes";
+import {lireStore, lignesAAlerter, ligneAlerte} from "./dossiersCommandes";
 
 // Résumé quotidien par mail (EmailJS) : une seule alerte par jour qui regroupe le matériel en attente et les stocks
 // sous leur minimum (le quota gratuit d'EmailJS est de 200 mails par mois, d'où pas de mail à chaque action).
@@ -38,12 +39,16 @@ export async function composerResume(){
     try{const r=await fetch(SUPA_URL+"/rest/v1/"+chemin,{headers:H});const d=await r.json();if(Array.isArray(d)){lectures++;return d;}}catch(e){/* hors ligne */}
     return [];
   };
-  const [dem,pieces,artsBruts]=await Promise.all([
+  const [dem,pieces,artsBruts,dossBruts]=await Promise.all([
     lire("demandes_materiel?statut=eq.a_commander&order=created_at.asc&limit=500"),
     lire("suivi_pieces?or=(statut.eq.A_recommander,statut.is.null)&order=created_at.asc&limit=500"),
     lire("stock_articles?select=reference,dimensions,quantite,stock_mini,stock_maxi&order=reference&limit=2000"),
+    lire("parametres_app?select=valeur&cle=eq.commandes_dossiers"),
   ]);
   if(!lectures)return null;
+  // dossiers de commandes par fournisseur (administrateur) : lignes dont la date limite « à commander avant le » est dépassée ou proche
+  const maintenant=new Date();
+  const alertesCmd=lignesAAlerter(lireStore(dossBruts[0]?dossBruts[0].valeur:""),{dem:new Set(dem.map(x=>String(x.id))),fiche:new Set(pieces.map(x=>String(x.id)))},maintenant);
   const arts=reunirStocks(artsBruts);
   const aCommander=dem.filter(l=>l.type==="commander");
   const aRenouveler=dem.filter(l=>l.type!=="commander");
@@ -57,12 +62,12 @@ export async function composerResume(){
   };
   const bloc=(titre,lignes)=>lignes.length?titre+" ("+lignes.length+")\n"+lignes.slice(0,MAX_LIGNES).join("\n")+(lignes.length>MAX_LIGNES?"\n… et "+(lignes.length-MAX_LIGNES)+" autres (voir l'appli)":"")+"\n\n":"";
   const renouveler=aRenouveler.map(ligneDemande).concat(pieces.map(lignePiece));
-  const vide=!aCommander.length&&!renouveler.length&&!bas.length;
+  const vide=!aCommander.length&&!renouveler.length&&!bas.length&&!alertesCmd.length;
   const message="Résumé du "+new Date().toLocaleDateString("fr-FR",{weekday:"long",day:"numeric",month:"long"})+"\n\n"
     +(vide?"Rien à signaler : aucun matériel en attente et aucun stock sous son minimum.\n\n"
-          :bloc("À COMMANDER",aCommander.map(ligneDemande))+bloc("À RENOUVELER",renouveler)+bloc("STOCK SOUS LE MINIMUM",bas.map(ligneStock)))
+          :bloc("COMMANDES À PASSER (date limite)",alertesCmd.map(l=>ligneAlerte(l,maintenant)))+bloc("À COMMANDER",aCommander.map(ligneDemande))+bloc("À RENOUVELER",renouveler)+bloc("STOCK SOUS LE MINIMUM",bas.map(ligneStock)))
     +"À traiter dans l'appli : "+window.location.origin+" (onglets Matériel et Stock)";
-  const parties=[aCommander.length&&aCommander.length+" à commander",renouveler.length&&renouveler.length+" à renouveler",bas.length&&bas.length+" stock bas"].filter(Boolean);
+  const parties=[alertesCmd.length&&alertesCmd.length+" commande"+(alertesCmd.length>1?"s":"")+" à passer",aCommander.length&&aCommander.length+" à commander",renouveler.length&&renouveler.length+" à renouveler",bas.length&&bas.length+" stock bas"].filter(Boolean);
   return {vide,message,sujet:"Résumé du jour — "+(parties.length?parties.join(", "):"rien à signaler")};
 }
 
