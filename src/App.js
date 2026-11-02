@@ -798,6 +798,25 @@ function etapeOk(nom,v,nr,cs,photos){
   }
   return true;
 }
+// Étape « entamée » : au moins une réponse saisie, une photo prise, une sous-partie ou l'étape entière cochée « non réalisable ». Sert à l'affichage seulement :
+// gris « À faire » tant qu'on n'y a rien mis, rouge ❌ « Incomplète » si c'est entamé mais que des champs obligatoires manquent, bleu « Prête à valider » sinon.
+// Les valeurs rangées toutes seules à l'ouverture (date d'entrée, DE, valeurs par défaut) ne comptent pas.
+function etapeEntamee(nom,v,nr,cs,photos){
+  if(nr)return true;
+  if((photos||[]).some(p=>p.etape===nom))return true;
+  const liste=(cs||CHAMPS)[nom]||[];
+  if(sousParties(nom,liste,v,c=>champVisible(c,v)).liste.some(sp=>sp.nr))return true;
+  return liste.some(c=>{
+    if(c.type==="technicien"||c.type==="titre"||c.id==="de"||c.id==="date_entree"||!champVisible(c,v))return false;
+    const x=v[c.id];if(x===undefined||x===null||String(x).trim()==="")return false;
+    return c.defaut===undefined||String(x)!==String(c.defaut);
+  });
+}
+const ETATS_ETAPE={
+  afaire:{ico:"○",lib:"À faire",bord:"#CBD2D9",fond:"#F1F3F5",coul:"#6B7280"},
+  incomplete:{ico:"❌",lib:"Incomplète",bord:"#C62828",fond:"#FDECEC",coul:"#B42318"},
+  prete:{ico:"●",lib:"Prête à valider",bord:"#1B4F8A",fond:"#EEF4FF",coul:"#1B4F8A"},
+};
 function today(){return new Date().toISOString().split("T")[0];}
 
 // ─── Délai client / échéance (delai.js : jours ouvrés = lundi-vendredi ; l'échéance est fixée dès la saisie, ou choisie en « Date précise ») ────────────
@@ -1414,14 +1433,35 @@ function BlocNonRealisable({nom,v,nr,onNR,onChange}){
   </>);
 }
 
-function SectionEtape({nom,idx,total,actif,validees,v,nr,onChange,onNR,onPageDeGarde,onValider,onSauvegarder,onEnregistrerEtape,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,onPhotoRemoved,champsSource}){
-  const [ouvert,setOuvert]=useState(false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>actif;const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2,photos);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
+function SectionEtape({nom,idx,total,actif,pret,validees,v,nr,onChange,onNR,onPageDeGarde,onValider,onSauvegarder,onEnregistrerEtape,onAutoSaveChamp,sessionTech,techs,clients,onAddClient,saving,ficheId,cheminBase,categories,photos,onPhotoAdded,onPhotoRemoved,champsSource}){
+  // Les étapes se remplissent dans n'importe quel ordre une fois l'Entrée validée (deux techniciens peuvent travailler chacun sur la sienne) : seules celles d'après l'Entrée restent verrouillées tant qu'elle ne l'est pas.
+  // « pret » : les valeurs de la fiche sont chargées (sinon la liste des étapes n'est pas encore la bonne et l'étape à faire n'est pas encore connue)
+  const [ouvert,setOuvert]=useState(false);const [deplie,setDeplie]=useState(idx===actif&&pret!==false);const estAct=idx===actif,estVal=validees.includes(idx),estLock=idx>0&&!(validees.includes(0)||actif>0);const cs2=champsSource||CHAMPS;const ok=etapeOk(nom,v,nr,cs2,photos);const techEtape=(cs2[nom]||[]).filter(c=>c.type==="technicien").map(c=>v[c.id]||"—")[0]||"—";const nbPhotos=photos.filter(p=>p.etape===nom).length;
+  useEffect(()=>{if(idx===actif&&pret!==false)setDeplie(true);},[actif,idx,pret]); // l'étape qui devient la première à faire s'ouvre toute seule
   function resume(){if(v[cleNr(nom)]==="Oui")return "Non réalisable — "+(v[cleNrJust(nom)]||"justification manquante");return(cs2[nom]||[]).filter(c=>c.type!=="technicien"&&champVisible(c,v)&&v[c.id]).slice(0,3).map(c=>`${c.label}: ${v[c.id]}${(c.unitesChoix&&v[c.id+"__unite"])||c.unite?" "+((c.unitesChoix&&v[c.id+"__unite"])||c.unite):""}`).join(" · ");}
   const champsEtape=<RenduChamps nom={nom} v={v} onChange={onChange} techs={techs} clients={clients} onAddClient={onAddClient} ficheId={ficheId} cheminBase={cheminBase} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={cs2} sousPartiesNR={idx>0}/>;
   if(estLock)return<div style={S.cLock}><div style={{display:"flex",alignItems:"center",gap:10}}><span>🔒</span><span style={{fontSize:14,color:"#9CA3AF"}}>{idx+1}. {nom}</span></div></div>;
   // étape validée : repliée avec son ✅ ; la dernière étape reste « active » une fois validée (il n'y a pas de suivante), elle se replie quand même
   if(estVal&&(!estAct||idx===(total||ETAPES.length)-1))return(<div style={S.cDone}><div onClick={()=>setOuvert(!ouvert)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"11px 16px",cursor:"pointer",background:ouvert?"#F0FFF4":"#fff"}}><div style={{display:"flex",alignItems:"center",gap:10}}><span>{nr?"⚠️":"✅"}</span><div><span style={{fontSize:14,fontWeight:600}}>{idx+1}. {nom}</span><span style={{fontSize:12,color:"#9CA3AF",marginLeft:8}}>— {techEtape}{nbPhotos>0?" · 📷 "+nbPhotos:""}</span>{nr&&<span style={{fontSize:12,color:"#E8720C",fontWeight:600,marginLeft:8}}>· non réalisable</span>}</div></div><span style={{display:"flex",alignItems:"center",gap:10}}>{onPageDeGarde&&<button type="button" onClick={e=>{e.stopPropagation();onPageDeGarde();}} style={{...S.p2,fontSize:11,padding:"4px 10px"}}>🖨 Page de garde</button>}<span style={{fontSize:12,color:"#6B7280"}}>{ouvert?"▲":"▼"}</span></span></div>{ouvert?(<div style={{padding:"14px 16px",borderTop:"1px solid #E2E6EA"}}><div style={S.info}>✏️ Modifiez puis enregistrez : la modification est tracée dans l'historique.</div>{idx!==0&&<BlocNonRealisable nom={nom} v={v} nr={nr} onNR={onNR} onChange={onChange}/>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}>{champsEtape}</div>{!ok&&<div style={{...S.alert,marginBottom:10}}>⚠ {nr?"Indiquez la justification (obligatoire).":"Des champs obligatoires (*) sont manquants."}</div>}<button onClick={onEnregistrerEtape} disabled={saving||!ok} style={{...S.p1,marginTop:8,width:"100%",justifyContent:"center",opacity:(saving||!ok)?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer cette étape"}</button></div>):<div style={{padding:"3px 16px 10px",fontSize:12,color:"#6B7280"}}>{resume()}</div>}</div>);
-  return(<div style={S.cAct}><div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14}}><div><span style={{fontSize:11,fontWeight:700,color:"#1B4F8A",textTransform:"uppercase",letterSpacing:".07em"}}>En cours</span><p style={{fontSize:16,fontWeight:700,margin:"2px 0 0"}}>{idx+1}. {nom}</p></div><span style={{fontSize:12,color:"#9CA3AF"}}>{idx+1}/{total||ETAPES.length}</span></div><div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>{idx!==0&&<BlocNonRealisable nom={nom} v={v} nr={nr} onNR={onNR} onChange={onChange}/>}<div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}>{champsEtape}</div>{!ok&&<div style={{...S.alert,marginBottom:10}}>⚠ {nr?"Indiquez la justification (obligatoire).":"Des champs obligatoires (*) sont manquants."}</div>}<button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>{ok&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":"✓ Valider et continuer →"}</button>}{onPageDeGarde&&<button type="button" style={{...S.p2,width:"100%",justifyContent:"center",marginTop:8}} onClick={onPageDeGarde}>🖨 Imprimer la page de garde (dossier papier)</button>}{!ok&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ {nr?"Renseignez la justification pour continuer":"Remplissez les champs obligatoires (*) pour continuer"}</div>}</div>);
+  // étape pas encore validée : repliable, avec son état (gris « À faire », rouge ❌ « Incomplète », bleu « Prête à valider ») ; la première étape à faire est dépliée d'office
+  const etat=!etapeEntamee(nom,v,nr,cs2,photos)?"afaire":ok?"prete":"incomplete";const et=ETATS_ETAPE[etat];
+  return(<div style={{...S.cAct,border:"2px solid "+et.bord,padding:0,overflow:"hidden"}}>
+    <div onClick={()=>setDeplie(!deplie)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:"6px 10px",padding:"13px 16px",cursor:"pointer",background:deplie?"#fff":et.fond}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,minWidth:0,flex:"1 1 170px"}}><span style={{fontSize:16,color:et.coul,flexShrink:0}}>{et.ico}</span><span style={{fontSize:deplie?16:14,fontWeight:700,minWidth:0}}>{idx+1}. {nom}</span></div>
+      <span style={{display:"flex",alignItems:"center",gap:8,flexShrink:0}}><span style={{fontSize:11,fontWeight:700,padding:"2px 9px",borderRadius:20,background:et.fond,color:et.coul,border:"1px solid "+et.bord,whiteSpace:"nowrap"}}>{et.lib}</span><span style={{fontSize:12,color:"#6B7280"}}>{deplie?"▲":"▼"}</span></span>
+    </div>
+    {!deplie&&<div style={{padding:"0 16px 11px",fontSize:12,color:etat==="incomplete"?"#B42318":"#6B7280"}}>{etat==="afaire"?"Pas encore commencée":etat==="incomplete"?"⚠ "+(nr?"Justification manquante":"Champs obligatoires manquants"):resume()}</div>}
+    {deplie&&<div style={{padding:"4px 20px 16px"}}>
+      <div style={S.tech}><span>👤</span><span style={{fontSize:13,color:"#1B4F8A"}}>Session : <strong>{sessionTech}</strong></span></div>
+      {idx!==0&&<BlocNonRealisable nom={nom} v={v} nr={nr} onNR={onNR} onChange={onChange}/>}
+      <div style={{opacity:nr?0.4:1,pointerEvents:nr?"none":"auto"}}>{champsEtape}</div>
+      {!ok&&<div style={{...S.alert,marginBottom:10}}>⚠ {nr?"Indiquez la justification (obligatoire).":"Des champs obligatoires (*) sont manquants."}</div>}
+      <button onClick={onSauvegarder} disabled={saving} style={{...S.p2,marginTop:8,width:"100%",justifyContent:"center",opacity:saving?0.5:1}}>{saving?"💾 ...":"💾 Enregistrer"}</button>
+      {ok&&<button style={{...S.p1,width:"100%",justifyContent:"center",opacity:saving?0.5:1,marginTop:8}} disabled={saving} onClick={onValider}>{saving?"...":estAct?"✓ Valider et continuer →":"✓ Valider cette étape"}</button>}
+      {onPageDeGarde&&<button type="button" style={{...S.p2,width:"100%",justifyContent:"center",marginTop:8}} onClick={onPageDeGarde}>🖨 Imprimer la page de garde (dossier papier)</button>}
+      {!ok&&<div style={{...S.alert,marginBottom:0,marginTop:8}}>⚠ {nr?"Renseignez la justification pour continuer":"Remplissez les champs obligatoires (*) pour continuer"}</div>}
+    </div>}
+  </div>);
 }
 
 function ModalIdent({techs,onConfirm}){
@@ -3813,17 +3853,27 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const isPompe=typeMateriel==="Pompe";
   const champsActifs=champsPourType(typeMateriel);
   function draftSiCorrespond(){const d=loadDraft();if(!d)return null;return d.ficheId===(ficheInit?.id||null)?d:null;}
-  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {...(!ficheInit?.id?valeursParDefaut(typeMateriel):{}),de:ficheInit?.de||"",date_entree:(ficheInit?.id&&ficheInit.created_at?String(ficheInit.created_at).slice(0,10):today()),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [actif,setActif]=useState(()=>{const d=draftSiCorrespond();return d?d.actif:(ficheInit?.etape_active||0);});const [validees,setValidees]=useState(()=>{const d=draftSiCorrespond();return d?d.validees:(ficheInit?.etapes_validees||[]);});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
+  const [ficheId,setFicheId]=useState(ficheInit?.id||null);const [v,setV]=useState(()=>{const d=draftSiCorrespond();if(d)return d.v;return {...(!ficheInit?.id?valeursParDefaut(typeMateriel):{}),de:ficheInit?.de||"",date_entree:(ficheInit?.id&&ficheInit.created_at?String(ficheInit.created_at).slice(0,10):today()),...(!ficheInit?.id&&seedValeurs?seedValeurs:{})};});const [nomsValides,setNomsValides]=useState(()=>{const d=draftSiCorrespond();if(d){if(Array.isArray(d.nomsValides))return d.nomsValides;if(d.nomsValides===null)return null;const dv=d.v||{};const ls=insererEtapeSuiviDevis(etapesPourType(typeMateriel,dv),dv,typeMateriel||"Moteur");return(d.validees||[]).map(i=>ls[i]).filter(Boolean);}return ficheInit?.id?null:[];});const [saving,setSaving]=useState(false);const [flash,setFlash]=useState(null);const [erreur,setErreur]=useState(null);const [apercu,setApercu]=useState(false);const [photos,setPhotos]=useState([]);const [statutChantier,setStatutChantier]=useState(()=>{const d=draftSiCorrespond();return d?d.statutChantier:(ficheInit?.statut_chantier||"A_demonter");});const [commentaires,setCommentaires]=useState("");const [piecesCommande,setPiecesCommande]=useState([]);const [savingComm,setSavingComm]=useState(false);
   const etapesActives=insererEtapeSuiviDevis(etapesPourType(typeMateriel,v),v,typeMateriel||"Moteur");
+  // Étapes validées : rangées PAR NOM (valeur cachée « __etapes_ok ») pour qu'une réponse qui ajoute ou retire une étape ne décale pas les validations ; une fiche plus ancienne (numéros d'étapes) est convertie à l'ouverture.
+  // « validees » (numéros) et « actif » (première étape non validée) en sont déduits. Une fois l'Entrée validée, les étapes se remplissent dans n'importe quel ordre (02/11/2026).
+  const nomsCourants=nomsValides!==null?nomsValides:(ficheInit?.etapes_validees||[]).map(i=>etapesActives[i]).filter(Boolean);
+  const validees=React.useMemo(()=>etapesActives.map((n,i)=>nomsCourants.includes(n)?i:-1).filter(i=>i>=0),[nomsValides,etapesActives.join("|")]);
+  const premiereAFaire=etapesActives.findIndex((_,i)=>!validees.includes(i));
+  const actif=premiereAFaire<0?Math.max(etapesActives.length-1,0):premiereAFaire;
   const matDefaut=typeMateriel===TYPE_CHEMINEE?"Cheminée":"Moteur";
   const nrMap={};etapesActives.forEach((nomE,iE)=>{if(v[cleNr(nomE)]==="Oui")nrMap[iE]=true;});
   // fiche terminée avant l'ajout de l'étape « Contrôle qualité » : toutes les autres étapes sont faites, le contrôle compte comme fait (la fiche reste « Terminée »)
   useEffect(()=>{
     const iq=etapesActives.indexOf(ETAPE_QUALITE);
     if(ficheInit?.statut!=="Terminée"||iq<0)return;
-    setValidees(p=>(p.includes(iq)||!etapesActives.every((_,i)=>i===iq||p.includes(i)))?p:[...p,iq]);
-  },[etapesActives.length,ficheInit]);
+    setNomsValides(p=>(p===null||p.includes(ETAPE_QUALITE)||!etapesActives.every(n=>n===ETAPE_QUALITE||p.includes(n)))?p:[...p,ETAPE_QUALITE]);
+  },[etapesActives.length,ficheInit,nomsValides===null]);
   const typeRef=useRef(typeMateriel);typeRef.current=typeMateriel;
+  // la liste des étapes validées (par nom) est écrite à chaque validation ; une fiche ancienne, convertie à l'ouverture, la reçoit au premier enregistrement
+  const persisteRef=useRef(false);
+  async function ecrireEtapesOk(fid,noms){await db.upsert("fiche_valeurs",[{fiche_id:fid,champ_id:"__etapes_ok",valeur:JSON.stringify(noms)}],"fiche_id,champ_id");persisteRef.current=true;}
+  async function ecrireEtapesOkSiBesoin(fid){if(!persisteRef.current&&nomsValides!==null&&nomsValides.length>0)await ecrireEtapesOk(fid,nomsValides);}
   const [avisRail,setAvisRail]=useState(null);
   const [offreGarde,setOffreGarde]=useState(false); // « Imprimer la page de garde » proposé juste après la validation de l'étape Entrée (28/10/2026)
   function imprimerPageDeGarde(){lancerImpression(genHtmlPageDeGarde(v,typeMateriel||"Moteur"));setOffreGarde(false);}
@@ -3893,14 +3943,20 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   },[ouvrirApercu]);
   useEffect(()=>{
     if(!ficheInit?.id)return;
-    db.get("fiche_valeurs","?fiche_id=eq."+ficheInit.id).then(rows=>{if(!Array.isArray(rows))return;const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});setV(p=>{const merge={...p,...m};const d=draftSiCorrespond();return d?{...merge,...d.v}:merge;});setCommentaires(m["__commentaires"]||"");setChargeFini(true);});
+    db.get("fiche_valeurs","?fiche_id=eq."+ficheInit.id).then(rows=>{if(!Array.isArray(rows))return;const m={};rows.forEach(r=>{m[r.champ_id]=r.valeur;});
+      // validations rangées par nom ; une fiche ancienne n'a que des numéros : on les convertit avec la liste d'étapes que donnent ses valeurs
+      let noms=null;const brut=m["__etapes_ok"];delete m["__etapes_ok"];
+      if(brut){try{const a=JSON.parse(brut);if(Array.isArray(a)){noms=a;persisteRef.current=true;}}catch(e){/* liste illisible : on repart des numéros */}}
+      if(noms===null){const ls=insererEtapeSuiviDevis(etapesPourType(typeRef.current,m),m,typeRef.current||"Moteur");noms=(ficheInit.etapes_validees||[]).map(i=>ls[i]).filter(Boolean);}
+      setNomsValides(p=>p!==null?p:noms);
+      setV(p=>{const merge={...p,...m};const d=draftSiCorrespond();return d?{...merge,...d.v}:merge;});setCommentaires(m["__commentaires"]||"");setChargeFini(true);});
     db.get("fiche_photos","?fiche_id=eq."+ficheInit.id+"&order=created_at").then(rows=>{if(!Array.isArray(rows))return;setPhotos(rows.map(p=>({...p,url:db.photoUrl(p.storage_path)})));});
     db.get("suivi_pieces","?fiche_id=eq."+ficheInit.id).then(rows=>{if(Array.isArray(rows))setPiecesCommande(rows);});
   },[ficheInit?.id]);
   useEffect(()=>{
     if(verrou)return; // fiche en lecture seule (tenue par quelqu'un d'autre) : rien à récupérer en cas de plantage
-    saveDraft({ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier});
-  },[ficheId,typeMateriel,sessionTech,v,actif,validees,statutChantier,verrou]);
+    saveDraft({ficheId,typeMateriel,sessionTech,v,actif,validees,nomsValides,statutChantier});
+  },[ficheId,typeMateriel,sessionTech,v,actif,validees,nomsValides,statutChantier,verrou]);
   const instantaneRef=useRef({v:"",c:""});instantaneRef.current={v:JSON.stringify(v),c:commentaires};
   useEffect(()=>{
     if(!chargeFini)return undefined;
@@ -3971,7 +4027,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       let fid=ficheId;
       const toutFini=etapesActives.every((_,i)=>validees.includes(i));
       if(!fid){
-        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||matDefaut,client:v.client||"",statut:"En cours",statut_chantier:statutChantier||"A_demonter",etape_active:idxEtape,etapes_validees:validees,type_materiel:typeMateriel||"Moteur"});
+        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||matDefaut,client:v.client||"",statut:"En cours",statut_chantier:statutChantier||"A_demonter",etape_active:actif,etapes_validees:validees,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;
         if(!fid)throw new Error("Impossible de créer la fiche");
         setFicheId(fid);
@@ -3989,6 +4045,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
           await db.upsert("fiche_valeurs",rows.slice(i,i+50),"fiche_id,champ_id");
         }
       }
+      await ecrireEtapesOkSiBesoin(fid);
       await synchroniserRail(fid);
       setFlash("saved_partiel");setTimeout(()=>setFlash(null),2000);
       if(fid)onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut});
@@ -4007,11 +4064,12 @@ const onChange=useCallback((id,val)=>setV(p=>{
     const instV=JSON.stringify(v);
     try{
       const toutFini=etapesActives.every((_,i)=>validees.includes(i));
-      await db.patch("fiches","?id=eq."+ficheId,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:toutFini?"Terminée":"En cours"});
+      await db.patch("fiches","?id=eq."+ficheId,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:toutFini?"Terminée":"En cours",...(nomsValides!==null?{etape_active:actif,etapes_validees:validees}:{})});
       const rows=Object.keys(v).filter(k=>!k.startsWith("__")&&v[k]!==undefined&&v[k]!=="").map(k=>({fiche_id:ficheId,champ_id:k,valeur:String(v[k])}));
       for(let i=0;i<rows.length;i+=50)await db.upsert("fiche_valeurs",rows.slice(i,i+50),"fiche_id,champ_id");
       const vides=Object.keys(v).filter(k=>!k.startsWith("__")&&v[k]==="");
       for(let i=0;i<vides.length;i+=40)await db.del("fiche_valeurs","?fiche_id=eq."+ficheId+"&champ_id=in.("+vides.slice(i,i+40).map(encodeURIComponent).join(",")+")");
+      await ecrireEtapesOkSiBesoin(ficheId);
       if(nomEtape)await db.post("fiche_historique",{fiche_id:ficheId,technicien:sessionTech,action:"Étape modifiée",etape:nomEtape});
       await synchroniserRail(ficheId);
       onFicheUpdated(ficheId,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut});
@@ -4039,26 +4097,27 @@ const onChange=useCallback((id,val)=>setV(p=>{
     setSaving(true);setErreur(null);
     const instV=JSON.stringify(v);
     try{
-      let fid=ficheId;const newVal=[...new Set([...validees,idx])];const toutFini=etapesActives.every((_,i)=>newVal.includes(i));const declencheDevis=etapesActives[idx]===ETAPE_DECLENCHE_DEVIS[typeMateriel||"Moteur"];
+      let fid=ficheId;const newNoms=[...new Set([...nomsCourants,etapesActives[idx]])];const newVal=etapesActives.map((n,i)=>newNoms.includes(n)?i:-1).filter(i=>i>=0);const toutFini=etapesActives.every((_,i)=>newVal.includes(i));const suivante=etapesActives.findIndex((_,i)=>!newVal.includes(i));const etapeSuivante=suivante<0?Math.max(etapesActives.length-1,0):suivante;const declencheDevis=etapesActives[idx]===ETAPE_DECLENCHE_DEVIS[typeMateriel||"Moteur"];
       let newSC=statutChantier;
       if(declencheDevis&&statutChantier==="A_demonter")newSC=v.devis_necessaire==="Non"?"A_remonter":"Devis";
       if(suiviDevisComplet(v)&&statutChantier==="Devis")newSC="A_remonter";
       if(!fid){
-        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||matDefaut,client:v.client||"",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:idx+1,etapes_validees:newVal,type_materiel:typeMateriel||"Moteur"});
+        const res=await db.post("fiches",{de:v.de,materiel:v.materiel_lieu||matDefaut,client:v.client||"",statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:etapeSuivante,etapes_validees:newVal,type_materiel:typeMateriel||"Moteur"});
         fid=Array.isArray(res)?res[0]?.id:res?.id;if(!fid)throw new Error("Impossible de créer la fiche");setFicheId(fid);
         await rattacherPhotos(fid);
         await ecrireValeursFiche(fid,v);
       }else{
         // fiche existante : les valeurs d'abord ; si la base refuse, l'étape n'est pas comptée validée et rien n'a été supprimé
         await ecrireValeursFiche(fid,v);
-        const maj=await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:Math.min(idx+1,etapesActives.length-1),etapes_validees:newVal});
+        const maj=await db.patch("fiches","?id=eq."+fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut:toutFini?"Terminée":"En cours",statut_chantier:newSC,etape_active:etapeSuivante,etapes_validees:newVal});
         if(!Array.isArray(maj))throw new Error("la fiche n'a pas pu être mise à jour (connexion ?)");
         setStatutChantier(newSC);
       }
+      await ecrireEtapesOk(fid,newNoms);
       await synchroniserRail(fid);
       await db.post("fiche_historique",{fiche_id:fid,technicien:sessionTech,action:"Étape validée",etape:etapesActives[idx]});
       if(onFicheUpdated)onFicheUpdated(fid,{statut:toutFini?"Terminée":"En cours",statut_chantier:newSC});
-      setValidees(newVal);if(idx+1<etapesActives.length)setActif(idx+1);setFlash(idx);setTimeout(()=>setFlash(null),3000);onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut_chantier:newSC});
+      setNomsValides(newNoms);setFlash(idx);setTimeout(()=>setFlash(null),3000);onFicheUpdated(fid,{de:v.de,client:v.client||"",materiel:v.materiel_lieu||matDefaut,statut_chantier:newSC});
       marquerV(instV);
       clearDraft();
       if(idx===0)setOffreGarde(true);
@@ -4109,7 +4168,7 @@ const onChange=useCallback((id,val)=>setV(p=>{
       {flash==="saved_partiel"&&<div style={{...S.ok,background:"#EEF4FF",color:"#1B4F8A",border:"1px solid #D6E4F7"}}>💾 Données sauvegardées.</div>}{flash!==null&&flash!=="saved_partiel"&&<div style={S.ok}>✅ Étape "{etapesActives[flash]}" enregistrée.</div>}{offreGarde&&<div style={{...S.info,flexWrap:"wrap",justifyContent:"space-between"}}><span>📄 Entrée validée : imprimez la page de garde (une feuille A4) pour le dossier papier.</span><span style={{display:"flex",gap:8}}><button type="button" style={{...S.p1,fontSize:12,padding:"6px 12px"}} onClick={imprimerPageDeGarde}>🖨 Imprimer la page de garde</button><button type="button" style={{...S.p2,fontSize:12,padding:"6px 10px"}} onClick={()=>setOffreGarde(false)} aria-label="Fermer">✕</button></span></div>}
       {erreur&&<div style={{...S.alert,marginBottom:14}}>{erreur}</div>}
       {avisRail&&<div style={{...S.alert,marginBottom:14,background:"#FFF8E1",borderColor:"#E8720C",color:"#8A4B00"}}>⚠ {avisRail}</div>}
-      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>onChange(cleNr(nom),v[cleNr(nom)]==="Oui"?"Non":"Oui")} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onEnregistrerEtape={()=>enregistrerModifs(nom)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={champsActifs} onPageDeGarde={i===0?imprimerPageDeGarde:null}/>)}
+      {etapesActives.map((nom,i)=><SectionEtape key={nom} nom={nom} idx={i} total={etapesActives.length} actif={actif} pret={chargeFini} validees={validees} v={v} nr={!!nrMap[i]} onChange={onChange} onNR={()=>onChange(cleNr(nom),v[cleNr(nom)]==="Oui"?"Non":"Oui")} onValider={()=>save(i)} onSauvegarder={()=>savePartiel(i)} onEnregistrerEtape={()=>enregistrerModifs(nom)} onAutoSaveChamp={onAutoSaveChamp} sessionTech={sessionTech} techs={techs} clients={clients} onAddClient={onAddClient} saving={saving} ficheId={ficheId} cheminBase={chem.chemin} categories={categories} photos={photos} onPhotoAdded={onPhotoAdded} onPhotoRemoved={onPhotoRemoved} champsSource={champsActifs} onPageDeGarde={i===0?imprimerPageDeGarde:null}/>)}
 
       <SectionMaterielCommander v={v} ficheId={ficheId} de={v.de} client={v.client||""} piecesInit={piecesCommande} onSave={setPiecesCommande} typeMateriel={typeMateriel} qui={sessionTech}/>
       {onOuvrirCommandes&&<SectionCommandesLiees de={v.de} onOuvrirCommandes={onOuvrirCommandes}/>}
