@@ -3,7 +3,7 @@ import {LectureCtx} from "./Acces";
 import {db} from "./supabase";
 import {normaliserNumero} from "./railClients";
 import {genHtml, afficherApercu, telechargerZip} from "./pdfUtils";
-import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, SourcesPhoto} from "./Photos";
+import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, supprimerPhotosDeFiche, ConfirmerSuppressionPhoto, SourcesPhoto} from "./Photos";
 
 // Fiche chantier : liste en dossiers (client > N° DE > lieu) comme la fiche atelier, mais dans une autre couleur
 // (vert pétrole) pour ne jamais confondre les deux. Le formulaire lui-même (FicheChantier) reste dans App.js.
@@ -129,12 +129,12 @@ function ChFicheItem({f,categories,champsPour,etapes,onOuvrir,onDupliquer,onMaj,
     setSupprEnCours(false);
   }
   async function supprPhotos(){
-    setOccupe("sp");try{await db.del("fiches_chantier_photos","?fiche_id=eq."+f.id);setPhotos([]);setConfP(false);}catch(e){echec(e);}setOccupe(null);
+    setOccupe("sp");try{await supprimerPhotosDeFiche("fiches_chantier_photos",f.id);setPhotos([]);setConfP(false);}catch(e){echec(e);}setOccupe(null);
   }
   async function supprFiche(){
     setOccupe("sf");
     try{
-      await db.del("fiches_chantier_photos","?fiche_id=eq."+f.id);
+      await supprimerPhotosDeFiche("fiches_chantier_photos",f.id);
       await db.del("fiches_chantier_valeurs","?fiche_id=eq."+f.id);
       await db.del("suivi_pieces","?fiche_id=eq."+f.id);
       await db.del("fiches_chantier","?id=eq."+f.id);

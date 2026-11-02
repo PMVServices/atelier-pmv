@@ -55,6 +55,27 @@ export async function supprimerPhotoEnBase(p,table,ficheId){
   }
 }
 
+// Supprime TOUTES les photos d'une fiche : les lignes en base, puis chaque fichier du stockage qui n'est plus utilisé par aucune autre ligne (une fiche dupliquée peut partager un fichier).
+// Avant (jusqu'au 02/11/2026), seules les lignes étaient supprimées : les fichiers restaient dans le stockage et l'espace n'était jamais libéré.
+// La liste des photos est relue AVANT d'effacer quoi que ce soit ; si la base ne répond pas, rien n'est supprimé. Renvoie {lignes, fichiers}.
+export async function supprimerPhotosDeFiche(table,ficheId){
+  const r0=await fetch(SUPA_URL+"/rest/v1/"+table+"?select=storage_path&fiche_id=eq."+ficheId,{headers:ENTETES});
+  if(!r0.ok)throw new Error("Les photos n'ont pas pu être listées (connexion ?). Rien n'a été supprimé.");
+  const lignes=await r0.json();
+  if(!Array.isArray(lignes))throw new Error("Les photos n'ont pas pu être listées (connexion ?). Rien n'a été supprimé.");
+  const chemins=[...new Set(lignes.map(l=>l.storage_path).filter(Boolean))];
+  const r1=await fetch(SUPA_URL+"/rest/v1/"+table+"?fiche_id=eq."+ficheId,{method:"DELETE",headers:ENTETES});
+  if(!r1.ok)throw new Error("Les photos n'ont pas pu être retirées de la fiche (connexion ?).");
+  let fichiers=0;
+  for(const chemin of chemins){
+    const r=await fetch(SUPA_URL+"/rest/v1/"+table+"?select=id&storage_path=eq."+encodeURIComponent(chemin),{headers:ENTETES});
+    if(!r.ok)continue; // doute : on garde le fichier plutôt que de risquer de supprimer une photo encore utilisée
+    const reste=await r.json();
+    if(Array.isArray(reste)&&reste.length===0){await db.deleteFile(chemin);fichiers++;}
+  }
+  return {lignes:lignes.length,fichiers};
+}
+
 // Bandeau de confirmation affiché sous les vignettes
 export function ConfirmerSuppressionPhoto({photo,occupe,onConfirmer,onAnnuler,styleBouton,styleBoutonDanger}){
   if(!photo)return null;

@@ -24,7 +24,7 @@ import {useAlertesDossiers, phraseAvant as phraseAvantCommande} from "./dossiers
 import {PanneauResumeCommercial, verifierResumeCommercial} from "./ResumeCommercial";
 import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT, naturePompe, POMPE_DESCRIPTIF_DEFAUT, estPompeDip, garnitureAbsente, DIP_DESCRIPTIF_DEFAUT, DIP_POMPE_TEXTE_DEFAUT, dipConclusionDefaut} from "./rapportModele";
-import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, ConfirmerSuppressionPhoto, avecSouris, SourcesPhoto} from "./Photos";
+import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, supprimerPhotosDeFiche, ConfirmerSuppressionPhoto, avecSouris, SourcesPhoto} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
 import {CHAMPS_CHEMINEE, ETAPES_CHEMINEE} from "./Cheminee";
 import {ETAPE_QUALITE, champsQualite} from "./controleQualite";
@@ -1716,13 +1716,15 @@ function PageStockage({fiches,onRetour}){
   async function supprimerPhotos(){
     setSuppEnCours(true);
     try{
+      let fichiersEfface=0;
       for(const id of selectionIds){
-        await db.del("fiche_photos","?fiche_id=eq."+id);
+        const r=await supprimerPhotosDeFiche("fiche_photos",id); // lignes ET fichiers du stockage
+        fichiersEfface+=r.fichiers;
       }
       setPhotos(prev=>prev.filter(p=>!selectionIds.includes(p.fiche_id)));
       setSelection({});
       setConfirmSuppr(false);
-      setMsg("✅ Photos supprimées — les fiches et toutes les données sont conservées intactes.");
+      setMsg("✅ Photos supprimées ("+fichiersEfface+" fichier"+(fichiersEfface>1?"s":"")+" effacé"+(fichiersEfface>1?"s":"")+" du stockage) — les fiches et toutes les données sont conservées intactes.");
       setTimeout(()=>setMsg(null),5000);
     }catch(e){setMsg("Erreur : "+e.message);}
     setSuppEnCours(false);
@@ -2494,7 +2496,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
   }
 
   async function supprimerPhotos(){
-    try{await db.del("fiche_photos","?fiche_id=eq."+f.id);setPhotos([]);setConfirmSupprPhotos(false);}
+    try{await supprimerPhotosDeFiche("fiche_photos",f.id);setPhotos([]);setConfirmSupprPhotos(false);}
     catch(e){alert("Erreur: "+e.message);}
   }
 
@@ -2506,7 +2508,7 @@ function FicheItem({f,onOpen,onApercu,onDelete,onStatutChange,categories,onDupli
       catch(e){alert("La ligne n'a pas pu être gardée dans le suivi des cheminées ("+e.message+"). La fiche n'est pas supprimée.");return;}
     }
     try{
-      await db.del("fiche_photos","?fiche_id=eq."+f.id);
+      await supprimerPhotosDeFiche("fiche_photos",f.id);
       await db.del("fiche_valeurs","?fiche_id=eq."+f.id);
       await db.del("suivi_pieces","?fiche_id=eq."+f.id);
       await db.del("fiche_historique","?fiche_id=eq."+f.id);
