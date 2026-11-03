@@ -3,6 +3,7 @@ import {genHtml, imprimerFiche, telechargerZip, apercuRapport, afficherApercu, t
 import {cleNr, cleNrJust} from "./etapeNr";
 import {INTERTITRES_TRAME, sousParties, cleSousPartieJust} from "./sousParties";
 import {genHtmlPageDeGarde} from "./pageDeGarde";
+import {genHtmlEntreeVierge} from "./entreeVierge";
 import {exporterRapportDocx} from "./rapportDocx";
 import {exporterRapportCheminee} from "./rapportLivretDocx";
 import {chargerConfigRapports} from "./configRapports";
@@ -2716,9 +2717,24 @@ function DossierClient({client,cible,fiches,onOpen,onApercu,onDelete,onStatutCha
 }
 
 // ─── PAGE ACCUEIL ────────────────────────────────────────────────────────
+// Fiche d'entrée VIERGE (demande du 03/11/2026) : une feuille A4 par matériel, pour remplir l'Entrée à la main quand la tablette n'est pas disponible
+const TYPES_ENTREE_VIERGE=[{id:"Moteur",emoji:"⚙️",titre:"Moteur"},{id:"Pompe",emoji:"💧",titre:"Pompe"},{id:"Moto-réducteur",emoji:"🔧",titre:"Moto-réducteur"},{id:"Ventilateur",emoji:"🌀",titre:"Ventilateur"},{id:TYPE_CHEMINEE,emoji:"🚆",titre:"Cheminée de freinage"},{id:"Autre",emoji:"🧰",titre:"Autre matériel"}];
+function imprimerEntreeVierge(type,titre){
+  const etape=etapesPourType(type,{})[0];
+  lancerImpression(genHtmlEntreeVierge(titre,(champsPourType(type)||{})[etape]||[]));
+}
+function ModalEntreeVierge({onFermer}){
+  return(<div onClick={onFermer} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:200,padding:16}}><div onClick={e=>e.stopPropagation()} style={{background:"#fff",borderRadius:14,padding:"24px 20px",width:"100%",maxWidth:420,boxShadow:"0 8px 40px rgba(0,0,0,0.2)"}}>
+    <p style={{fontSize:17,fontWeight:700,margin:"0 0 4px"}}>🖨 Fiche d'entrée vierge</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px"}}>Une feuille A4 à remplir à la main si la tablette n'est pas disponible. Quel matériel ?</p>
+    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>{TYPES_ENTREE_VIERGE.map(t=><button key={t.id} type="button" onClick={()=>{imprimerEntreeVierge(t.id,t.titre);onFermer();}} style={{...S.p2,justifyContent:"flex-start",gap:8,padding:"10px 12px",fontSize:13}}><span>{t.emoji}</span><span>{t.titre}</span></button>)}</div>
+    <button type="button" onClick={onFermer} style={{...S.p2,width:"100%",justifyContent:"center",marginTop:12}}>Fermer</button>
+  </div></div>);
+}
+
 function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,categories,onDupliquer}){
   const lecture=React.useContext(LectureCtx);
-  const [loading,setLoading]=useState(true);const [q,setQ]=useState("");const [fs,setFs]=useState("Tous");
+  const [loading,setLoading]=useState(true);const [q,setQ]=useState("");const [fs,setFs]=useState("Tous");const [entreeVierge,setEntreeVierge]=useState(false);
   useEffect(()=>{db.get("fiches","?order=created_at.desc").then(d=>{setFiches(Array.isArray(d)?d:[]);setLoading(false);}).catch(()=>setLoading(false));},[]);
   async function onStatutChange(ficheId,newStatut){await db.patch("fiches","?id=eq."+ficheId,{statut_chantier:newStatut});setFiches(prev=>prev.map(f=>f.id===ficheId?{...f,statut_chantier:newStatut}:f));}
   function onDelete(id){setFiches(prev=>prev.filter(f=>f.id!==id));}
@@ -2758,7 +2774,11 @@ function PageAccueil({fiches,setFiches,onNew,onOpen,onApercu,onStatutChange,cate
         </div>
         {devisCount>0&&<span style={{background:"#FFF8E1",color:"#E8720C",fontSize:12,padding:"4px 12px",borderRadius:20,fontWeight:600}}>⚠ {devisCount} devis en attente</span>}
       </div>
-      {!lecture&&<button style={S.p1} onClick={onNew}>+ Nouvelle fiche</button>}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+        <button style={S.p2} onClick={()=>setEntreeVierge(true)} title="Imprimer une fiche d'entrée vierge (A4) à remplir à la main">🖨 Entrée vierge</button>
+        {!lecture&&<button style={S.p1} onClick={onNew}>+ Nouvelle fiche</button>}
+      </div>
+      {entreeVierge&&<ModalEntreeVierge onFermer={()=>setEntreeVierge(false)}/>}
     </div>
     <div style={{background:"#fff",borderRadius:10,border:"1px solid #E2E6EA",padding:"12px 16px",marginBottom:16,display:"flex",gap:10,flexWrap:"wrap"}}>
       <input value={q} onChange={e=>setQ(e.target.value)} placeholder="🔍 Client, N° DE, lieu..." style={{...S.inp,flex:1,minWidth:160}}/>
