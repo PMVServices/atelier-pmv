@@ -1,4 +1,4 @@
-import React, {useState, useEffect, useMemo} from "react";
+import React, {useState, useEffect, useMemo, useRef} from "react";
 import {db, SUPA_URL, H} from "./supabase";
 
 // Accès par personne : à chaque ouverture l'appli demande « Qui ouvre l'application ? » (Nom Prénom) ;
@@ -11,6 +11,9 @@ export const PROFILS={
   commercial:{label:"Commercial",icone:"💼"},
   maintenance:{label:"Maintenance",icone:"⚙️"}, // ne remplit aucune fiche : modifie seulement les champs, intitulés et colonnes du planning (page « Maintenance »)
 };
+// Code du profil Maintenance : demandé À CHAQUE FOIS qu'une personne de ce profil est choisie (« Qui ouvre l'application ? », « Changer de personne », « Qui utilise l'application ? »),
+// contrairement au code de l'appareil (une seule fois). Comme lui, il est écrit dans le code du site (dépôt public) : barrière d'interface seulement.
+export const CODE_MAINTENANCE="2401";
 export const LectureCtx=React.createContext(false);
 // Personne connectée + « demander qui utilise l'appli » (fenêtre de choix par-dessus l'écran en cours, sans le fermer) : sert aux fiches
 export const PersonneCtx=React.createContext(null); // la personne connectée (le profil Commercial a, comme un technicien, la main sur les fiches atelier et chantier et sur le planning)
@@ -61,49 +64,59 @@ export function EcranChargement({erreur,onRetour}){
 }
 
 // ── code de l'appareil (une seule fois par appareil) ───────────────────
-export function EcranCode({code,logo,onSucces}){
+// titre / sousTitre / memoriser / onAnnuler / clavier : facultatifs. Par défaut c'est le code de l'appareil (mémorisé une fois) ; le code Maintenance ne se mémorise pas, peut être annulé et se tape aussi au clavier.
+export function EcranCode({code,logo,onSucces,titre="Code de l'appareil",sousTitre="Demandé une seule fois sur cet appareil.",memoriser=true,onAnnuler,clavier}){
   const [s,setS]=useState("");const [err,setErr]=useState(false);
+  const saisie=useRef(""); // chiffres déjà tapés, à jour même si deux touches arrivent avant le redessin
   function tap(c){
-    if(s.length>=4)return;
-    const n=s+c;setS(n);
+    if(saisie.current.length>=4)return;
+    const n=saisie.current+c;saisie.current=n;setS(n);
     if(n.length===4){
-      if(n===code){try{localStorage.setItem(CLE_PIN,"1");}catch(e){}onSucces();}
-      else{setErr(true);setTimeout(()=>{setS("");setErr(false);},800);}
+      if(n===code){if(memoriser){try{localStorage.setItem(CLE_PIN,"1");}catch(e){}}onSucces();}
+      else{setErr(true);setTimeout(()=>{saisie.current="";setS("");setErr(false);},800);}
     }
   }
+  function effacer(){if(saisie.current.length>=4)return;saisie.current=saisie.current.slice(0,-1);setS(saisie.current);}
+  const toucheRef=useRef(null);
+  toucheRef.current=e=>{if(/^[0-9]$/.test(e.key))tap(e.key);else if(e.key==="Backspace")effacer();else if(e.key==="Escape"&&onAnnuler)onAnnuler();};
+  useEffect(()=>{if(!clavier)return undefined;const h=e=>toucheRef.current(e);window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);},[clavier]);
   const touches=["1","2","3","4","5","6","7","8","9","","0","⌫"];
   return(<div style={OVERLAY}><div style={{...CARTE,maxWidth:300,textAlign:"center",padding:"28px 24px"}}>
     {logo&&<img src={logo} alt="PMV Services" style={{height:56,marginBottom:10,objectFit:"contain"}}/>}
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 6px"}}>Code de l'appareil</p>
-    <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 16px"}}>Demandé une seule fois sur cet appareil.</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 6px"}}>{titre}</p>
+    <p style={{fontSize:11,color:"#9CA3AF",margin:"0 0 16px",overflowWrap:"anywhere"}}>{sousTitre}</p>
     <div style={{display:"flex",justifyContent:"center",gap:12,marginBottom:20}}>
       {[0,1,2,3].map(i=><div key={i} style={{width:16,height:16,borderRadius:"50%",background:s.length>i?(err?"#D73A49":"#1B4F8A"):"#E2E6EA",transition:"background 0.15s"}}/>)}
     </div>
     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10}}>
-      {touches.map((t,i)=>t===""?<div key={i}/>:<button key={i} type="button" onClick={()=>t==="⌫"?setS(ss=>ss.slice(0,-1)):tap(t)} style={{padding:"14px",fontSize:18,fontWeight:600,borderRadius:10,border:"1.5px solid #E2E6EA",background:t==="⌫"?"#F5F6F8":"#fff",cursor:"pointer",color:t==="⌫"?"#6B7280":"#1A1A2E"}}>{t}</button>)}
+      {touches.map((t,i)=>t===""?<div key={i}/>:<button key={i} type="button" onClick={()=>t==="⌫"?effacer():tap(t)} style={{padding:"14px",fontSize:18,fontWeight:600,borderRadius:10,border:"1.5px solid #E2E6EA",background:t==="⌫"?"#F5F6F8":"#fff",cursor:"pointer",color:t==="⌫"?"#6B7280":"#1A1A2E"}}>{t}</button>)}
     </div>
     {err&&<p style={{color:"#D73A49",fontSize:13,marginTop:12,fontWeight:600}}>Code incorrect</p>}
+    {onAnnuler&&<div style={{marginTop:14}}><button type="button" onClick={onAnnuler} style={{background:"none",border:"none",color:"#6B7280",fontSize:13,cursor:"pointer",textDecoration:"underline"}}>Annuler</button></div>}
   </div></div>);
 }
 
 // ── « Qui ouvre l'application ? » ──────────────────────────────────────
 export function EcranQui({personnes,derniereId,onChoisir,onAnnuler,titre,logo}){
   const [q,setQ]=useState("");
+  const [attente,setAttente]=useState(null); // personne du profil Maintenance dont le code est demandé avant de la choisir
+  const choisir=p=>{if(p.profil==="maintenance")setAttente(p);else onChoisir(p);};
   const tri=useMemo(()=>[...personnes].sort((a,b)=>(String(a.nom)+" "+String(a.prenom)).localeCompare(String(b.nom)+" "+String(b.prenom),"fr")),[personnes]);
   const mots=norm(q).split(" ").filter(Boolean);
   const liste=tri.filter(p=>{const h=norm(nomComplet(p));return mots.every(m=>h.includes(m));});
   const derniere=personnes.find(p=>p.id===derniereId);
+  if(attente)return <EcranCode code={CODE_MAINTENANCE} logo={logo} titre="Code Maintenance" sousTitre={nomComplet(attente)+" — demandé à chaque connexion en Maintenance."} memoriser={false} clavier onSucces={()=>onChoisir(attente)} onAnnuler={()=>setAttente(null)}/>;
   return(<div style={OVERLAY}><div style={{...CARTE,maxWidth:760,padding:"14px 12px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:12}}>
       {logo&&<img src={logo} alt="PMV Services" style={{height:38,objectFit:"contain"}}/>}
       <div style={{fontSize:19,fontWeight:800,color:"#1A1A2E"}}>{titre||"Qui ouvre l'application ?"}</div>
     </div>
-    {derniere&&!q&&<button type="button" onClick={()=>onChoisir(derniere)} style={{...BTN1,width:"100%",background:"#22863A",marginBottom:10,textAlign:"left",minHeight:54}}>
+    {derniere&&!q&&<button type="button" onClick={()=>choisir(derniere)} style={{...BTN1,width:"100%",background:"#22863A",marginBottom:10,textAlign:"left",minHeight:54}}>
       Continuer : {nomComplet(derniere)}<span style={{fontSize:12,fontWeight:400,opacity:0.9}}> · {PROFILS[derniere.profil].label}</span>
     </button>}
     {tri.length>24&&<input type="search" value={q} onChange={e=>setQ(e.target.value)} placeholder="Rechercher un nom…" style={{...INP,marginBottom:10}} autoComplete="off"/>}
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(132px,1fr))",gap:8}}>
-      {liste.map(p=>(<button key={p.id} type="button" onClick={()=>onChoisir(p)} title={PROFILS[p.profil].label} style={{display:"flex",alignItems:"center",gap:8,background:"#F3F6FA",border:"1.5px solid #D6E0EE",borderRadius:10,padding:"6px 8px",minHeight:52,cursor:"pointer",textAlign:"left",color:"#1A1A2E",fontSize:14,fontWeight:600,lineHeight:1.2,overflowWrap:"anywhere"}}>
+      {liste.map(p=>(<button key={p.id} type="button" onClick={()=>choisir(p)} title={PROFILS[p.profil].label} style={{display:"flex",alignItems:"center",gap:8,background:"#F3F6FA",border:"1.5px solid #D6E0EE",borderRadius:10,padding:"6px 8px",minHeight:52,cursor:"pointer",textAlign:"left",color:"#1A1A2E",fontSize:14,fontWeight:600,lineHeight:1.2,overflowWrap:"anywhere"}}>
         <span style={{flex:"none",fontSize:15}}>{PROFILS[p.profil].icone}</span>
         <span style={{minWidth:0}}>{nomComplet(p)}</span>
       </button>))}
@@ -202,7 +215,7 @@ export function PageAcces({personnes,techs,moi,onEnregistre,onRetour}){
       <h1 style={{fontSize:22,fontWeight:800,margin:0}}>🔑 Accès</h1>
       <button type="button" onClick={onRetour} style={BTN2}>← Retour</button>
     </div>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>À chaque ouverture, l'appli demande qui ouvre. Le profil de la personne décide de ce qu'elle voit : <b>Administrateur</b> (tout), <b>Technicien</b> (fiches, planning, matériel, stock…), <b>Commercial</b> (suivi clients, calendrier, rapports, et fiches atelier, fiches chantier et planning comme un technicien). Les initiales servent à préremplir « qui a fait la fiche » pour un technicien.</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>À chaque ouverture, l'appli demande qui ouvre. Le profil de la personne décide de ce qu'elle voit : <b>Administrateur</b> (tout), <b>Technicien</b> (fiches, planning, matériel, stock…), <b>Commercial</b> (suivi clients, calendrier, rapports, et fiches atelier, fiches chantier et planning comme un technicien), <b>Maintenance</b> (modifie les champs des fiches, le planning et les rapports sans remplir de fiche ; son code est demandé à chaque connexion). Les initiales servent à préremplir « qui a fait la fiche » pour un technicien.</p>
 
     <div style={carte}>
       {tri.map(p=>(<div key={p.id} style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",padding:"8px 0",borderBottom:"1px solid #F3F4F6"}}>
