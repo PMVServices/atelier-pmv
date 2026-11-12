@@ -6968,7 +6968,7 @@ export default function App(){
   if(!pinOk)return <EcranCode code={PIN_CODE} logo={LOGO_B64} onSucces={()=>setPinOk(true)}/>;
   if(!MODE_POSTE&&personnes===null)return <EcranChargement erreur={erreurAcces} onRetour={chargerAcces}/>;
   // appareil non connecté et aucune personne lisible : la base est fermée aux appareils non connectés (ou neuve) → connexion de l'appareil
-  if(!appareil.connecte&&personnes&&personnes.length===0&&!baseNeuve)return <EcranConnexionAppareil obligatoire logo={LOGO_B64} onPremiere={MODE_POSTE?null:()=>setBaseNeuve(true)}/>;
+  if(!appareil.connecte&&personnes&&personnes.length===0&&!baseNeuve)return <EcranConnexionAppareil obligatoire logo={LOGO_B64} onPremiere={MODE_POSTE||!/[?&]base-neuve(&|$)/.test(window.location.search)?null:()=>setBaseNeuve(true)}/>;
   if(!MODE_POSTE&&personnes.length===0)return <EcranPremierDemarrage codeAdmin={ADMIN_CODE} logo={LOGO_B64} onCree={p=>{setPersonnes([p]);choisirPersonne(p);}}/>;
   if(!moi)return <EcranQui personnes={personnes} derniereId={(()=>{try{return localStorage.getItem(CLE_DERNIERE);}catch(e){return null;}})()} logo={LOGO_B64} onChoisir={choisirPersonne}/>;
   const ecranChoix=(changerPers||demandeQui)&&<EcranQui personnes={personnes} derniereId={null} logo={LOGO_B64}
