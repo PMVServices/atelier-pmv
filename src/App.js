@@ -6939,7 +6939,8 @@ export default function App(){
   const [appareil,setAppareil]=useState(etatAppareil);
   const [connexionAppareil,setConnexionAppareil]=useState(false); // fenêtre « Connexion de l'appareil » ouverte par l'administrateur
   const [baseNeuve,setBaseNeuve]=useState(false);                 // « Base neuve : créer le premier administrateur »
-  useEffect(()=>surAppareil(e=>{setAppareil(e);chargerAcces();}),[]);
+  // connexion ou déconnexion de l'appareil : la page se recharge, pour que fiches, clients, réglages et planning (chargés une seule fois à l'ouverture, donc vides si la fenêtre était ouverte avant la connexion) soient relus avec le bon accès
+  useEffect(()=>surAppareil(e=>{setAppareil(e);try{window.location.reload();}catch(err){chargerAcces();}}),[]);
   const moi=MODE_POSTE?PERSONNE_POSTE:(personnes&&moiId?(personnes.find(p=>p.id===moiId)||null):null);
   const role=moi?moi.profil:"tech";
   const admin=role==="admin",commercial=role==="commercial";
