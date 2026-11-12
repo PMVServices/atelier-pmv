@@ -11,7 +11,7 @@ import {typeGenerique} from "./rapportPerso";
 import {lirePlanningLibre, modifierPlanningLibre, nouvelIdLibre, estIdLibre} from "./planningLibre";
 import {apercuRapportCheminee} from "./rapportLivretHtml";
 import {MATERIEL_CHEMINEE_DEFAUT, VERDICTS_CHEMINEE, PHOTOS_RAPPORT_CHEMINEE, SERIES_RAPPORT_CHEMINEE, valeursDepartRapportCheminee, resoudrePhotosCheminee} from "./rapportCheminee";
-import {SUPA_URL,SUPA_KEY,H,db} from "./supabase";
+import {SUPA_URL,SUPA_KEY,H,db,etatAppareil,surAppareil,deconnecterAppareil} from "./supabase";
 import {NoticeActivation} from "./Activation";
 import {ScanDemande} from "./Stock";
 import {ChampContact} from "./Contacts";
@@ -23,7 +23,7 @@ import PageSuiviCheminees, {conserverLigneCheminee} from "./PageSuiviCheminees";
 import VueDossiers from "./Dossiers";
 import {useAlertesDossiers, phraseAvant as phraseAvantCommande} from "./dossiersCommandes";
 import {PanneauResumeCommercial, verifierResumeCommercial} from "./ResumeCommercial";
-import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
+import {LectureCtx, PersonneCtx, EcranCode, EcranChargement, EcranQui, EcranPremierDemarrage, EcranConnexionAppareil, MenuPersonne, PageAcces, PROFILS, lirePersonnes, nomComplet, nomCourt, CLE_SESSION, CLE_DERNIERE, CLE_PIN} from "./Acces";
 import {DEPART_ATELIER_DEFAUT, MATERIEL_CONTROLE_DEFAUT, naturePompe, POMPE_DESCRIPTIF_DEFAUT, estPompeDip, garnitureAbsente, DIP_DESCRIPTIF_DEFAUT, DIP_POMPE_TEXTE_DEFAUT, dipConclusionDefaut} from "./rapportModele";
 import {useDepotImages, styleDepot, CroixPhoto, supprimerPhotoEnBase, supprimerPhotosDeFiche, ConfirmerSuppressionPhoto, avecSouris, SourcesPhoto} from "./Photos";
 import {COULEUR_CHANTIER, ListeChantier, CaseEntretienAtelier, normaliserDE, htmlChantier, STATUTS_MATERIEL, lireMateriel} from "./Chantier";
@@ -6934,6 +6934,12 @@ export default function App(){
   // Accès par personne : la liste vient de la base ; le profil de la personne choisie décide de ce qu'elle voit
   const chargerAcces=()=>{setErreurAcces(null);lirePersonnes().then(r=>{if(r.liste)setPersonnes(r.liste);else setErreurAcces(r.erreur);});};
   useEffect(()=>{chargerAcces();},[]);
+  // Connexion de l'appareil à la base (supabase.js). Tant que la base est ouverte, elle est facultative (l'administrateur la fait depuis son menu) ;
+  // une fois la base fermée aux appareils non connectés, la liste des personnes revient vide : l'écran de connexion s'affiche alors de lui-même.
+  const [appareil,setAppareil]=useState(etatAppareil);
+  const [connexionAppareil,setConnexionAppareil]=useState(false); // fenêtre « Connexion de l'appareil » ouverte par l'administrateur
+  const [baseNeuve,setBaseNeuve]=useState(false);                 // « Base neuve : créer le premier administrateur »
+  useEffect(()=>surAppareil(e=>{setAppareil(e);chargerAcces();}),[]);
   const moi=MODE_POSTE?PERSONNE_POSTE:(personnes&&moiId?(personnes.find(p=>p.id===moiId)||null):null);
   const role=moi?moi.profil:"tech";
   const admin=role==="admin",commercial=role==="commercial";
@@ -6960,13 +6966,17 @@ export default function App(){
   },[moiId]);
   if(!pinOk)return <EcranCode code={PIN_CODE} logo={LOGO_B64} onSucces={()=>setPinOk(true)}/>;
   if(!MODE_POSTE&&personnes===null)return <EcranChargement erreur={erreurAcces} onRetour={chargerAcces}/>;
+  // appareil non connecté et aucune personne lisible : la base est fermée aux appareils non connectés (ou neuve) → connexion de l'appareil
+  if(!appareil.connecte&&personnes&&personnes.length===0&&!baseNeuve)return <EcranConnexionAppareil obligatoire logo={LOGO_B64} onPremiere={MODE_POSTE?null:()=>setBaseNeuve(true)}/>;
   if(!MODE_POSTE&&personnes.length===0)return <EcranPremierDemarrage codeAdmin={ADMIN_CODE} logo={LOGO_B64} onCree={p=>{setPersonnes([p]);choisirPersonne(p);}}/>;
   if(!moi)return <EcranQui personnes={personnes} derniereId={(()=>{try{return localStorage.getItem(CLE_DERNIERE);}catch(e){return null;}})()} logo={LOGO_B64} onChoisir={choisirPersonne}/>;
   const ecranChoix=(changerPers||demandeQui)&&<EcranQui personnes={personnes} derniereId={null} logo={LOGO_B64}
     titre={demandeQui?"Qui utilise l'application ?":"Changer de personne"}
     onChoisir={p=>{const cb=demandeQui&&demandeQui.cb;setDemandeQui(null);choisirPersonne(p);if(cb)cb(p);}}
     onAnnuler={()=>{const cb=demandeQui&&demandeQui.cb;setDemandeQui(null);setChangerPers(false);if(cb)cb(null);}}/>;
-  const fenetrePersonne=menuPersonne&&<MenuPersonne moi={moi} onChanger={()=>{setMenuPersonne(false);setChangerPers(true);}} onAcces={()=>{setMenuPersonne(false);setMenuOuvert(false);setPage("acces");}} onFermer={()=>setMenuPersonne(false)}/>;
+  const fenetrePersonne=<>{menuPersonne&&<MenuPersonne moi={moi} onChanger={()=>{setMenuPersonne(false);setChangerPers(true);}} onAcces={()=>{setMenuPersonne(false);setMenuOuvert(false);setPage("acces");}} onFermer={()=>setMenuPersonne(false)}
+      appareil={appareil} onConnecterAppareil={()=>{setMenuPersonne(false);setConnexionAppareil(true);}} onDeconnecterAppareil={()=>{setMenuPersonne(false);deconnecterAppareil();}}/>}
+    {connexionAppareil&&<EcranConnexionAppareil logo={LOGO_B64} onConnecte={()=>setConnexionAppareil(false)} onAnnuler={()=>setConnexionAppareil(false)}/>}</>;
   // pastille de la personne connectée = bouton « changer de personne » ; sur tablette (avecBouton) elle ajoute le signe ⇄ pour montrer qu'on peut la toucher
   const chipPersonne=(compact,avecBouton)=><button onClick={()=>setMenuPersonne(true)} title={nomComplet(moi)+" — "+PROFILS[role].label+" (toucher pour changer de personne)"} aria-label={"Personne connectée : "+nomComplet(moi)+". Changer de personne"} style={{background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",color:"#fff",padding:"3px 10px",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",maxWidth:avecBouton?200:150,overflow:"hidden",textOverflow:"ellipsis"}}>{PROFILS[role].icone}{compact?"":" "+nomCourt(moi)}{avecBouton?" ⇄":""}</button>;
   if(MODE_STOCK){

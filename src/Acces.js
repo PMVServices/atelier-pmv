@@ -1,5 +1,5 @@
 import React, {useState, useEffect, useMemo, useRef} from "react";
-import {db, SUPA_URL, H} from "./supabase";
+import {db, SUPA_URL, H, connecterAppareil} from "./supabase";
 
 // Accès par personne : à chaque ouverture l'appli demande « Qui ouvre l'application ? » (Nom Prénom) ;
 // le profil de la personne choisie (Administrateur, Technicien, Commercial) décide de ce qu'elle voit.
@@ -96,6 +96,34 @@ export function EcranCode({code,logo,onSucces,titre="Code de l'appareil",sousTit
   </div></div>);
 }
 
+// ── connexion de l'appareil à la base (compte Supabase de l'atelier ; une seule fois par appareil) : voir supabase.js ──
+// obligatoire = la base est fermée aux appareils non connectés (pas d'« Annuler ») ; sinon c'est l'administrateur qui connecte l'appareil depuis son menu.
+export function EcranConnexionAppareil({logo,obligatoire,onConnecte,onAnnuler,onPremiere}){
+  const [email,setEmail]=useState("");const [mdp,setMdp]=useState("");const [erreur,setErreur]=useState(null);const [occupe,setOccupe]=useState(false);
+  async function valider(e){
+    if(e)e.preventDefault();
+    if(!email.trim()||!mdp){setErreur("Indiquez l'identifiant et le mot de passe.");return;}
+    setOccupe(true);setErreur(null);
+    try{await connecterAppareil(email,mdp);setMdp("");setOccupe(false);if(onConnecte)onConnecte();}
+    catch(err){setErreur(err.message||"Connexion impossible.");setOccupe(false);}
+  }
+  return(<div style={{...OVERLAY,zIndex:1000}}><form onSubmit={valider} style={CARTE}>
+    <div style={{textAlign:"center",marginBottom:12}}>
+      {logo&&<img src={logo} alt="PMV Services" style={{height:54,objectFit:"contain",marginBottom:8}}/>}
+      <div style={{fontSize:18,fontWeight:800,color:"#1A1A2E"}}>🔐 Connexion de l'appareil</div>
+    </div>
+    <p style={{fontSize:13,color:"#4B5563",margin:"0 0 14px",lineHeight:1.5}}>{obligatoire
+      ?"Cet appareil n'est pas connecté à la base de l'atelier. Demandez l'identifiant et le mot de passe à l'administrateur : ils ne sont demandés qu'une seule fois sur cet appareil."
+      :"Connectez cet appareil avec le compte de l'atelier (créé dans Supabase). C'est à faire une seule fois par appareil : il reste connecté ensuite."}</p>
+    <div style={{marginBottom:10}}><label style={LBL} htmlFor="app-id">Identifiant (adresse mail)</label><input id="app-id" type="email" value={email} onChange={e=>setEmail(e.target.value)} style={INP} autoComplete="username" autoCapitalize="none" spellCheck={false}/></div>
+    <div style={{marginBottom:12}}><label style={LBL} htmlFor="app-mdp">Mot de passe</label><input id="app-mdp" type="password" value={mdp} onChange={e=>setMdp(e.target.value)} style={INP} autoComplete="current-password"/></div>
+    {erreur&&<div role="alert" style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:6,padding:"7px 10px",fontSize:13,color:"#D73A49",marginBottom:10}}>{erreur}</div>}
+    <button type="submit" disabled={occupe} style={{...BTN1,width:"100%",opacity:occupe?0.6:1}}>{occupe?"⏳ Connexion…":"Connecter cet appareil"}</button>
+    {onAnnuler&&<div style={{textAlign:"center",marginTop:12}}><button type="button" onClick={onAnnuler} style={{background:"none",border:"none",color:"#6B7280",fontSize:13,cursor:"pointer",textDecoration:"underline"}}>Annuler</button></div>}
+    {onPremiere&&<div style={{textAlign:"center",marginTop:12}}><button type="button" onClick={onPremiere} style={{background:"none",border:"none",color:"#9CA3AF",fontSize:12,cursor:"pointer",textDecoration:"underline"}}>Base neuve : créer le premier administrateur</button></div>}
+  </form></div>);
+}
+
 // ── « Qui ouvre l'application ? » ──────────────────────────────────────
 export function EcranQui({personnes,derniereId,onChoisir,onAnnuler,titre,logo}){
   const [q,setQ]=useState("");
@@ -155,7 +183,8 @@ export function EcranPremierDemarrage({codeAdmin,onCree,logo}){
 }
 
 // ── fenêtre de la personne connectée ───────────────────────────────────
-export function MenuPersonne({moi,onChanger,onAcces,onFermer}){
+export function MenuPersonne({moi,onChanger,onAcces,onFermer,appareil,onConnecterAppareil,onDeconnecterAppareil}){
+  const [confDeco,setConfDeco]=useState(false);
   return(<div onClick={onFermer} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16}}>
     <div onClick={e=>e.stopPropagation()} style={{...CARTE,maxWidth:340,padding:"22px 20px"}}>
       <div style={{fontSize:12,color:"#6B7280",marginBottom:2}}>Connecté</div>
@@ -164,6 +193,14 @@ export function MenuPersonne({moi,onChanger,onAcces,onFermer}){
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         <button type="button" onClick={onChanger} style={BTN1}>🔁 Changer de personne</button>
         {moi.profil==="admin"&&<button type="button" onClick={onAcces} style={BTN2}>🔑 Gérer les accès</button>}
+        {moi.profil==="admin"&&appareil&&(appareil.connecte
+          ?<div style={{border:"1px solid #BFE3C8",background:"#F0FFF4",borderRadius:8,padding:"8px 10px",fontSize:12,color:"#22863A"}}>
+            <div style={{fontWeight:700,overflowWrap:"anywhere"}}>🔐 Appareil connecté{appareil.email?" : "+appareil.email:""}</div>
+            {!confDeco&&<button type="button" onClick={()=>setConfDeco(true)} style={{background:"none",border:"none",color:"#6B7280",fontSize:12,cursor:"pointer",textDecoration:"underline",padding:0,marginTop:4}}>Déconnecter cet appareil</button>}
+            {confDeco&&<div style={{marginTop:6,color:"#8A1F2B"}}>Déconnecter cet appareil de la base ? Il faudra ressaisir l'identifiant et le mot de passe.
+              <div style={{display:"flex",gap:8,marginTop:6}}><button type="button" onClick={()=>{setConfDeco(false);onDeconnecterAppareil();}} style={{...BTN1,background:"#D73A49",padding:"6px 12px",fontSize:12}}>Oui, déconnecter</button><button type="button" onClick={()=>setConfDeco(false)} style={{...BTN2,padding:"5px 12px",fontSize:12}}>Non</button></div></div>}
+          </div>
+          :<button type="button" onClick={onConnecterAppareil} style={BTN2}>🔓 Appareil non connecté — connecter</button>)}
         <button type="button" onClick={onFermer} style={{...BTN2,border:"1.5px solid #D1D5DB",color:"#6B7280"}}>Fermer</button>
       </div>
     </div>
