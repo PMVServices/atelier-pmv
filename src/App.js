@@ -4,6 +4,7 @@ import {cleNr, cleNrJust} from "./etapeNr";
 import {INTERTITRES_TRAME, sousParties, cleSousPartieJust} from "./sousParties";
 import {genHtmlPageDeGarde} from "./pageDeGarde";
 import {genHtmlEntreeVierge} from "./entreeVierge";
+import {BoutonPageDeGardeChantier} from "./pageDeGardeChantier";
 import {exporterRapportDocx} from "./rapportDocx";
 import {exporterRapportCheminee} from "./rapportLivretDocx";
 import {chargerConfigRapports} from "./configRapports";
@@ -2027,7 +2028,7 @@ function PageStats({fiches,pieces}){
 
 
 // ─── TABLEAU DE BORD ─────────────────────────────────────────────────────
-function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemandeMateriel,onVoirMateriel,onOuvrirFiche,onNaviguer}){
+function PageDashboard({admin,clients,fiches,pieces,commandesResume,demandesMat,onDemandeMateriel,onVoirMateriel,onOuvrirFiche,onNaviguer}){
   const largeurD=useWidth();
   const telephone=largeurD<600; // sur téléphone : raccourcis seulement, les notifications restent sur tablette et ordinateur
   const largeD=largeurD>=1100; // ordinateur : les blocs de notifications se rangent sur deux colonnes
@@ -2112,7 +2113,7 @@ function PageDashboard({admin,fiches,pieces,commandesResume,demandesMat,onDemand
   );
 
   return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
-    <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 16px"}}>🏠 Tableau de bord</h2>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",margin:"0 0 16px"}}><h2 style={{fontSize:20,fontWeight:700,margin:0}}>🏠 Tableau de bord</h2><BoutonPageDeGardeChantier clients={clients}/></div>
 
     {onDemandeMateriel&&<button onClick={onDemandeMateriel} style={{width:"100%",display:"flex",alignItems:"center",gap:16,background:"#E8720C",color:"#fff",border:"none",borderRadius:14,padding:"18px 22px",minHeight:96,marginBottom:14,cursor:"pointer",boxShadow:"0 3px 10px rgba(232,114,12,0.35)",textAlign:"left"}}>
       <span style={{fontSize:40,lineHeight:1}}>🛒</span>
@@ -7057,7 +7058,7 @@ export default function App(){
       }}
       rapports={{champsDe:champsRapportListe,categories:(categories||[]).map(c=>c.nom).filter(Boolean),fiches:fiches,apercu:apercuRapportMaintenance,preparer:(type,ficheId)=>preparerRapport(ficheId,type,null)}}
       rendreApercu={(liste,etape)=><div>{liste.map(c=><UnChamp key={c.id} c={c} v={{}} onChange={()=>{}} techs={techs} clients={clients} onAddClient={()=>{}} ficheId={null} cheminBase="" photos={[]} onPhotoAdded={()=>{}} onPhotoRemoved={()=>{}} etape={etape}/>)}</div>}/>}
-    {page==="dashboard"&&role!=="maintenance"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage}/>:<PageDashboard admin={admin} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
+    {page==="dashboard"&&role!=="maintenance"&&(commercial?<DashboardCommercial suivi={suivi} items={navItems} onNaviguer={setPage} clients={clients}/>:<PageDashboard admin={admin} clients={clients} fiches={fiches} pieces={pieces} commandesResume={commandesResume} demandesMat={demandesMat} onDemandeMateriel={()=>ouvrirDemande("dashboard")} onVoirMateriel={voirMaterielCommandes} onOuvrirFiche={f=>{setFicheOuverte(f);setPage("fiche");}} onNaviguer={setPage}/>)}
     {page==="accueil"&&<EcritureAtelier><PageAccueil fiches={fiches} setFiches={setFiches} categories={categories} onNew={()=>askIdent(t=>{setSessionTech(t);setPage("choix");})} onOpen={f=>{setFicheOuverte(f);setPage("fiche");}} onApercu={f=>{setOuvrirApercu(true);setFicheOuverte(f);setPage("fiche");}} onStatutChange={onStatutChange} onDupliquer={dupliquerFiche}/></EcritureAtelier>}
     {page==="choix"&&<EcritureAtelier><PageChoix onChoisir={m=>{if(m!=="Moteur"&&m!=="Pompe"&&m!=="Moto-réducteur"&&m!=="Ventilateur"&&m!=="Autre"&&m!==TYPE_CHEMINEE){alert("Bientôt disponible.");return;}setFicheOuverte(null);setTypeMat(m);setPage("fiche");}} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");}}/></EcritureAtelier>}
     {page==="fiche"&&<EcritureAtelier><PageFiche key={"fiche-"+cleFiche} onReouvrir={reouvrirFiche} ficheInit={ficheOuverte} typeMateriel={ficheOuverte?.type_materiel||typeMat} sessionTech={sessionTech||"—"} techs={techs} clients={clients} onAddClient={onAddClient} categories={categories} onRetour={()=>{setPage(retourFiche);setRetourFiche("accueil");setFicheOuverte(null);}} onFicheUpdated={onFicheUpdated} ouvrirApercu={ouvrirApercu} onClearApercu={()=>setOuvrirApercu(false)} onOpenRapport={id=>{setRapportFicheId(id);setPage("rapport");}} onOuvrirCommandes={SUIVI_COMMANDES?()=>setPage("commandes"):null} seedValeurs={seedValeurs} onSeedConsumed={()=>setSeedValeurs(null)}/></EcritureAtelier>}

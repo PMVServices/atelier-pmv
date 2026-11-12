@@ -3,6 +3,7 @@ import {db, SUPA_URL, H} from "./supabase";
 import {NoticeActivation} from "./Activation";
 import {ChampContact} from "./Contacts";
 import {normaliserDE} from "./Chantier";
+import {BoutonPageDeGardeChantier} from "./pageDeGardeChantier";
 
 // Suivi clients (profil Commercial), deux sous-onglets :
 //  • Relance devis : un tableau où chaque ligne = un devis envoyé (N° de DE, client, contact, téléphone, mail, montant…)
@@ -1253,14 +1254,14 @@ export function PageSuiviClients({suivi,fiches,champClient,clients,par,onOuvrirF
 }
 
 // ── tableau de bord du Commercial ────────────────────────────────────────
-export function DashboardCommercial({suivi,items,onNaviguer}){
+export function DashboardCommercial({suivi,items,onNaviguer,clients}){
   const aRelancer=suivi.aRelancer,prosRelancer=suivi.prospectsARelancer,totalRel=aRelancer.length+prosRelancer.length;
   const bientot=[...suivi.lignes,...suivi.prospects].filter(l=>etatRelance(l)==="bientot");
   const nbDemarcher=suivi.prospects.filter(p=>p.statut==="a_demarcher").length;
   const rdvProches=suivi.rdv.filter(r=>["passe","aujourdhui","demain"].includes(etatRdv(r))).sort((a,b)=>String(a.date_rdv).slice(0,10).localeCompare(String(b.date_rdv).slice(0,10))||String(a.heure||"99").localeCompare(String(b.heure||"99")));
   const ligneBloc={display:"flex",justifyContent:"space-between",alignItems:"center",gap:10,flexWrap:"wrap",background:"#fff",border:"1px solid #F5C2C7",borderRadius:8,padding:"8px 10px",marginBottom:6};
   return(<div style={{maxWidth:"var(--lp,900px)",margin:"0 auto",padding:"20px 16px"}}>
-    <h2 style={{fontSize:20,fontWeight:700,margin:"0 0 16px"}}>🏠 Tableau de bord</h2>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,flexWrap:"wrap",margin:"0 0 16px"}}><h2 style={{fontSize:20,fontWeight:700,margin:0}}>🏠 Tableau de bord</h2><BoutonPageDeGardeChantier clients={clients}/></div>
 
     {(suivi.dispo===true||suivi.dispoProspects===true)&&(totalRel>0
       ?<div style={{background:"#FFF5F5",border:"1px solid #D73A49",borderRadius:12,padding:"12px 14px",marginBottom:16}}>
