@@ -1,8 +1,9 @@
 // Lit (LECTURE SEULE) la configuration faite par la Maintenance (page « Maintenance » de l'appli) et l'affiche lisiblement.
 // À lancer avant toute modification des champs des fiches, des colonnes du planning ou de leurs états : node scripts/lire-config.js
-// Option : --json pour la configuration brute. N'écrit jamais rien dans la base ; la clé utilisée est la clé publique déjà dans src/supabase.js.
+// Option : --json pour la configuration brute. N'écrit jamais rien dans la base. Depuis la fermeture de la base (13/11/2026) il faut être connecté : lancer une fois « node scripts/connexion.js » (identifiant + mot de passe saisis au clavier, jamais écrits dans un fichier).
 const fs=require("fs");
 const path=require("path");
+const connexion=require("./connexion");
 
 const src=fs.readFileSync(path.join(__dirname,"..","src","supabase.js"),"utf8");
 const URL_=(src.match(/SUPA_URL\s*=\s*"([^"]+)"/)||[])[1];
@@ -10,7 +11,7 @@ const KEY=(src.match(/SUPA_KEY\s*=\s*"([^"]+)"/)||[])[1];
 if(!URL_||!KEY){console.error("Impossible de lire SUPA_URL / SUPA_KEY dans src/supabase.js");process.exit(1);}
 
 async function lire(cle){
-  const r=await fetch(URL_+"/rest/v1/parametres_app?select=cle,valeur&cle=eq."+cle,{headers:{apikey:KEY,Authorization:"Bearer "+KEY}});
+  const r=await fetch(URL_+"/rest/v1/parametres_app?select=cle,valeur&cle=eq."+cle,{headers:await connexion.entetes()});
   if(!r.ok)throw new Error("Lecture impossible ("+r.status+")");
   const rows=await r.json();
   return rows[0]&&rows[0].valeur?rows[0].valeur:null;

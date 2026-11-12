@@ -3,10 +3,11 @@
 //            node scripts/sauvegarde.js --compter        → compte seulement les lignes de chaque table (n'écrit aucun fichier)
 //            node scripts/sauvegarde.js --dest D:\NAS\PMV   → autre dossier de destination (un sous-dossier daté y est créé)
 //            node scripts/sauvegarde.js --garder 30      → ne garde que les 30 sauvegardes les plus récentes du dossier de destination
-// N'écrit jamais dans la base ; la clé utilisée est la clé publique déjà dans src/supabase.js. Les photos (stockage) ne sont pas copiées : seule leur liste (table fiche_photos) l'est.
+// N'écrit jamais dans la base. Depuis la fermeture de la base (13/11/2026) il faut être connecté : lancer une fois « node scripts/connexion.js » (identifiant + mot de passe saisis au clavier, jamais écrits dans un fichier). Les photos (stockage) ne sont pas copiées : seule leur liste (table fiche_photos) l'est.
 // ATTENTION : les fichiers contiennent des données clients (noms, contacts, prix) : les ranger comme la base elle-même.
 const fs=require("fs");
 const path=require("path");
+const connexion=require("./connexion");
 
 const src=fs.readFileSync(path.join(__dirname,"..","src","supabase.js"),"utf8");
 const URL_=(src.match(/SUPA_URL\s*=\s*"([^"]+)"/)||[])[1];
@@ -26,7 +27,8 @@ const parent=path.resolve(option("--dest")||path.join(racineDepot,"..","sauvegar
 const garder=parseInt(option("--garder"),10);
 if(!compterSeulement&&(parent===racineDepot||parent.startsWith(racineDepot+path.sep))){console.error("Le dossier de destination ne doit pas être dans le dépôt du projet (données clients) : "+parent);process.exit(1);}
 
-const entetes=extra=>({apikey:KEY,Authorization:"Bearer "+KEY,...(extra||{})});
+let JETON=null; // jeton de la connexion de ce PC (scripts/connexion.js), pris au démarrage
+const entetes=extra=>({apikey:KEY,Authorization:"Bearer "+JETON,...(extra||{})});
 async function demander(table,from,to,compter){
   const r=await fetch(URL_+"/rest/v1/"+table+"?select=*",{headers:entetes({Range:from+"-"+to,"Range-Unit":"items",...(compter?{Prefer:"count=exact"}:{})})});
   if(r.status===404||r.status===400){const t=await r.json().catch(()=>({}));if(t&&t.code==="PGRST205")return {absente:true};}
@@ -48,6 +50,7 @@ async function toutLire(table){
 const horodatage=()=>{const d=new Date();const z=n=>String(n).padStart(2,"0");return d.getFullYear()+"-"+z(d.getMonth()+1)+"-"+z(d.getDate())+"_"+z(d.getHours())+z(d.getMinutes());};
 
 (async()=>{
+  JETON=await connexion.jeton();
   if(compterSeulement){
     console.log("Lignes par table (comptage seul, rien n'est écrit) :");
     let total=0,absentes=0;
