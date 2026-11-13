@@ -14,7 +14,7 @@ const case_ = () => "<i class='b'></i>";
 const trait = (mm) => "<span class='t' style='min-width:" + mm + "mm'></span>";
 const date = () => trait(9) + "/" + trait(9) + "/" + trait(13);
 const faitPar = () => "Fait par " + PERSONNES.map((x) => "<span class='o'>" + case_() + x + "</span>").join("") + "<span class='o'>" + case_() + "Autre " + trait(14) + "</span>";
-const relances = () => ["1<sup>ère</sup> relance le", "2<sup>ème</sup> relance le", "3<sup>ème</sup> relance le"].map((x) => "<div class='l'>" + x + " " + date() + "</div>").join("");
+const relances = () => ["1<sup>ère</sup> relance le", "2<sup>ème</sup> relance le", "3<sup>ème</sup> relance le"].map((x) => "<div class='l'>" + x + " " + date() + " " + faitPar() + "</div>").join("");
 const ligneFournisseur = (lib) => "<div class='fourn'><span class='lib'>" + lib + "</span><span class='t'></span>" + case_() + "<span>;</span><span class='t'></span>" + case_() + "</div>";
 
 // d = {chantier, client, resume} ; vide => feuille vierge (rien d'imprimé dans les trois zones, des lignes à remplir à la main)
