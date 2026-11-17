@@ -5,6 +5,7 @@ import {INTERTITRES_TRAME, sousParties, cleSousPartieJust} from "./sousParties";
 import {genHtmlPageDeGarde} from "./pageDeGarde";
 import {genHtmlEntreeVierge} from "./entreeVierge";
 import {BoutonPageDeGardeChantier} from "./pageDeGardeChantier";
+import PageNonConformites from "./PageNonConformites";
 import {exporterRapportDocx} from "./rapportDocx";
 import {exporterRapportCheminee} from "./rapportLivretDocx";
 import {chargerConfigRapports} from "./configRapports";
@@ -3861,7 +3862,7 @@ function PageFiche({ficheInit,typeMateriel,sessionTech,techs,clients,onAddClient
   const lecture=React.useContext(LectureCtx);
   const largeurEcran=useWidth();
   const etroit=largeurEcran<600; // téléphone : en-tête de la fiche plus compact
-  const [hautApp,setHautApp]=useState(56); // hauteur réelle de la barre du haut de l'appli (52 px sous 1400 px de large, 56 au-delà) : l'en-tête de la fiche s'épingle juste dessous
+  const [hautApp,setHautApp]=useState(56); // hauteur réelle de la barre du haut de l'appli (52 px sous SEUIL_BARRE de large, 56 au-delà) : l'en-tête de la fiche s'épingle juste dessous
   useEffect(()=>{
     const mesurer=()=>{const e=document.getElementById("entete-app");const h=e?Math.round(e.getBoundingClientRect().height):0;if(h>0)setHautApp(h);};
     mesurer();
@@ -4617,7 +4618,7 @@ function FicheChantier({fiche,typeEquipementInit,seedV,techs,clients,onAddClient
   var cheminBase=(v.ch_client||"client").replace(/[^a-z0-9]/gi,"_")+"/"+(deAff||"de")+"/"+typeEquipement.replace(/[^a-z0-9]/gi,"_");
 
   return(<div style={{paddingBottom:80}}>
-    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<1400?52:56,zIndex:90}}>
+    <div style={{background:COULEUR_CHANTIER,color:"#fff",padding:largeur<600?"8px 12px":"10px 16px",position:"sticky",top:largeur<SEUIL_BARRE?52:56,zIndex:90}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div style={{minWidth:0,flex:largeur<600?"1 1 100%":"0 1 auto"}}>
           <p style={{margin:0,fontSize:12,fontWeight:700,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:largeur<600?"nowrap":"normal"}}>{(v.ch_client||"Client")+" / "+(deAff||"DE")+" / "+(v.ch_eq_nom||typeEquipement)}</p>
@@ -6798,12 +6799,16 @@ function VueMaterielCommandes({demandes,disponible,recharger,onDemandeMateriel,p
   </div>);
 }
 
+// largeur à partir de laquelle la barre d'onglets complète s'affiche (en dessous : menu ☰). Mesuré le 17/11/2026 : 12 onglets pour l'administrateur au nom très long = 1678 px de barre ; marge d'environ 80 px.
+// À remesurer (pire cas : administrateur + nom très long) chaque fois qu'on ajoute un onglet ; l'épinglage de l'en-tête de fiche (52 / 56 px) suit le même seuil.
+const SEUIL_BARRE=1760;
 const TOUS_PROFILS=["admin","tech","commercial"],PROFILS_INTERNES=["admin","tech"];
 const NAV_ITEMS=[
   {id:"dashboard",label:"🏠 Tableau de bord",roles:TOUS_PROFILS},
   {id:"accueil",label:"📁 Fiche Atelier",roles:TOUS_PROFILS},{id:"chantier",label:"🏗 Fiche Chantier",roles:TOUS_PROFILS},
   {id:"planning",label:"📋 Planning",roles:TOUS_PROFILS},
   {id:"rapport",label:"📧 Rapport",roles:TOUS_PROFILS},
+  {id:"nonconformites",label:"⚠️ Non conformités",roles:TOUS_PROFILS}, // non-conformités écrites par chacun, vues par l'administrateur (17/11/2026) ; pas pour le profil Maintenance
   {id:"cheminees",label:"🚆 Suivi cheminées",roles:TOUS_PROFILS}, // tableau des cheminées / résistances de freinage (30/10/2026)
   {id:"suivi",label:"🔧 Matériel",roles:PROFILS_INTERNES},
   ...(SUIVI_COMMANDES?[{id:"commandes",label:"📦 Commandes",roles:PROFILS_INTERNES}]:[]),
@@ -6815,8 +6820,8 @@ const NAV_ITEMS=[
   {id:"maintenance",label:"⚙️ Maintenance",roles:["maintenance"]},
 ];
 // Ordre des onglets du profil Commercial (le suivi clients passe avant tout le reste)
-const ORDRE_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","cheminees"];
-const PAGES_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","cheminees","fiche","choix"];
+const ORDRE_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","nonconformites","cheminees"];
+const PAGES_COMMERCIAL=["dashboard","devis","clients","calendrier","accueil","chantier","planning","rapport","nonconformites","cheminees","fiche","choix"];
 function navPourRole(role){
   const l=NAV_ITEMS.filter(n=>n.roles.includes(role));
   return role==="commercial"?l.sort((a,b)=>ORDRE_COMMERCIAL.indexOf(a.id)-ORDRE_COMMERCIAL.indexOf(b.id)):l;
@@ -6929,7 +6934,7 @@ export default function App(){
   },[]);
 
   const width=useWidth();
-  const isMobile=width<1400; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
+  const isMobile=width<SEUIL_BARRE; // ne sert qu'à l'en-tête : barre d'onglets au-dessus, menu ☰ en dessous
   const tablette=isMobile&&width>=600; // tablette : la personne connectée (pastille + ⇄) est aussi dans l'en-tête, à côté du ☰ (téléphone : seulement dans le menu ☰)
   const [menuOuvert,setMenuOuvert]=useState(false);
   // Accès par personne : la liste vient de la base ; le profil de la personne choisie décide de ce qu'elle voit
@@ -7075,6 +7080,7 @@ export default function App(){
       ?<PageActivationMateriel onRetour={()=>setPage(origineDemande)} onVerifier={demandesMat.recharger}/>
       :<PageDemandeMateriel techs={techs} sessionTech={sessionTech} onRetour={()=>setPage(origineDemande)} onVoirCommandes={voirMaterielCommandes} onEnvoyee={demandesMat.recharger}/>)}
     {page==="stock"&&<PageStockRail techs={techs} sessionTech={sessionTech} admin={admin} clients={clients}/>}
+    {page==="nonconformites"&&role!=="maintenance"&&<PageNonConformites moi={moi} admin={admin} personnes={personnes} Dictee={BoutonDictee} appendTexte={appendTexte}/>}
     {page==="clients"&&(admin||commercial)&&<PageClients clients={clients} fiches={fiches} suivi={suivi} onOuvrirFiche={fi=>ouvrirFicheDepuis(fi,"clients")}/>}
     {page==="devis"&&commercial&&<PageSuiviClients onOuvrirFiche={fi=>ouvrirFicheDepuis(fi,"devis")} onOuvrirClient={nom=>ouvrirClient(nom,setPage)} suivi={suivi} fiches={fiches} clients={clients} par={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
     {page==="calendrier"&&<PageCalendrier admin={admin} sessionTech={sessionTech||nomCourt(moi)} champClient={(valeur,onChange)=><ChampClient valeur={valeur} onChange={onChange} clients={clients} onAddClient={onAddClient}/>}/>}
