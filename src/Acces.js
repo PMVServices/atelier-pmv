@@ -14,6 +14,25 @@ export const PROFILS={
 // Code du profil Maintenance : demandé À CHAQUE FOIS qu'une personne de ce profil est choisie (« Qui ouvre l'application ? », « Changer de personne », « Qui utilise l'application ? »),
 // contrairement au code de l'appareil (une seule fois). Comme lui, il est écrit dans le code du site (dépôt public) : barrière d'interface seulement.
 export const CODE_MAINTENANCE="2401";
+// Code MAÎTRE (même valeur que le code Maintenance et que l'ancien code administrateur) : remplace le code personnel de n'importe qui, montre les codes personnels dans l'écran « Accès » et permet de les modifier ou de les retirer.
+// Codes personnels (PIN, 4 chiffres, facultatifs) : rangés dans la liste des personnes (champ « pin ») sous forme CHIFFRÉE (AES-GCM, clé tirée du code maître) : ils n'apparaissent jamais en clair dans la base ni à l'écran
+// sans le code maître. Barrière d'interface seulement : le code maître est écrit dans le code du site ; si sa valeur change un jour, les codes personnels déjà enregistrés ne sont plus lisibles (à ressaisir).
+export const CODE_MAITRE=CODE_MAINTENANCE;
+const _enc=new TextEncoder(),_dec=new TextDecoder();
+const _b64=u=>btoa(String.fromCharCode(...u));const _deb64=t=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
+async function _cleMaitre(sel){
+  const base=await crypto.subtle.importKey("raw",_enc.encode("PMV:"+CODE_MAITRE),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt:sel,iterations:100000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+export async function chiffrerPin(pin){
+  const sel=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},await _cleMaitre(sel),_enc.encode(String(pin))));
+  return "v1:"+_b64(sel)+":"+_b64(iv)+":"+_b64(ct);
+}
+export async function dechiffrerPin(blob){
+  try{const [v,s,i,c]=String(blob||"").split(":");if(v!=="v1")return null;return _dec.decode(await crypto.subtle.decrypt({name:"AES-GCM",iv:_deb64(i)},await _cleMaitre(_deb64(s)),_deb64(c)));}
+  catch(e){return null;}
+}
 export const LectureCtx=React.createContext(false);
 // Personne connectée + « demander qui utilise l'appli » (fenêtre de choix par-dessus l'écran en cours, sans le fermer) : sert aux fiches
 export const PersonneCtx=React.createContext(null); // la personne connectée (le profil Commercial a, comme un technicien, la main sur les fiches atelier et chantier et sur le planning)
@@ -72,7 +91,7 @@ export function EcranCode({code,logo,onSucces,titre="Code de l'appareil",sousTit
     if(saisie.current.length>=4)return;
     const n=saisie.current+c;saisie.current=n;setS(n);
     if(n.length===4){
-      if(n===code){if(memoriser){try{localStorage.setItem(CLE_PIN,"1");}catch(e){}}onSucces();}
+      if(Array.isArray(code)?code.includes(n):n===code){if(memoriser){try{localStorage.setItem(CLE_PIN,"1");}catch(e){}}onSucces();}
       else{setErr(true);setTimeout(()=>{saisie.current="";setS("");setErr(false);},800);}
     }
   }
@@ -127,13 +146,17 @@ export function EcranConnexionAppareil({logo,obligatoire,onConnecte,onAnnuler,on
 // ── « Qui ouvre l'application ? » ──────────────────────────────────────
 export function EcranQui({personnes,derniereId,onChoisir,onAnnuler,titre,logo}){
   const [q,setQ]=useState("");
-  const [attente,setAttente]=useState(null); // personne du profil Maintenance dont le code est demandé avant de la choisir
-  const choisir=p=>{if(p.profil==="maintenance")setAttente(p);else onChoisir(p);};
+  const [attente,setAttente]=useState(null); // {p, etape, codes} : code demandé avant de choisir la personne (Maintenance : code Maintenance ; sinon son code personnel, ou le code maître)
+  const choisir=async p=>{
+    if(p.profil==="maintenance"){setAttente({p,etape:"maintenance",codes:[CODE_MAINTENANCE]});return;}
+    if(p.pin){const clair=await dechiffrerPin(p.pin);setAttente({p,etape:"pin",codes:clair?[clair,CODE_MAITRE]:[CODE_MAITRE]});return;}
+    onChoisir(p);
+  };
   const tri=useMemo(()=>[...personnes].sort((a,b)=>(String(a.nom)+" "+String(a.prenom)).localeCompare(String(b.nom)+" "+String(b.prenom),"fr")),[personnes]);
   const mots=norm(q).split(" ").filter(Boolean);
   const liste=tri.filter(p=>{const h=norm(nomComplet(p));return mots.every(m=>h.includes(m));});
   const derniere=personnes.find(p=>p.id===derniereId);
-  if(attente)return <EcranCode code={CODE_MAINTENANCE} logo={logo} titre="Code Maintenance" sousTitre={nomComplet(attente)+" — demandé à chaque connexion en Maintenance."} memoriser={false} clavier onSucces={()=>onChoisir(attente)} onAnnuler={()=>setAttente(null)}/>;
+  if(attente)return <EcranCode code={attente.codes} logo={logo} titre={attente.etape==="pin"?"Code personnel":"Code Maintenance"} sousTitre={nomComplet(attente.p)+(attente.etape==="pin"?" — son code personnel (4 chiffres).":" — demandé à chaque connexion en Maintenance.")} memoriser={false} clavier onSucces={()=>onChoisir(attente.p)} onAnnuler={()=>setAttente(null)}/>;
   return(<div style={OVERLAY}><div style={{...CARTE,maxWidth:760,padding:"14px 12px"}}>
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:12,marginBottom:12}}>
       {logo&&<img src={logo} alt="PMV Services" style={{height:38,objectFit:"contain"}}/>}
@@ -146,7 +169,7 @@ export function EcranQui({personnes,derniereId,onChoisir,onAnnuler,titre,logo}){
     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(132px,1fr))",gap:8}}>
       {liste.map(p=>(<button key={p.id} type="button" onClick={()=>choisir(p)} title={PROFILS[p.profil].label} style={{display:"flex",alignItems:"center",gap:8,background:"#F3F6FA",border:"1.5px solid #D6E0EE",borderRadius:10,padding:"6px 8px",minHeight:52,cursor:"pointer",textAlign:"left",color:"#1A1A2E",fontSize:14,fontWeight:600,lineHeight:1.2,overflowWrap:"anywhere"}}>
         <span style={{flex:"none",fontSize:15}}>{PROFILS[p.profil].icone}</span>
-        <span style={{minWidth:0}}>{nomComplet(p)}</span>
+        <span style={{minWidth:0}}>{nomComplet(p)}{p.pin&&p.profil!=="maintenance"&&<span title="Code personnel" style={{marginLeft:5,fontSize:11}}>🔒</span>}</span>
       </button>))}
     </div>
     {liste.length===0&&<div style={{textAlign:"center",fontSize:13,color:"#9CA3AF",padding:12}}>Aucun nom ne correspond.</div>}
@@ -182,9 +205,69 @@ export function EcranPremierDemarrage({codeAdmin,onCree,logo}){
   </div></div>);
 }
 
+// ── code personnel d'une personne : définir (libre), modifier / retirer (code actuel ou code maître ; avec le code maître déjà donné, sans le redemander) ──
+const BTN_PETIT={background:"#fff",color:"#1B4F8A",border:"1.5px solid #1B4F8A",padding:"5px 11px",borderRadius:8,fontWeight:600,fontSize:12,cursor:"pointer"};
+function CodePersonne({p,maitre,onChange}){
+  const [mode,setMode]=useState(null); // null | definir | modifier | verifier-modifier | verifier-retirer | confirmer-retirer
+  const [saisie,setSaisie]=useState("");const [err,setErr]=useState("");const [clair,setClair]=useState(null);
+  useEffect(()=>{let vivant=true;if(maitre&&p.pin)dechiffrerPin(p.pin).then(c=>{if(vivant)setClair(c);});else setClair(null);return()=>{vivant=false;};},[maitre,p.pin]);
+  const fermer=()=>{setMode(null);setSaisie("");setErr("");};
+  async function valider(){
+    setErr("");
+    if(mode==="definir"||mode==="modifier"){
+      if(!/^\d{4}$/.test(saisie)){setErr("Le code doit avoir exactement 4 chiffres.");return;}
+      const blob=await chiffrerPin(saisie);fermer();await onChange(blob);return;
+    }
+    if(mode==="verifier-modifier"||mode==="verifier-retirer"){
+      const ok=saisie===CODE_MAITRE||saisie===(await dechiffrerPin(p.pin));
+      if(!ok){setErr("Code incorrect.");setSaisie("");return;}
+      if(mode==="verifier-retirer"){fermer();await onChange(null);return;}
+      setSaisie("");setMode("modifier");
+    }
+  }
+  const etiquette={definir:"Nouveau code (4 chiffres)",modifier:"Nouveau code (4 chiffres)","verifier-modifier":"Code actuel de cette personne (ou code maître)","verifier-retirer":"Code actuel de cette personne (ou code maître)"}[mode];
+  return(<div style={{flex:"1 1 100%",display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",fontSize:13,paddingTop:2}}>
+    <span style={{color:p.pin?"#22863A":"#9CA3AF",fontWeight:600}}>{p.pin?"🔒 Code défini":"Aucun code"}</span>
+    {p.pin&&maitre&&<span style={{fontFamily:"monospace",fontSize:15,fontWeight:700,background:"#FFF8E1",border:"1px solid #F3D9A8",borderRadius:6,padding:"1px 8px"}}>{clair||"…"}</span>}
+    {!mode&&!p.pin&&<button type="button" onClick={()=>setMode("definir")} style={BTN_PETIT}>➕ Définir un code</button>}
+    {!mode&&p.pin&&<>
+      <button type="button" onClick={()=>maitre?setMode("modifier"):setMode("verifier-modifier")} style={BTN_PETIT}>✏️ Modifier</button>
+      <button type="button" onClick={()=>maitre?setMode("confirmer-retirer"):setMode("verifier-retirer")} style={{...BTN_PETIT,color:"#D73A49",borderColor:"#D73A49"}}>Retirer</button>
+    </>}
+    {mode==="confirmer-retirer"&&<><span style={{color:"#8A1F2B"}}>Retirer ce code ?</span><button type="button" onClick={async()=>{fermer();await onChange(null);}} style={{...BTN_PETIT,background:"#D73A49",color:"#fff",borderColor:"#D73A49"}}>Oui</button><button type="button" onClick={fermer} style={BTN_PETIT}>Non</button></>}
+    {etiquette&&<form onSubmit={e=>{e.preventDefault();valider();}} style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",flex:"1 1 100%"}}>
+      <label style={{fontSize:12,color:"#4B5563"}}>{etiquette}</label>
+      <input type="password" inputMode="numeric" maxLength={4} value={saisie} onChange={e=>setSaisie(e.target.value.replace(/\D/g,""))} autoComplete="off" autoFocus aria-label={etiquette} style={{...INP,width:96,padding:"6px 8px",fontSize:15,letterSpacing:".2em",textAlign:"center"}}/>
+      <button type="submit" style={{...BTN_PETIT,background:"#1B4F8A",color:"#fff"}}>OK</button>
+      <button type="button" onClick={fermer} style={BTN_PETIT}>Annuler</button>
+      {err&&<span role="alert" style={{color:"#D73A49",fontWeight:600}}>{err}</span>}
+    </form>}
+  </div>);
+}
+// « Mon code » : la personne connectée gère son propre code (le modifier ou le retirer demande le code actuel ou le code maître)
+function FenetreMonCode({moi,onFermer,onEnregistrer}){
+  const [msg,setMsg]=useState("");const [err,setErr]=useState("");
+  async function changer(blob){
+    setMsg("");setErr("");
+    try{await onEnregistrer(blob);setMsg(blob?"✓ Code enregistré.":"✓ Code retiré.");}
+    catch(e){setErr("L'enregistrement n'a pas abouti (connexion ?).");}
+  }
+  return(<div onClick={onFermer} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:310,padding:16}}>
+    <div onClick={e=>e.stopPropagation()} style={{...CARTE,maxWidth:360,padding:"20px 18px"}}>
+      <div style={{fontSize:17,fontWeight:800,color:"#1A1A2E"}}>🔐 Mon code</div>
+      <p style={{fontSize:12,color:"#6B7280",margin:"6px 0 12px",lineHeight:1.5}}>Un code personnel à 4 chiffres, demandé quand on choisit votre nom dans l'appli : personne d'autre ne peut ouvrir l'appli à votre nom. Il n'est jamais affiché. Pour le modifier ou le retirer, il faut le code actuel.</p>
+      <div style={{display:"flex"}}><CodePersonne p={moi} maitre={false} onChange={changer}/></div>
+      {msg&&<div style={{marginTop:10,fontSize:13,color:"#22863A",fontWeight:600}}>{msg}</div>}
+      {err&&<div role="alert" style={{marginTop:10,fontSize:13,color:"#D73A49"}}>{err}</div>}
+      <button type="button" onClick={onFermer} style={{...BTN2,width:"100%",marginTop:14,border:"1.5px solid #D1D5DB",color:"#6B7280"}}>Fermer</button>
+    </div>
+  </div>);
+}
+
 // ── fenêtre de la personne connectée ───────────────────────────────────
-export function MenuPersonne({moi,onChanger,onAcces,onFermer,appareil,onConnecterAppareil,onDeconnecterAppareil}){
-  const [confDeco,setConfDeco]=useState(false);
+export function MenuPersonne({moi,onChanger,onAcces,onFermer,appareil,onConnecterAppareil,onDeconnecterAppareil,onMonCode}){
+  const [confDeco,setConfDeco]=useState(false);const [monCode,setMonCode]=useState(false);
+  if(monCode)return <FenetreMonCode moi={moi} onFermer={()=>setMonCode(false)} onEnregistrer={onMonCode}/>;
   return(<div onClick={onFermer} style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.45)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:300,padding:16}}>
     <div onClick={e=>e.stopPropagation()} style={{...CARTE,maxWidth:340,padding:"22px 20px"}}>
       <div style={{fontSize:12,color:"#6B7280",marginBottom:2}}>Connecté</div>
@@ -192,6 +275,7 @@ export function MenuPersonne({moi,onChanger,onAcces,onFermer,appareil,onConnecte
       <div style={{fontSize:13,color:"#1B4F8A",fontWeight:600,marginBottom:16}}>{PROFILS[moi.profil].icone} {PROFILS[moi.profil].label}</div>
       <div style={{display:"flex",flexDirection:"column",gap:8}}>
         <button type="button" onClick={onChanger} style={BTN1}>🔁 Changer de personne</button>
+        {onMonCode&&moi.profil!=="maintenance"&&<button type="button" onClick={()=>setMonCode(true)} style={BTN2}>🔐 Mon code{moi.pin?" (défini)":""}</button>}
         {moi.profil==="admin"&&<button type="button" onClick={onAcces} style={BTN2}>🔑 Gérer les accès</button>}
         {moi.profil==="admin"&&appareil&&(appareil.connecte
           ?<div style={{border:"1px solid #BFE3C8",background:"#F0FFF4",borderRadius:8,padding:"8px 10px",fontSize:12,color:"#22863A"}}>
@@ -213,6 +297,7 @@ export function PageAcces({personnes,techs,moi,onEnregistre,onRetour}){
   const [nouveau,setNouveau]=useState({nom:"",prenom:"",profil:"tech",initiales:""});
   const [lot,setLot]=useState("");const [lotProfil,setLotProfil]=useState("tech");
   const [occupe,setOccupe]=useState(false);const [message,setMessage]=useState(null);const [erreur,setErreur]=useState(null);
+  const [maitre,setMaitre]=useState(false);const [demandeMaitre,setDemandeMaitre]=useState(false); // code maître donné dans cet écran : montre les codes personnels
   const modifie=JSON.stringify(liste)!==JSON.stringify(personnes);
   const maj=(id,champs)=>setListe(l=>l.map(p=>p.id===id?{...p,...champs}:p));
   const existe=(nom,prenom,sauf)=>liste.some(p=>p.id!==sauf&&norm(p.nom)===norm(nom)&&norm(p.prenom)===norm(prenom));
@@ -252,8 +337,10 @@ export function PageAcces({personnes,techs,moi,onEnregistre,onRetour}){
       <h1 style={{fontSize:22,fontWeight:800,margin:0}}>🔑 Accès</h1>
       <button type="button" onClick={onRetour} style={BTN2}>← Retour</button>
     </div>
-    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>À chaque ouverture, l'appli demande qui ouvre. Le profil de la personne décide de ce qu'elle voit : <b>Administrateur</b> (tout), <b>Technicien</b> (fiches, planning, matériel, stock…), <b>Commercial</b> (suivi clients, calendrier, rapports, et fiches atelier, fiches chantier et planning comme un technicien), <b>Maintenance</b> (modifie les champs des fiches, le planning et les rapports sans remplir de fiche ; son code est demandé à chaque connexion). Les initiales servent à préremplir « qui a fait la fiche » pour un technicien.</p>
+    <p style={{fontSize:13,color:"#6B7280",margin:"0 0 14px",lineHeight:1.5}}>À chaque ouverture, l'appli demande qui ouvre. Le profil de la personne décide de ce qu'elle voit : <b>Administrateur</b> (tout), <b>Technicien</b> (fiches, planning, matériel, stock…), <b>Commercial</b> (suivi clients, calendrier, rapports, et fiches atelier, fiches chantier et planning comme un technicien), <b>Maintenance</b> (modifie les champs des fiches, le planning et les rapports sans remplir de fiche ; son code est demandé à chaque connexion). Chaque personne peut avoir un <b>code personnel</b> (4 chiffres), demandé quand on choisit son nom : il ne s'affiche jamais ; avec le <b>code maître</b> on voit les codes, on peut les modifier ou les retirer. Sans le code maître, modifier ou retirer un code demande le code actuel. Les initiales servent à préremplir « qui a fait la fiche » pour un technicien.</p>
 
+    {demandeMaitre&&<EcranCode code={CODE_MAITRE} titre="Code maître" sousTitre="Pour voir les codes personnels déjà définis." memoriser={false} clavier onSucces={()=>{setMaitre(true);setDemandeMaitre(false);}} onAnnuler={()=>setDemandeMaitre(false)}/>}
+    <div style={{display:"flex",justifyContent:"flex-end",marginBottom:8}}><button type="button" onClick={()=>maitre?setMaitre(false):setDemandeMaitre(true)} style={BTN2}>{maitre?"🙈 Masquer les codes":"🔓 Voir les codes (code maître)"}</button></div>
     <div style={carte}>
       {tri.map(p=>(<div key={p.id} style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",padding:"8px 0",borderBottom:"1px solid #F3F4F6"}}>
         <div style={{flex:"2 1 170px",minWidth:0}}>
@@ -267,6 +354,7 @@ export function PageAcces({personnes,techs,moi,onEnregistre,onRetour}){
           {techsListe.map(t=><option key={t} value={t}>{t}</option>)}
         </select>
         <button type="button" onClick={()=>retirer(p.id)} disabled={p.id===moi.id} title={p.id===moi.id?"Vous ne pouvez pas vous retirer vous-même":"Retirer cette personne"} aria-label={"Retirer "+nomComplet(p)} style={{background:"transparent",border:"none",fontSize:16,cursor:p.id===moi.id?"not-allowed":"pointer",opacity:p.id===moi.id?0.3:1,padding:"4px 8px"}}>🗑</button>
+        {p.profil!=="maintenance"&&<CodePersonne p={p} maitre={maitre} onChange={blob=>maj(p.id,{pin:blob||undefined})}/>}
       </div>))}
     </div>
 
